@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../lib/api';
+import { useOrg } from '../context/OrgContext';
 
 const CATEGORIES = ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COMMUNICATIONS','OTHER'];
 const ICONS = { MEALS:'🍽️', TRAVEL:'✈️', ACCOMMODATION:'🏨', SUPPLIES:'📦', COMMUNICATIONS:'📱', OTHER:'📎' };
@@ -9,6 +10,9 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function AddExpensePage() {
   const navigate = useNavigate();
+  const { settings } = useOrg();
+  const categories = settings?.categories || ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COMMUNICATIONS','OTHER'];
+  const expenseTypes = settings?.expenseTypes || ['REIMBURSEMENT','CASH_ADVANCE'];
   const { id } = useParams();
   const fileRef = useRef();
   const [scanning, setScanning] = useState(false);
@@ -137,7 +141,7 @@ export default function AddExpensePage() {
 
       {/* Category pills */}
       <div className="flex gap-2 mb-4 flex-wrap">
-        {CATEGORIES.map(c => (
+        {categories.map(c => (
           <button key={c} onClick={() => set('category', c)}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border transition-colors ${form.category===c ? 'bg-brand-400 text-white border-brand-400' : 'border-gray-200 text-gray-600 hover:border-brand-300'}`}>
             {ICONS[c]} {c.charAt(0)+c.slice(1).toLowerCase()}

@@ -15,6 +15,7 @@ model User {
   passwordHash   String
   role           Role            @default(EMPLOYEE)
   department     String?
+  costCenter     String?
   managerId      String?
   manager        User?           @relation("Reports", fields: [managerId], references: [id])
   reports        User[]          @relation("Reports")
@@ -39,8 +40,8 @@ model Expense {
   amount        Float
   currency      Currency      @default(PHP)
   amountPhp     Float
-  category      Category
-  expenseType   ExpenseType   @default(REIMBURSEMENT)
+  category      String
+  expenseType   String        @default("REIMBURSEMENT")
   receiptId     String?
   receipt       Receipt?      @relation(fields: [receiptId], references: [id])
   costCenter    String?
@@ -56,20 +57,6 @@ model Expense {
 enum Currency {
   PHP
   USD
-}
-
-enum Category {
-  MEALS
-  TRAVEL
-  ACCOMMODATION
-  SUPPLIES
-  COMMUNICATIONS
-  OTHER
-}
-
-enum ExpenseType {
-  REIMBURSEMENT
-  CASH_ADVANCE
 }
 
 enum ExpenseStatus {
@@ -125,5 +112,20 @@ model OrgSettings {
   defaultCurrency      Currency @default(PHP)
   receiptRequiredAbove Float    @default(500)
   approvalLevels       Int      @default(2)
+  primaryColor         String   @default("#1D9E75")
+  logoUrl              String?
+  categories           String   @default("MEALS,TRAVEL,ACCOMMODATION,SUPPLIES,COMMUNICATIONS,OTHER")
+  expenseTypes         String   @default("REIMBURSEMENT,CASH_ADVANCE")
   updatedAt            DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

@@ -3,15 +3,16 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const { authenticate } = require('../middleware/auth');
 const { sendApprovalRequestEmail } = require('../lib/email');
+const { createNotification } = require('./notifications');
 const prisma = new PrismaClient();
 
 const PHP_USD = 56;
 const toPhp = (amt, cur) => cur === 'USD' ? amt * PHP_USD : amt;
 
 const expenseInclude = {
-  submittedBy: { select: { id:true, name:true, email:true, department:true } },
+  submittedBy: { select: { id:true, name:true, email:true, department:true, costCenter:true } },
   approvals: {
-    include: { approver: { select: { id:true, name:true, role:true } } },
+    include: { approver: { select: { id:true, name:true, role:true, email:true } } },
     orderBy: { createdAt: 'asc' },
   },
   receipt: { select: { id:true, mimeType:true, filename:true } },
@@ -38,6 +39,20 @@ router.get('/', authenticate, async (req, res) => {
   } catch(err){ res.status(500).json({error:err.message}); }
 });
 
+router.get('/pending-count', authenticate, async (req, res) => {
+  try {
+    // For employees: count their own pending expenses
+    // For managers: count pending approvals waiting for them
+    const [myPending, toApprove] = await Promise.all([
+      prisma.expense.count({ where: { submittedById: req.user.id, status: 'PENDING' } }),
+      ['MANAGER','FINANCE','ADMIN'].includes(req.user.role)
+        ? prisma.approval.count({ where: { approverId: req.user.id, status: 'PENDING' } })
+        : Promise.resolve(0),
+    ]);
+    res.json({ myPending, toApprove });
+  } catch(err){ res.status(500).json({error:err.message}); }
+});
+
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const e = await prisma.expense.findUnique({ where:{id:req.params.id}, include:expenseInclude });
@@ -58,7 +73,7 @@ router.post('/', authenticate, async (req, res) => {
         amountPhp: toPhp(Number(amount), currency),
         category, expenseType,
         receiptId: receiptId || null,
-        costCenter: costCenter||null,
+        costCenter: costCenter || req.user.costCenter || null,
         expenseDate: new Date(expenseDate),
         submittedById: req.user.id,
         status: 'DRAFT',
@@ -112,8 +127,24 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       prisma.approval.deleteMany({where:{expenseId:expense.id}}),
       prisma.approval.create({data:{expenseId:expense.id, approverId, level:1, status:'PENDING'}}),
     ]);
+
+    // Notify approver
     const approver = manager || fallback;
-    if(approver) await sendApprovalRequestEmail(approver.email, approver.name, expense).catch(()=>{});
+    if(approver) {
+      await sendApprovalRequestEmail(approver.email, approver.name, expense).catch(()=>{});
+      await createNotification(approverId, 'APPROVAL_REQUEST',
+        'New expense to approve',
+        `${expense.submittedBy.name} submitted "${expense.title}" for approval`,
+        '/approvals'
+      );
+    }
+    // Notify submitter their expense is pending
+    await createNotification(req.user.id, 'EXPENSE_SUBMITTED',
+      'Expense submitted',
+      `Your expense "${expense.title}" has been submitted for approval`,
+      '/expenses'
+    );
+
     res.json({message:'Submitted', expense: await prisma.expense.findUnique({where:{id:expense.id}})});
   } catch(err){ res.status(500).json({error:err.message}); }
 });
@@ -124,7 +155,7 @@ router.post('/:id/cancel', authenticate, async (req, res) => {
     const e = await prisma.expense.findUnique({where:{id:req.params.id}});
     if(!e) return res.status(404).json({error:'Not found'});
     if(e.submittedById!==req.user.id) return res.status(403).json({error:'Forbidden'});
-    if(!['DRAFT','PENDING'].includes(e.status)) return res.status(400).json({error:'Cannot cancel in current status'});
+    if(!['DRAFT','PENDING'].includes(e.status)) return res.status(400).json({error:'Cannot cancel'});
     await prisma.$transaction([
       prisma.expense.update({where:{id:e.id}, data:{status:'CANCELLED', description: reason ? `${e.description||''}\n[Cancelled: ${reason}]`.trim() : e.description}}),
       prisma.approval.updateMany({where:{expenseId:e.id,status:'PENDING'}, data:{status:'REJECTED',notes:reason||'Cancelled by submitter'}}),
@@ -138,7 +169,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     const e = await prisma.expense.findUnique({where:{id:req.params.id}});
     if(!e) return res.status(404).json({error:'Not found'});
     if(e.submittedById!==req.user.id && req.user.role!=='ADMIN') return res.status(403).json({error:'Forbidden'});
-    if(!['DRAFT','CANCELLED','REJECTED'].includes(e.status)) return res.status(400).json({error:'Cannot delete in current status'});
+    if(!['DRAFT','CANCELLED','REJECTED'].includes(e.status)) return res.status(400).json({error:'Cannot delete'});
     await prisma.approval.deleteMany({where:{expenseId:e.id}});
     await prisma.expense.delete({where:{id:e.id}});
     res.json({message:'Deleted'});
