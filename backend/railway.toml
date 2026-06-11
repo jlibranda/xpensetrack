@@ -6,6 +6,6 @@ NPM_CONFIG_PRODUCTION = "false"
 CI = "false"
 
 [deploy]
-startCommand = "npx prisma generate && npx prisma db push --accept-data-loss && node src/index.js"
+startCommand = "npx prisma generate && node src/index.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
