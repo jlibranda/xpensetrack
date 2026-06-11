@@ -10,6 +10,7 @@ import AddExpensePage from './pages/AddExpensePage';
 import ApprovalsPage from './pages/ApprovalsPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
+import UsersPage from './pages/UsersPage';
 
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -36,6 +37,9 @@ export default function App() {
               } />
               <Route path="reports" element={
                 <PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>
+              } />
+              <Route path="users" element={
+                <PrivateRoute roles={['ADMIN','FINANCE']}><UsersPage /></PrivateRoute>
               } />
               <Route path="settings" element={
                 <PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>
