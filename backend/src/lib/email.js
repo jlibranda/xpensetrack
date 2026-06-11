@@ -1,76 +1,182 @@
 // src/lib/email.js
-const nodemailer = require('nodemailer');
+// Supports both Resend API (recommended) and SMTP (Gmail fallback)
 
-let transporter = null;
-function getTransporter() {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) return null;
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
+const appName = 'XpenseTrack';
+const brandColor = '#1D9E75';
+
+function html(title, body) {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+    <div style="background:${brandColor};padding:24px 32px">
+      <h1 style="margin:0;color:#fff;font-size:20px;font-weight:600">${appName}</h1>
+    </div>
+    <div style="padding:32px">
+      <h2 style="margin:0 0 16px;color:#111;font-size:18px;font-weight:600">${title}</h2>
+      ${body}
+    </div>
+    <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #f3f4f6">
+      <p style="margin:0;color:#9ca3af;font-size:12px">Sent by ${appName}. Do not reply.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function btn(url, label) {
+  return `<a href="${url}" style="display:inline-block;background:${brandColor};color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px;margin:16px 0">${label}</a>`;
+}
+
+function row(label, value) {
+  return `<tr><td style="padding:8px 0;color:#6b7280;font-size:14px;width:40%">${label}</td><td style="padding:8px 0;color:#111;font-size:14px;font-weight:500">${value}</td></tr>`;
+}
+
+// ── Send via Resend API (preferred) ───────────────────────────────
+async function sendViaResend(to, subject, htmlBody) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return false;
+
+  const fromEmail = process.env.RESEND_FROM || `noreply@${process.env.RESEND_DOMAIN || 'xpensetrack.app'}`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        from: `${appName} <${fromEmail}>`,
+        to: [to],
+        subject,
+        html: htmlBody,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      console.log(`Email sent via Resend to ${to}: ${subject}`);
+      return true;
+    } else {
+      console.error('Resend error:', data);
+      return false;
+    }
+  } catch(err) {
+    console.error('Resend failed:', err.message);
+    return false;
+  }
+}
+
+// ── Send via SMTP (Gmail fallback) ────────────────────────────────
+async function sendViaSMTP(to, subject, htmlBody) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return false;
+  try {
+    const nodemailer = require('nodemailer');
+    const t = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT) || 587,
+      secure: false,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      tls: { rejectUnauthorized: false },
     });
+    await t.sendMail({
+      from: `"${appName}" <${process.env.SMTP_USER}>`,
+      to, subject, html: htmlBody,
+    });
+    console.log(`Email sent via SMTP to ${to}: ${subject}`);
+    return true;
+  } catch(err) {
+    console.error('SMTP failed:', err.message);
+    return false;
   }
-  return transporter;
 }
 
-const fmt = (e) => `${e.currency==='PHP'?'₱':'$'}${e.amount?.toLocaleString()}`;
+// ── Main send function ────────────────────────────────────────────
+async function sendMail(to, subject, htmlBody) {
+  // Try Resend first, fall back to SMTP
+  const sent = await sendViaResend(to, subject, htmlBody)
+    || await sendViaSMTP(to, subject, htmlBody);
 
-async function sendMail(opts) {
-  const t = getTransporter();
-  if (!t) { console.log('Email not configured. Subject:', opts.subject); return; }
-  try { await t.sendMail({ from: `"XpenseTrack" <${process.env.SMTP_USER}>`, ...opts }); }
-  catch(err) { console.log('Email failed:', err.message); }
+  if (!sent) {
+    console.log(`[Email not sent - no email service configured]\nTo: ${to}\nSubject: ${subject}`);
+  }
+  return sent;
 }
 
+// ── Email templates ───────────────────────────────────────────────
 async function sendApprovalRequestEmail(toEmail, toName, expense) {
-  await sendMail({
-    to: toEmail,
-    subject: `Action required: ${expense.title}`,
-    html: `<div style="font-family:sans-serif;max-width:480px">
-      <h2 style="color:#0F6E56">New expense to approve</h2>
-      <p>Hi ${toName}, a new expense needs your approval:</p>
-      <table style="width:100%;border-collapse:collapse;margin:16px 0">
-        <tr><td style="padding:6px 0;color:#666">Description</td><td><b>${expense.title}</b></td></tr>
-        <tr><td style="padding:6px 0;color:#666">Amount</td><td><b>${fmt(expense)}</b></td></tr>
-        <tr><td style="padding:6px 0;color:#666">Category</td><td>${expense.category}</td></tr>
-      </table>
-      <a href="${process.env.FRONTEND_URL}/approvals" style="background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Review →</a>
-    </div>`,
-  });
+  const sym = expense.currency === 'PHP' ? '₱' : '$';
+  const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
+  const date = new Date(expense.expenseDate).toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
+  const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+
+  return sendMail(toEmail, `Action required: Approve "${expense.title}"`, html(
+    'New expense needs your approval',
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">An expense has been submitted and is waiting for your approval:</p>
+     <table style="width:100%;border-collapse:collapse;margin:0 0 20px">
+       ${row('Description', expense.title)}
+       ${row('Amount', amt)}
+       ${row('Category', expense.category.charAt(0) + expense.category.slice(1).toLowerCase())}
+       ${row('Date', date)}
+       ${expense.description ? row('Notes', expense.description) : ''}
+     </table>
+     ${btn(`${frontendUrl}/approvals`, 'Review & approve →')}`
+  ));
 }
 
 async function sendStatusUpdateEmail(toEmail, toName, expense, status) {
-  const map = {
-    APPROVED: { label:'Approved ✅', msg:'Your expense has been approved for reimbursement.' },
-    REJECTED: { label:'Rejected ❌', msg:'Your expense was rejected. Check the approval notes.' },
-    RETURNED: { label:'Returned ↩', msg:'Your expense was returned for revision. Please check the comments and resubmit.' },
-    MANAGER_APPROVED: { label:'Manager Approved', msg:'Approved by manager, now pending finance review.' },
+  const sym = expense.currency === 'PHP' ? '₱' : '$';
+  const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
+  const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+
+  const configs = {
+    APPROVED: { subject:`✅ Expense approved — ${expense.title}`, title:'Expense approved', msg:'Your expense has been fully approved and will be processed for reimbursement.', color:'#16a34a' },
+    REJECTED: { subject:`❌ Expense rejected — ${expense.title}`, title:'Expense rejected', msg:'Your expense was not approved. Please check the notes from your approver and resubmit if needed.', color:'#dc2626' },
+    RETURNED: { subject:`↩ Expense returned — ${expense.title}`, title:'Expense returned for revision', msg:'Your approver returned this expense for revision. Please review their comments and resubmit.', color:'#d97706' },
+    MANAGER_APPROVED: { subject:`✓ Manager approved — ${expense.title}`, title:'Approved by manager', msg:'Your expense was approved by your manager and is now pending finance review.', color:'#2563eb' },
+    REIMBURSED: { subject:`💰 Expense reimbursed — ${expense.title}`, title:'Expense reimbursed', msg:'Your expense has been reimbursed!', color: brandColor },
   };
-  const s = map[status] || { label: status, msg: '' };
-  await sendMail({
-    to: toEmail,
-    subject: `Expense ${s.label}: ${expense.title}`,
-    html: `<div style="font-family:sans-serif;max-width:480px">
-      <h2>${s.label}</h2>
-      <p>Hi ${toName}, ${s.msg}</p>
-      <p><b>${expense.title}</b> — ${fmt(expense)}</p>
-      <a href="${process.env.FRONTEND_URL}/expenses" style="background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">View in XpenseTrack →</a>
-    </div>`,
-  });
+
+  const cfg = configs[status] || { subject:`Expense update — ${expense.title}`, title:'Expense update', msg:'', color:'#374151' };
+
+  return sendMail(toEmail, cfg.subject, html(
+    cfg.title,
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">${cfg.msg}</p>
+     <div style="background:#f9fafb;border-left:4px solid ${cfg.color};border-radius:4px;padding:16px;margin:0 0 20px">
+       <p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#111">${expense.title}</p>
+       <p style="margin:0;font-size:14px;color:#6b7280">${amt}</p>
+     </div>
+     ${btn(`${frontendUrl}/expenses`, 'View my expenses →')}`
+  ));
 }
 
 async function sendPasswordResetEmail(toEmail, toName, resetUrl) {
-  await sendMail({
-    to: toEmail,
-    subject: 'Reset your XpenseTrack password',
-    html: `<div style="font-family:sans-serif;max-width:480px">
-      <h2 style="color:#0F6E56">Reset your password</h2>
-      <p>Hi ${toName}, click below to reset your password. Link expires in 1 hour.</p>
-      <a href="${resetUrl}" style="background:#1D9E75;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">Reset password →</a>
-      <p style="color:#999;font-size:12px">If you didn't request this, ignore this email.</p>
-    </div>`,
-  });
+  return sendMail(toEmail, 'Reset your XpenseTrack password', html(
+    'Reset your password',
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">Click the button below to reset your password. This link expires in <strong>1 hour</strong>.</p>
+     ${btn(resetUrl, 'Reset my password →')}
+     <p style="color:#9ca3af;font-size:12px;margin:20px 0 0">If you didn't request this, ignore this email.</p>`
+  ));
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail };
+async function sendWelcomeEmail(toEmail, toName, tempPassword) {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+  return sendMail(toEmail, `Welcome to ${appName}!`, html(
+    `Welcome, ${toName}!`,
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Your XpenseTrack account has been created. Here are your login details:</p>
+     <div style="background:#f9fafb;border-radius:8px;padding:16px;margin:0 0 20px">
+       <table style="width:100%;border-collapse:collapse">
+         ${row('Email', toEmail)}
+         ${row('Password', `<code style="background:#e5e7eb;padding:2px 6px;border-radius:4px">${tempPassword}</code>`)}
+       </table>
+     </div>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">Please log in and change your password from your profile settings.</p>
+     ${btn(`${frontendUrl}/login`, 'Log in to XpenseTrack →')}`
+  ));
+}
+
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail };
