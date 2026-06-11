@@ -7,11 +7,10 @@ const { authenticate } = require('../middleware/auth');
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-// POST /api/ocr/scan — upload receipt, store in DB, parse with AI
+// POST /api/ocr/scan
 router.post('/scan', authenticate, upload.single('receipt'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
-    // 1. Store receipt in DB
     const receipt = await prisma.receipt.create({
       data: {
         data: req.file.buffer,
@@ -20,7 +19,6 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
       },
     });
 
-    // 2. AI parse if Anthropic key available
     let parsed = null;
     if (process.env.ANTHROPIC_API_KEY) {
       try {
@@ -39,9 +37,9 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
               role: 'user',
               content: [
                 { type: 'image', source: { type: 'base64', media_type: req.file.mimetype, data: base64 } },
-                { type: 'text', text: `Extract receipt data. Return ONLY valid JSON, no other text:
-{"title":"merchant name","amount":number_or_null,"currency":"PHP","date":"YYYY-MM-DD_or_null","category":"MEALS|TRAVEL|ACCOMMODATION|SUPPLIES|COMMUNICATIONS|OTHER"}
-Default currency to PHP if unclear. Category must be one of the listed values.` }
+                { type: 'text', text: `Extract receipt data. Return ONLY valid JSON, no markdown, no explanation:
+{"title":"merchant name or store","amount":number_or_null,"currency":"PHP","date":"YYYY-MM-DD or null","category":"MEALS|TRAVEL|ACCOMMODATION|SUPPLIES|COMMUNICATIONS|OTHER"}
+Default currency PHP. Amount must be a number (no currency symbols).` }
               ],
             }],
           }),
@@ -52,31 +50,45 @@ Default currency to PHP if unclear. Category must be one of the listed values.` 
           const match = text.match(/\{[\s\S]*\}/);
           if (match) parsed = JSON.parse(match[0]);
         }
-      } catch (e) { console.log('AI parse error:', e.message); }
+      } catch(e) { console.log('AI parse error:', e.message); }
     }
 
     res.json({
       receiptId: receipt.id,
-      receiptUrl: `/api/ocr/receipt/${receipt.id}`,
-      parsed: parsed || { title: '', amount: null, currency: 'PHP', date: null, category: 'OTHER' },
+      parsed: parsed || { title:'', amount:null, currency:'PHP', date:null, category:'OTHER' },
       aiUsed: !!parsed,
     });
-  } catch (err) {
+  } catch(err) {
     console.error('OCR error:', err);
     res.status(500).json({ error: 'Receipt upload failed', message: err.message });
   }
 });
 
 // GET /api/ocr/receipt/:id — serve receipt image
-router.get('/receipt/:id', authenticate, async (req, res) => {
+// Supports auth token in header OR query param (for <img> tags)
+router.get('/receipt/:id', async (req, res) => {
   try {
+    // Verify auth — accept from header or query param
+    const jwt = require('jsonwebtoken');
+    const token = (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null)
+      || req.query.token;
+
+    if (!token) return res.status(401).send('Unauthorized');
+
+    try {
+      jwt.verify(token, process.env.JWT_SECRET);
+    } catch(e) {
+      return res.status(401).send('Invalid token');
+    }
+
     const receipt = await prisma.receipt.findUnique({ where: { id: req.params.id } });
-    if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
+    if (!receipt) return res.status(404).send('Receipt not found');
+
     res.setHeader('Content-Type', receipt.mimeType);
-    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
     res.send(receipt.data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch(err) {
+    res.status(500).send('Error loading receipt');
   }
 });
 

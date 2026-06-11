@@ -32,7 +32,8 @@ export default function AddExpensePage() {
           expenseDate:e.expenseDate.split('T')[0], costCenter:e.costCenter||'' });
         if (e.receipt?.id) {
           setReceiptId(e.receipt.id);
-          setReceiptPreview(`${API_BASE}/ocr/receipt/${e.receipt.id}`);
+          const tok = localStorage.getItem('token');
+          setReceiptPreview(`${API_BASE}/ocr/receipt/${e.receipt.id}?token=${encodeURIComponent(tok)}`);
         }
       }).catch(() => navigate('/expenses'));
     }
@@ -49,8 +50,11 @@ export default function AddExpensePage() {
       const fd = new FormData();
       fd.append('receipt', file);
       const res = await api.post('/ocr/scan', fd, { headers:{'Content-Type':'multipart/form-data'} });
-      if (res.receiptId) setReceiptId(res.receiptId);
-      if (res.receiptUrl) setReceiptPreview(`${API_BASE}/ocr/receipt/${res.receiptId}`);
+      if (res.receiptId) {
+          setReceiptId(res.receiptId);
+          const token = localStorage.getItem('token');
+          setReceiptPreview(`${API_BASE}/ocr/receipt/${res.receiptId}?token=${encodeURIComponent(token)}`);
+        }
       if (res.parsed) {
         setForm(f => ({
           ...f,

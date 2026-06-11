@@ -1,6 +1,7 @@
 // src/pages/ApprovalsPage.jsx
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import ReceiptImage from '../components/ReceiptImage';
 import { useCurrency } from '../context/CurrencyContext';
 
 const STATUS_BADGE = {
@@ -132,15 +133,7 @@ export default function ApprovalsPage() {
                 </div>
                 {selected.expense.receipt?.id ? (
                   <div className="mb-3">
-                    <img
-                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/ocr/receipt/${selected.expense.receipt.id}`}
-                      alt="Receipt"
-                      className="w-full rounded-lg border border-gray-100 max-h-64 object-contain cursor-pointer"
-                      onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/ocr/receipt/${selected.expense.receipt.id}`, '_blank')}
-                      onError={e => { e.target.style.display='none'; }}
-                    />
-                    <button onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/ocr/receipt/${selected.expense.receipt.id}`, '_blank')}
-                      className="text-xs text-brand-400 hover:text-brand-600 mt-1">🔍 View full size</button>
+                    <ReceiptImage receiptId={selected.expense.receipt.id} className="w-full max-h-64 object-contain" />
                   </div>
                 ) : (
                   <div className="bg-gray-50 rounded-lg p-4 text-center text-xs text-gray-400 mb-3">No receipt attached</div>

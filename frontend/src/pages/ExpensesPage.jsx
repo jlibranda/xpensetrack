@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import ReceiptImage from '../components/ReceiptImage';
 import { useCurrency } from '../context/CurrencyContext';
 
 const STATUS_BADGE = {
@@ -170,20 +171,14 @@ export default function ExpensesPage() {
               </div>
             )}
 
-            {/* Receipt */}
-            {selected.receiptUrl && (
+                        {/* Receipt */}
+            {selected.receipt?.id && (
               <div className="mb-3">
                 <p className="text-xs font-medium text-gray-500 mb-1.5">Receipt</p>
-                {selected.receipt?.id ? (
-                  <img src={selected.receiptUrl} alt="Receipt" className="w-full rounded-lg border border-gray-100 max-h-48 object-contain" />
-                ) : (
-                  <a href={selected.receiptUrl} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-brand-400 hover:text-brand-600">
-                    🧾 View receipt →
-                  </a>
-                )}
+                <ReceiptImage receiptId={selected.receipt.id} className="w-full max-h-48 object-contain" />
               </div>
             )}
+
 
             {/* Actions */}
             <div className="flex flex-col gap-2 border-t border-gray-50 pt-3">
