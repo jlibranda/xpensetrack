@@ -1,18 +1,6 @@
 [build]
-builder = "NIXPACKS"
-
-[build.env]
-NPM_CONFIG_PRODUCTION = "false"
-CI = "false"
-
-[build.nixpacksPlan.phases.setup]
-nixPkgs = ["nodejs_20", "openssl"]
-
-[build.nixpacksPlan.phases.install]
-cmds = ["npm install"]
-
-[build.nixpacksPlan.phases.build]
-cmds = ["npx prisma generate"]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "node src/index.js"
