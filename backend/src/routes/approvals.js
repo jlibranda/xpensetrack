@@ -3,7 +3,7 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { sendStatusUpdateEmail } = require('../lib/email');
-const { createNotification } = require('./notifications');
+const { createNotification } = require('../lib/notifications');
 const prisma = new PrismaClient();
 
 const expenseInclude = {

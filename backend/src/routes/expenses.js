@@ -3,7 +3,7 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const { authenticate } = require('../middleware/auth');
 const { sendApprovalRequestEmail } = require('../lib/email');
-const { createNotification } = require('./notifications');
+const { createNotification } = require('../lib/notifications');
 const prisma = new PrismaClient();
 
 const PHP_USD = 56;
