@@ -11,6 +11,7 @@ export default function AddExpensePage() {
   const [scanning, setScanning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState('');
+  const [receiptPreview, setReceiptPreview] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -26,14 +27,18 @@ export default function AddExpensePage() {
   const handleScan = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Show local preview immediately
+    setReceiptPreview(URL.createObjectURL(file));
     setScanning(true); setError('');
+
     try {
       const formData = new FormData();
       formData.append('receipt', file);
       const res = await api.post('/ocr/scan', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setReceiptUrl(res.receiptUrl);
+      if (res.receiptUrl) setReceiptUrl(res.receiptUrl);
       if (res.parsed) {
         setForm(f => ({
           ...f,
@@ -45,7 +50,12 @@ export default function AddExpensePage() {
         }));
       }
     } catch (err) {
-      setError('Receipt scan failed. Please fill in the form manually.');
+      // OCR failed but we still have the preview — store as base64 fallback
+      setError('OCR service unavailable. Receipt saved locally. Please fill in the form manually.');
+      // Convert to base64 for storage fallback
+      const reader = new FileReader();
+      reader.onload = (ev) => setReceiptUrl(ev.target.result);
+      reader.readAsDataURL(file);
     } finally {
       setScanning(false);
     }
@@ -53,20 +63,23 @@ export default function AddExpensePage() {
 
   const handleSubmit = async (action) => {
     if (!form.title || !form.amount || !form.expenseDate) {
-      setError('Title, amount, and date are required.'); return;
+      setError('Description, amount, and date are required.'); return;
+    }
+    if (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0) {
+      setError('Please enter a valid amount.'); return;
     }
     setSubmitting(true); setError('');
     try {
-      const expense = await api.post('/expenses', { ...form, receiptUrl });
+      const expense = await api.post('/expenses', { ...form, receiptUrl: receiptUrl || undefined });
       if (action === 'submit') {
         await api.post(`/expenses/${expense.id}/submit`);
-        setSuccess('Expense submitted for approval!');
+        setSuccess('✅ Expense submitted for approval! Your manager will be notified.');
       } else {
-        setSuccess('Draft saved!');
+        setSuccess('💾 Draft saved! You can submit it later from My Expenses.');
       }
-      setTimeout(() => navigate('/expenses'), 1500);
+      setTimeout(() => navigate('/expenses'), 2000);
     } catch (err) {
-      setError(err.error || 'Failed to save expense.');
+      setError(err.error || 'Failed to save expense. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -81,28 +94,24 @@ export default function AddExpensePage() {
 
       {/* Receipt scan */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
-        <h2 className="text-sm font-medium text-gray-700 mb-3">Receipt</h2>
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScan} />
-        {receiptUrl ? (
+        <h2 className="text-sm font-medium text-gray-700 mb-3">Receipt <span className="text-xs text-gray-400 font-normal">(optional but recommended)</span></h2>
+        <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={handleScan} />
+        {receiptPreview ? (
           <div className="flex items-center gap-3">
-            <img src={receiptUrl} alt="Receipt" className="w-16 h-16 object-cover rounded-lg border border-gray-100" />
+            <img src={receiptPreview} alt="Receipt preview" className="w-16 h-16 object-cover rounded-lg border border-gray-100" />
             <div>
-              <p className="text-sm text-green-700 font-medium">Receipt scanned ✓</p>
-              <button onClick={() => { setReceiptUrl(''); fileRef.current.value = ''; }} className="text-xs text-gray-400 hover:text-gray-600 mt-1">Remove</button>
+              <p className="text-sm font-medium text-green-700">{scanning ? '🔍 Scanning receipt...' : '✓ Receipt attached'}</p>
+              {scanning && <p className="text-xs text-gray-400 mt-0.5">Auto-filling form from receipt...</p>}
+              <button onClick={() => { setReceiptUrl(''); setReceiptPreview(''); fileRef.current.value = ''; }}
+                className="text-xs text-gray-400 hover:text-gray-600 mt-1">Remove</button>
             </div>
           </div>
         ) : (
           <button onClick={() => fileRef.current.click()} disabled={scanning}
             className="w-full border-2 border-dashed border-gray-200 rounded-xl py-6 text-center hover:border-brand-400 hover:bg-brand-50 transition-colors">
-            {scanning ? (
-              <p className="text-sm text-brand-600 font-medium">Scanning receipt...</p>
-            ) : (
-              <>
-                <p className="text-2xl mb-1">📷</p>
-                <p className="text-sm font-medium text-gray-700">Scan or upload receipt</p>
-                <p className="text-xs text-gray-400 mt-0.5">OCR auto-fills the form below</p>
-              </>
-            )}
+            <p className="text-2xl mb-1">📷</p>
+            <p className="text-sm font-medium text-gray-700">Scan or upload receipt</p>
+            <p className="text-xs text-gray-400 mt-0.5">Photo, image file, or PDF · Auto-fills form below</p>
           </button>
         )}
       </div>
@@ -120,27 +129,28 @@ export default function AddExpensePage() {
           <div>
             <label className="block text-xs text-gray-500 mb-1">Amount *</label>
             <input type="number" value={form.amount} onChange={e => set('amount', e.target.value)}
-              placeholder="0.00" min="0" step="0.01"
+              placeholder="0.00" min="0.01" step="0.01"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Currency</label>
             <select value={form.currency} onChange={e => set('currency', e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400">
-              <option value="PHP">₱ PHP</option>
-              <option value="USD">$ USD</option>
+              <option value="PHP">₱ PHP — Philippine Peso</option>
+              <option value="USD">$ USD — US Dollar</option>
             </select>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date *</label>
             <input type="date" value={form.expenseDate} onChange={e => set('expenseDate', e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Category</label>
             <select value={form.category} onChange={e => set('category', e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400">
-              {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
+              {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase().replace('_', ' ')}</option>)}
             </select>
           </div>
           <div>
@@ -154,13 +164,13 @@ export default function AddExpensePage() {
           <div>
             <label className="block text-xs text-gray-500 mb-1">Cost center / project</label>
             <input value={form.costCenter} onChange={e => set('costCenter', e.target.value)}
-              placeholder="e.g. Q2 Marketing"
+              placeholder="e.g. Q2 Marketing, Project X"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Notes / business purpose</label>
+            <label className="block text-xs text-gray-500 mb-1">Business purpose / notes</label>
             <textarea value={form.description} onChange={e => set('description', e.target.value)}
-              rows={3} placeholder="Business purpose or additional context"
+              rows={2} placeholder="Why was this expense incurred? Who was present?"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 resize-none" />
           </div>
         </div>
@@ -172,13 +182,14 @@ export default function AddExpensePage() {
       <div className="flex gap-3">
         <button onClick={() => handleSubmit('submit')} disabled={submitting}
           className="flex-1 py-2.5 bg-brand-400 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors disabled:opacity-60">
-          {submitting ? 'Submitting...' : 'Submit for approval'}
+          {submitting ? 'Submitting...' : '📤 Submit for approval'}
         </button>
         <button onClick={() => handleSubmit('draft')} disabled={submitting}
           className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50 transition-colors disabled:opacity-60">
-          Save draft
+          💾 Save draft
         </button>
       </div>
+      <p className="text-xs text-gray-400 text-center mt-2">Submitting will notify your manager for approval.</p>
     </div>
   );
 }

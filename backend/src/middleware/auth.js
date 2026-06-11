@@ -4,11 +4,12 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 const authenticate = async (req, res, next) => {
+  // Accept token from header OR query param (needed for file downloads)
   const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
-  const token = header.split(' ')[1];
+  const token = (header && header.startsWith('Bearer ') ? header.split(' ')[1] : null)
+    || req.query.token;
+
+  if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = await prisma.user.findUnique({ where: { id: decoded.userId } });
