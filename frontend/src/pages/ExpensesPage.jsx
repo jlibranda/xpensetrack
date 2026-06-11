@@ -32,6 +32,7 @@ export default function ExpensesPage() {
   const [actionMsg, setActionMsg] = useState('');
   const { format } = useCurrency();
   const navigate = useNavigate();
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
   const load = async () => {
     setLoading(true);
@@ -173,7 +174,7 @@ export default function ExpensesPage() {
             {selected.receiptUrl && (
               <div className="mb-3">
                 <p className="text-xs font-medium text-gray-500 mb-1.5">Receipt</p>
-                {selected.receiptUrl.startsWith('data:') ? (
+                {selected.receipt?.id ? (
                   <img src={selected.receiptUrl} alt="Receipt" className="w-full rounded-lg border border-gray-100 max-h-48 object-contain" />
                 ) : (
                   <a href={selected.receiptUrl} target="_blank" rel="noopener noreferrer"

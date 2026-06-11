@@ -2,7 +2,6 @@
 const nodemailer = require('nodemailer');
 
 let transporter = null;
-
 function getTransporter() {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER) return null;
   if (!transporter) {
@@ -15,61 +14,63 @@ function getTransporter() {
   return transporter;
 }
 
-const sym = (e) => e.currency === 'PHP' ? '₱' : '$';
-const fmt = (e) => `${sym(e)}${e.amount?.toLocaleString()}`;
+const fmt = (e) => `${e.currency==='PHP'?'₱':'$'}${e.amount?.toLocaleString()}`;
 
-const STATUS_CONFIG = {
-  APPROVED: { label: 'Approved ✅', color: '#3B6D11', msg: 'Your expense has been fully approved and will be processed for reimbursement.' },
-  REJECTED: { label: 'Rejected ❌', color: '#A32D2D', msg: 'Your expense has been rejected. Please check the notes and resubmit if needed.' },
-  RETURNED: { label: 'Returned for revision ↩', color: '#854F0B', msg: 'Your expense has been returned for revision. Please review the comments and resubmit.' },
-  MANAGER_APPROVED: { label: 'Manager Approved ✅', color: '#854F0B', msg: 'Your expense has been approved by your manager and is now pending finance review.' },
-};
+async function sendMail(opts) {
+  const t = getTransporter();
+  if (!t) { console.log('Email not configured. Subject:', opts.subject); return; }
+  try { await t.sendMail({ from: `"XpenseTrack" <${process.env.SMTP_USER}>`, ...opts }); }
+  catch(err) { console.log('Email failed:', err.message); }
+}
 
 async function sendApprovalRequestEmail(toEmail, toName, expense) {
-  const t = getTransporter();
-  if (!t) return;
-  try {
-    await t.sendMail({
-      from: `"XpenseTrack" <${process.env.SMTP_USER}>`,
-      to: toEmail,
-      subject: `Action required: Expense approval for ${expense.title}`,
-      html: `<div style="font-family:sans-serif;max-width:480px">
-        <h2 style="color:#0F6E56">Expense Approval Request</h2>
-        <p>Hi ${toName},</p>
-        <p>A new expense has been submitted for your approval:</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <tr><td style="padding:6px 0;color:#666">Description</td><td><b>${expense.title}</b></td></tr>
-          <tr><td style="padding:6px 0;color:#666">Amount</td><td><b>${fmt(expense)}</b></td></tr>
-          <tr><td style="padding:6px 0;color:#666">Category</td><td>${expense.category}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">Date</td><td>${new Date(expense.expenseDate).toLocaleDateString()}</td></tr>
-        </table>
-        <a href="${process.env.FRONTEND_URL}/approvals" style="background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Review in XpenseTrack →</a>
-      </div>`,
-    });
-  } catch (err) { console.log('Email not sent (SMTP not configured):', err.message); }
+  await sendMail({
+    to: toEmail,
+    subject: `Action required: ${expense.title}`,
+    html: `<div style="font-family:sans-serif;max-width:480px">
+      <h2 style="color:#0F6E56">New expense to approve</h2>
+      <p>Hi ${toName}, a new expense needs your approval:</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        <tr><td style="padding:6px 0;color:#666">Description</td><td><b>${expense.title}</b></td></tr>
+        <tr><td style="padding:6px 0;color:#666">Amount</td><td><b>${fmt(expense)}</b></td></tr>
+        <tr><td style="padding:6px 0;color:#666">Category</td><td>${expense.category}</td></tr>
+      </table>
+      <a href="${process.env.FRONTEND_URL}/approvals" style="background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Review →</a>
+    </div>`,
+  });
 }
 
 async function sendStatusUpdateEmail(toEmail, toName, expense, status) {
-  const t = getTransporter();
-  if (!t) return;
-  const s = STATUS_CONFIG[status] || { label: status, color: '#333', msg: '' };
-  try {
-    await t.sendMail({
-      from: `"XpenseTrack" <${process.env.SMTP_USER}>`,
-      to: toEmail,
-      subject: `Expense ${s.label}: ${expense.title}`,
-      html: `<div style="font-family:sans-serif;max-width:480px">
-        <h2 style="color:${s.color}">Expense ${s.label}</h2>
-        <p>Hi ${toName},</p>
-        <p>${s.msg}</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <tr><td style="padding:6px 0;color:#666">Description</td><td><b>${expense.title}</b></td></tr>
-          <tr><td style="padding:6px 0;color:#666">Amount</td><td><b>${fmt(expense)}</b></td></tr>
-        </table>
-        <a href="${process.env.FRONTEND_URL}/expenses" style="background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">View in XpenseTrack →</a>
-      </div>`,
-    });
-  } catch (err) { console.log('Email not sent:', err.message); }
+  const map = {
+    APPROVED: { label:'Approved ✅', msg:'Your expense has been approved for reimbursement.' },
+    REJECTED: { label:'Rejected ❌', msg:'Your expense was rejected. Check the approval notes.' },
+    RETURNED: { label:'Returned ↩', msg:'Your expense was returned for revision. Please check the comments and resubmit.' },
+    MANAGER_APPROVED: { label:'Manager Approved', msg:'Approved by manager, now pending finance review.' },
+  };
+  const s = map[status] || { label: status, msg: '' };
+  await sendMail({
+    to: toEmail,
+    subject: `Expense ${s.label}: ${expense.title}`,
+    html: `<div style="font-family:sans-serif;max-width:480px">
+      <h2>${s.label}</h2>
+      <p>Hi ${toName}, ${s.msg}</p>
+      <p><b>${expense.title}</b> — ${fmt(expense)}</p>
+      <a href="${process.env.FRONTEND_URL}/expenses" style="background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">View in XpenseTrack →</a>
+    </div>`,
+  });
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail };
+async function sendPasswordResetEmail(toEmail, toName, resetUrl) {
+  await sendMail({
+    to: toEmail,
+    subject: 'Reset your XpenseTrack password',
+    html: `<div style="font-family:sans-serif;max-width:480px">
+      <h2 style="color:#0F6E56">Reset your password</h2>
+      <p>Hi ${toName}, click below to reset your password. Link expires in 1 hour.</p>
+      <a href="${resetUrl}" style="background:#1D9E75;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">Reset password →</a>
+      <p style="color:#999;font-size:12px">If you didn't request this, ignore this email.</p>
+    </div>`,
+  });
+}
+
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail };

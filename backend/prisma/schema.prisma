@@ -9,27 +9,23 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  name         String
-  passwordHash String
-  role         Role      @default(EMPLOYEE)
-  department   String?
-  managerId    String?
-  manager      User?     @relation("Reports", fields: [managerId], references: [id])
-  reports      User[]    @relation("Reports")
-  expenses     Expense[] @relation("SubmittedBy")
-  approvals    Approval[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String         @id @default(cuid())
+  email          String         @unique
+  name           String
+  passwordHash   String
+  role           Role           @default(EMPLOYEE)
+  department     String?
+  managerId      String?
+  manager        User?          @relation("Reports", fields: [managerId], references: [id])
+  reports        User[]         @relation("Reports")
+  expenses       Expense[]      @relation("SubmittedBy")
+  approvals      Approval[]
+  passwordResets PasswordReset[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 }
 
-enum Role {
-  EMPLOYEE
-  MANAGER
-  FINANCE
-  ADMIN
-}
+enum Role { EMPLOYEE MANAGER FINANCE ADMIN }
 
 model Expense {
   id            String        @id @default(cuid())
@@ -40,8 +36,8 @@ model Expense {
   amountPhp     Float
   category      Category
   expenseType   ExpenseType   @default(REIMBURSEMENT)
-  receiptUrl    String?
-  receiptData   String?
+  receiptId     String?
+  receipt       Receipt?      @relation(fields: [receiptId], references: [id])
   costCenter    String?
   expenseDate   DateTime
   submittedById String
@@ -52,33 +48,19 @@ model Expense {
   updatedAt     DateTime      @updatedAt
 }
 
-enum Currency {
-  PHP
-  USD
+model Receipt {
+  id        String    @id @default(cuid())
+  data      Bytes
+  mimeType  String    @default("image/jpeg")
+  filename  String?
+  expenses  Expense[]
+  createdAt DateTime  @default(now())
 }
 
-enum Category {
-  MEALS
-  TRAVEL
-  ACCOMMODATION
-  SUPPLIES
-  COMMUNICATIONS
-  OTHER
-}
-
-enum ExpenseType {
-  REIMBURSEMENT
-  CASH_ADVANCE
-}
-
-enum ExpenseStatus {
-  DRAFT
-  PENDING
-  APPROVED
-  REJECTED
-  REIMBURSED
-  CANCELLED
-}
+enum Currency    { PHP USD }
+enum Category    { MEALS TRAVEL ACCOMMODATION SUPPLIES COMMUNICATIONS OTHER }
+enum ExpenseType { REIMBURSEMENT CASH_ADVANCE }
+enum ExpenseStatus { DRAFT PENDING APPROVED REJECTED REIMBURSED CANCELLED }
 
 model Approval {
   id         String         @id @default(cuid())
@@ -93,10 +75,16 @@ model Approval {
   updatedAt  DateTime       @updatedAt
 }
 
-enum ApprovalStatus {
-  PENDING
-  APPROVED
-  REJECTED
+enum ApprovalStatus { PENDING APPROVED REJECTED }
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 model OrgSettings {

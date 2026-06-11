@@ -130,15 +130,18 @@ export default function ApprovalsPage() {
                   <p className="text-sm font-medium text-gray-900">Receipt & details</p>
                   <button onClick={() => setSelected(null)} className="text-xs text-gray-400">✕</button>
                 </div>
-                {selected.expense.receiptUrl ? (
-                  selected.expense.receiptUrl.startsWith('data:') ? (
-                    <img src={selected.expense.receiptUrl} alt="Receipt" className="w-full rounded-lg border border-gray-100 max-h-64 object-contain mb-3" />
-                  ) : (
-                    <a href={selected.expense.receiptUrl} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-xs text-brand-400 hover:text-brand-600 mb-3">
-                      🧾 View receipt →
-                    </a>
-                  )
+                {selected.expense.receipt?.id ? (
+                  <div className="mb-3">
+                    <img
+                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/ocr/receipt/${selected.expense.receipt.id}`}
+                      alt="Receipt"
+                      className="w-full rounded-lg border border-gray-100 max-h-64 object-contain cursor-pointer"
+                      onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/ocr/receipt/${selected.expense.receipt.id}`, '_blank')}
+                      onError={e => { e.target.style.display='none'; }}
+                    />
+                    <button onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/ocr/receipt/${selected.expense.receipt.id}`, '_blank')}
+                      className="text-xs text-brand-400 hover:text-brand-600 mt-1">🔍 View full size</button>
+                  </div>
                 ) : (
                   <div className="bg-gray-50 rounded-lg p-4 text-center text-xs text-gray-400 mb-3">No receipt attached</div>
                 )}
