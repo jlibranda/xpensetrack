@@ -3,7 +3,11 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import api from '../lib/api';
 import { useAuth } from './AuthContext';
 
-const NotificationContext = createContext(null);
+const NotificationContext = createContext({
+  notifications: [], unreadCount: 0,
+  pendingCounts: { myPending: 0, toApprove: 0 },
+  load: () => {}, markAllRead: () => {},
+});
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
@@ -18,22 +22,32 @@ export function NotificationProvider({ children }) {
         api.get('/notifications'),
         api.get('/expenses/pending-count'),
       ]);
-      setNotifications(notif.notifications || []);
-      setUnreadCount(notif.unreadCount || 0);
-      setPendingCounts(counts);
-    } catch(e) {}
+      setNotifications(notif?.notifications || []);
+      setUnreadCount(notif?.unreadCount || 0);
+      setPendingCounts(counts || { myPending: 0, toApprove: 0 });
+    } catch(e) {
+      // Silently fail
+    }
   }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      setUnreadCount(0);
+      setPendingCounts({ myPending: 0, toApprove: 0 });
+      return;
+    }
     load();
-    const interval = setInterval(load, 30000); // poll every 30s
+    const interval = setInterval(load, 30000);
     return () => clearInterval(interval);
-  }, [load]);
+  }, [user, load]);
 
   const markAllRead = async () => {
-    await api.patch('/notifications/read-all');
-    setUnreadCount(0);
-    setNotifications(n => n.map(x => ({ ...x, read: true })));
+    try {
+      await api.patch('/notifications/read-all');
+      setUnreadCount(0);
+      setNotifications(n => n.map(x => ({ ...x, read: true })));
+    } catch(e) {}
   };
 
   return (

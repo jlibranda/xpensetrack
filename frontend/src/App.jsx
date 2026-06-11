@@ -20,13 +20,32 @@ import ProfilePage from './pages/ProfilePage';
 
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center h-screen text-gray-400 text-sm">Loading...</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center h-screen bg-gray-50">
+      <div className="text-center">
+        <div className="w-10 h-10 rounded-xl bg-brand-400 flex items-center justify-center text-white text-lg font-bold mx-auto mb-3">X</div>
+        <p className="text-sm text-gray-400">Loading...</p>
+      </div>
+    </div>
+  );
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
   return children;
 }
 
 function AppRoutes() {
+  const { loading } = useAuth();
+
+  // Don't render routes until auth is resolved — prevents flash/blink
+  if (loading) return (
+    <div className="flex items-center justify-center h-screen bg-gray-50">
+      <div className="text-center">
+        <div className="w-10 h-10 rounded-xl bg-brand-400 flex items-center justify-center text-white text-lg font-bold mx-auto mb-3">X</div>
+        <p className="text-sm text-gray-400">Loading...</p>
+      </div>
+    </div>
+  );
+
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -44,22 +63,23 @@ function AppRoutes() {
         <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <OrgProvider>
-        <CurrencyProvider>
-          <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
+        <OrgProvider>
+          <CurrencyProvider>
             <NotificationProvider>
               <AppRoutes />
             </NotificationProvider>
-          </BrowserRouter>
-        </CurrencyProvider>
-      </OrgProvider>
-    </AuthProvider>
+          </CurrencyProvider>
+        </OrgProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
