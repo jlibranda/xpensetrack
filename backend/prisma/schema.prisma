@@ -1,0 +1,117 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  role          Role      @default(EMPLOYEE)
+  department    String?
+  managerId     String?
+  manager       User?     @relation("Reports", fields: [managerId], references: [id])
+  reports       User[]    @relation("Reports")
+  expenses      Expense[] @relation("SubmittedBy")
+  approvals     Approval[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  FINANCE
+  ADMIN
+}
+
+model Expense {
+  id            String        @id @default(cuid())
+  title         String
+  description   String?
+  amount        Float
+  currency      Currency      @default(PHP)
+  amountPhp     Float         // always stored in PHP for reporting
+  category      Category
+  expenseType   ExpenseType   @default(REIMBURSEMENT)
+  receiptUrl    String?
+  receiptData   String?       // raw OCR text
+  costCenter    String?
+  expenseDate   DateTime
+  submittedById String
+  submittedBy   User          @relation("SubmittedBy", fields: [submittedById], references: [id])
+  approvals     Approval[]
+  status        ExpenseStatus @default(DRAFT)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum Currency {
+  PHP
+  USD
+}
+
+enum Category {
+  MEALS
+  TRAVEL
+  ACCOMMODATION
+  SUPPLIES
+  COMMUNICATIONS
+  OTHER
+}
+
+enum ExpenseType {
+  REIMBURSEMENT
+  CASH_ADVANCE
+}
+
+enum ExpenseStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+model Approval {
+  id         String         @id @default(cuid())
+  expenseId  String
+  expense    Expense        @relation(fields: [expenseId], references: [id])
+  approverId String
+  approver   User           @relation(fields: [approverId], references: [id])
+  status     ApprovalStatus @default(PENDING)
+  level      Int            @default(1) // 1=manager, 2=finance
+  notes      String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  fromCurrency Currency
+  toCurrency   Currency
+  rate      Float
+  date      DateTime @default(now())
+}
+
+model OrgSettings {
+  id                   String @id @default(cuid())
+  companyName          String @default("My Company")
+  defaultCurrency      Currency @default(PHP)
+  receiptRequiredAbove Float  @default(500)
+  approvalLevels       Int    @default(2)
+  updatedAt            DateTime @updatedAt
+}
