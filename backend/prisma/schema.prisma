@@ -9,23 +9,28 @@ datasource db {
 }
 
 model User {
-  id             String         @id @default(cuid())
-  email          String         @unique
+  id             String          @id @default(cuid())
+  email          String          @unique
   name           String
   passwordHash   String
-  role           Role           @default(EMPLOYEE)
+  role           Role            @default(EMPLOYEE)
   department     String?
   managerId      String?
-  manager        User?          @relation("Reports", fields: [managerId], references: [id])
-  reports        User[]         @relation("Reports")
-  expenses       Expense[]      @relation("SubmittedBy")
+  manager        User?           @relation("Reports", fields: [managerId], references: [id])
+  reports        User[]          @relation("Reports")
+  expenses       Expense[]       @relation("SubmittedBy")
   approvals      Approval[]
   passwordResets PasswordReset[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
-enum Role { EMPLOYEE MANAGER FINANCE ADMIN }
+enum Role {
+  EMPLOYEE
+  MANAGER
+  FINANCE
+  ADMIN
+}
 
 model Expense {
   id            String        @id @default(cuid())
@@ -48,6 +53,34 @@ model Expense {
   updatedAt     DateTime      @updatedAt
 }
 
+enum Currency {
+  PHP
+  USD
+}
+
+enum Category {
+  MEALS
+  TRAVEL
+  ACCOMMODATION
+  SUPPLIES
+  COMMUNICATIONS
+  OTHER
+}
+
+enum ExpenseType {
+  REIMBURSEMENT
+  CASH_ADVANCE
+}
+
+enum ExpenseStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  REIMBURSED
+  CANCELLED
+}
+
 model Receipt {
   id        String    @id @default(cuid())
   data      Bytes
@@ -56,11 +89,6 @@ model Receipt {
   expenses  Expense[]
   createdAt DateTime  @default(now())
 }
-
-enum Currency    { PHP USD }
-enum Category    { MEALS TRAVEL ACCOMMODATION SUPPLIES COMMUNICATIONS OTHER }
-enum ExpenseType { REIMBURSEMENT CASH_ADVANCE }
-enum ExpenseStatus { DRAFT PENDING APPROVED REJECTED REIMBURSED CANCELLED }
 
 model Approval {
   id         String         @id @default(cuid())
@@ -75,7 +103,11 @@ model Approval {
   updatedAt  DateTime       @updatedAt
 }
 
-enum ApprovalStatus { PENDING APPROVED REJECTED }
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
 
 model PasswordReset {
   id        String   @id @default(cuid())
