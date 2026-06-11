@@ -15,6 +15,7 @@ router.get('/pending', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
           include: {
             submittedBy: { select: { id: true, name: true, email: true, department: true } },
             approvals: { include: { approver: { select: { name: true } } } },
+            receipt: { select: { id: true, mimeType: true } },
           },
         },
       },
@@ -30,7 +31,7 @@ router.get('/history', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
     const approvals = await prisma.approval.findMany({
       where: { approverId: req.user.id, status: { not: 'PENDING' } },
       include: {
-        expense: { include: { submittedBy: { select: { id: true, name: true } } } },
+        expense: { include: { submittedBy: { select: { id: true, name: true } }, receipt: { select: { id: true, mimeType: true } } } },
       },
       orderBy: { updatedAt: 'desc' },
       take: 50,
@@ -45,7 +46,7 @@ router.post('/:id/approve', authenticate, requireRole('MANAGER', 'FINANCE', 'ADM
     const { notes } = req.body;
     const approval = await prisma.approval.findUnique({
       where: { id: req.params.id },
-      include: { expense: { include: { submittedBy: true } } },
+      include: { expense: { include: { submittedBy: true, receipt: { select: { id: true, mimeType: true } } } } },
     });
     if (!approval) return res.status(404).json({ error: 'Not found' });
     if (approval.approverId !== req.user.id) return res.status(403).json({ error: 'Not your approval' });
@@ -79,7 +80,7 @@ router.post('/:id/reject', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMI
     const { notes } = req.body;
     const approval = await prisma.approval.findUnique({
       where: { id: req.params.id },
-      include: { expense: { include: { submittedBy: true } } },
+      include: { expense: { include: { submittedBy: true, receipt: { select: { id: true, mimeType: true } } } } },
     });
     if (!approval) return res.status(404).json({ error: 'Not found' });
     if (approval.approverId !== req.user.id) return res.status(403).json({ error: 'Not your approval' });
@@ -101,7 +102,7 @@ router.post('/:id/return', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMI
     if (!notes) return res.status(400).json({ error: 'A comment is required when returning an expense' });
     const approval = await prisma.approval.findUnique({
       where: { id: req.params.id },
-      include: { expense: { include: { submittedBy: true } } },
+      include: { expense: { include: { submittedBy: true, receipt: { select: { id: true, mimeType: true } } } } },
     });
     if (!approval) return res.status(404).json({ error: 'Not found' });
     if (approval.approverId !== req.user.id) return res.status(403).json({ error: 'Not your approval' });
