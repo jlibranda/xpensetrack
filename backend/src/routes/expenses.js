@@ -91,14 +91,16 @@ router.patch('/:id', authenticate, async (req, res) => {
     if(e.submittedById!==req.user.id && req.user.role==='EMPLOYEE') return res.status(403).json({error:'Forbidden'});
     if(!['DRAFT','REJECTED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
     const { title, orNumber, merchant, description, amount, currency, category, expenseType, receiptId, costCenter, expenseDate } = req.body;
+    const newAmount = amount !== undefined ? Number(amount) : e.amount;
+    const newCurrency = currency || e.currency;
     const updated = await prisma.expense.update({
       where:{id:req.params.id},
       data:{
         title: title||(merchant?merchant:undefined), orNumber: orNumber!==undefined?orNumber||null:undefined, merchant: merchant!==undefined?merchant||null:undefined, description,
-        amount: amount ? Number(amount) : undefined,
+        amount: amount !== undefined ? Number(amount) : undefined,
         currency, category, expenseType,
         receiptId: receiptId !== undefined ? (receiptId||null) : undefined,
-        costCenter, amountPhp: amount ? toPhp(Number(amount), currency||e.currency) : undefined,
+        costCenter, amountPhp: toPhp(newAmount, newCurrency),
         expenseDate: expenseDate ? new Date(expenseDate) : undefined,
         status: 'DRAFT',
       },
@@ -119,8 +121,10 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     if(!['DRAFT','REJECTED','CANCELLED'].includes(expense.status)) return res.status(400).json({error:'Already submitted'});
 
     const manager = expense.submittedBy.manager;
-    const fallback = await prisma.user.findFirst({ where:{role:{in:['ADMIN','FINANCE']}} });
-    const approverId = manager?.id || fallback?.id || req.user.id;
+    const fallback = await prisma.user.findFirst({ where: { role: { in: ['ADMIN','FINANCE'] }, id: { not: req.user.id } } });
+    const approverId = (manager?.id && manager.id !== req.user.id) ? manager.id : (fallback?.id || null);
+
+    if (!approverId) return res.status(400).json({ error: 'No approver found. Please contact an admin.' });
 
     await prisma.$transaction([
       prisma.expense.update({where:{id:expense.id}, data:{status:'PENDING'}}),
@@ -129,7 +133,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     ]);
 
     // Notify approver
-    const approver = manager || fallback;
+    const approver = (manager?.id && manager.id !== req.user.id) ? manager : fallback;
     if(approver) {
       await sendApprovalRequestEmail(approver.email, `${approver.firstName||''} ${approver.lastName||''}`.trim(), expense).catch(()=>{});
       await createNotification(approverId, 'APPROVAL_REQUEST',
@@ -170,8 +174,13 @@ router.delete('/:id', authenticate, async (req, res) => {
     if(!e) return res.status(404).json({error:'Not found'});
     if(e.submittedById!==req.user.id && req.user.role!=='ADMIN') return res.status(403).json({error:'Forbidden'});
     if(!['DRAFT','CANCELLED','REJECTED'].includes(e.status)) return res.status(400).json({error:'Cannot delete'});
+    const orphanReceiptId = e.receiptId || null;
     await prisma.approval.deleteMany({where:{expenseId:e.id}});
     await prisma.expense.delete({where:{id:e.id}});
+    if (orphanReceiptId) {
+      const stillUsed = await prisma.expense.count({ where: { receiptId: orphanReceiptId } });
+      if (stillUsed === 0) await prisma.receipt.delete({ where: { id: orphanReceiptId } }).catch(() => {});
+    }
     res.json({message:'Deleted'});
   } catch(err){ res.status(500).json({error:err.message}); }
 });

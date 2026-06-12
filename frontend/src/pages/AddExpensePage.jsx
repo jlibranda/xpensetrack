@@ -21,7 +21,7 @@ export default function AddExpensePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [form, setForm] = useState({
-    title:'', orNumber:'', merchant:'', amount:'', currency:'PHP',
+    title:'', orNumber:'', merchant:'', description:'', amount:'', currency:'PHP',
     category: categories[0] || 'MEALS',
     expenseType: expenseTypes[0] || 'REIMBURSEMENT',
     expenseDate: new Date().toISOString().split('T')[0],
@@ -32,6 +32,7 @@ export default function AddExpensePage() {
       api.get(`/expenses/${id}`).then(e => {
         setForm({
           title: e.title, orNumber: e.orNumber||'', merchant: e.merchant||'',
+          description: e.description||'',
           amount: e.amount, currency: e.currency, category: e.category,
           expenseType: e.expenseType, expenseDate: e.expenseDate.split('T')[0],
         });
@@ -204,7 +205,7 @@ export default function AddExpensePage() {
 
           <div>
             <label className="block text-xs text-gray-500 mb-1">Purpose / Notes</label>
-            <textarea value={form.title} onChange={e=>set('title',e.target.value)} rows={2}
+            <textarea value={form.description} onChange={e=>set('description',e.target.value)} rows={2}
               placeholder="Brief description of this expense..."
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 resize-none" />
           </div>

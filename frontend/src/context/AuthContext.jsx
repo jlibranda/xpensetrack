@@ -51,6 +51,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('xpense_theme');
+    localStorage.removeItem('xpense_perms');
     setUser(null);
     // Clean up theme
     document.documentElement.classList.remove('dark');
