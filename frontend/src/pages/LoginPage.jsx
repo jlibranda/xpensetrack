@@ -14,44 +14,50 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // Load branding without auth token
   useEffect(() => {
-    fetch(`${API_BASE}/settings/public`).then(r=>r.json()).then(s=>{
-      if(s?.primaryColor) setBranding(s);
-    }).catch(()=>{});
+    fetch(`${API_BASE}/settings/public`)
+      .then(r => r.json())
+      .then(s => { if (s?.primaryColor) setBranding(s); })
+      .catch(() => {});
   }, []);
 
   const bg = branding.primaryColor || '#1D9E75';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(''); setLoading(true);
+    setError('');
+    setLoading(true);
     try {
       await login(email, password);
       navigate('/');
     } catch(err) {
-      setError(err.error || 'Invalid email or password.');
-    } finally { setLoading(false); }
+      // Error stays visible — never auto-dismisses
+      setError(err.error || 'Invalid email or password. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Clear error only when user starts typing again
+  const handleEmailChange = (e) => { setEmail(e.target.value); if (error) setError(''); };
+  const handlePasswordChange = (e) => { setPassword(e.target.value); if (error) setError(''); };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative"
       style={branding.wallpaperUrl ? {
-        backgroundImage:`url(${branding.wallpaperUrl})`,
-        backgroundSize:'cover', backgroundPosition:'center'
-      } : { backgroundColor:'#f3f4f6' }}>
+        backgroundImage: `url(${branding.wallpaperUrl})`,
+        backgroundSize: 'cover', backgroundPosition: 'center',
+      } : { backgroundColor: '#f3f4f6' }}>
 
-      {/* Overlay for wallpaper readability */}
-      {branding.wallpaperUrl && <div className="absolute inset-0 bg-black/40" />}
+      {branding.wallpaperUrl && <div className="absolute inset-0 bg-black/50" />}
 
       <div className="w-full max-w-sm relative z-10">
-        {/* Logo / Brand */}
         <div className="text-center mb-6">
           {branding.logoUrl ? (
             <img src={branding.logoUrl} alt="Logo" className="w-16 h-16 rounded-2xl object-cover mx-auto mb-3 shadow-lg" />
           ) : (
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3 shadow-lg"
-              style={{backgroundColor:bg}}>
+              style={{ backgroundColor: bg }}>
               {branding.companyName?.[0] || 'X'}
             </div>
           )}
@@ -63,32 +69,34 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit}
-          className="bg-white rounded-2xl shadow-xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-6 space-y-4">
+          {/* Error stays until user types again */}
           {error && (
-            <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-sm text-red-700">
-              {error}
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-sm text-red-700 flex items-start gap-2">
+              <span className="shrink-0 mt-0.5">⚠️</span>
+              <span>{error}</span>
             </div>
           )}
           <div>
-            <label className="block text-xs text-gray-500 mb-1.5">Email</label>
-            <input type="email" required value={email} onChange={e=>setEmail(e.target.value)}
+            <label className="block text-xs text-gray-500 mb-1.5">Email address</label>
+            <input type="email" required value={email} onChange={handleEmailChange}
               placeholder="you@company.com" autoFocus
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 transition-all"
-              style={{'--tw-ring-color': bg}} />
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all" />
           </div>
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs text-gray-500">Password</label>
-              <Link to="/forgot-password" className="text-xs hover:underline" style={{color:bg}}>Forgot password?</Link>
+              <Link to="/forgot-password" className="text-xs hover:underline" style={{ color: bg }}>
+                Forgot password?
+              </Link>
             </div>
-            <input type="password" required value={password} onChange={e=>setPassword(e.target.value)}
+            <input type="password" required value={password} onChange={handlePasswordChange}
               placeholder="••••••••"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none transition-all" />
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all" />
           </div>
           <button type="submit" disabled={loading}
             className="w-full py-2.5 text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-all hover:opacity-90 shadow-sm"
-            style={{backgroundColor:bg}}>
+            style={{ backgroundColor: bg }}>
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>

@@ -7,6 +7,86 @@ import api from '../lib/api';
 
 const TABS = ['General','Branding','Categories','Expense Types','Password','Access Control'];
 
+
+// Separate component for Access Control tab
+function AccessControlTab({ settings, navigate }) {
+  const ALL_PERMS = [
+    { key:'submit_expenses', label:'Submit expenses', roles:['EMPLOYEE','MANAGER','FINANCE','ADMIN'] },
+    { key:'view_own_expenses', label:'View own expenses', roles:['EMPLOYEE','MANAGER','FINANCE','ADMIN'] },
+    { key:'upload_receipts', label:'Upload receipts & AI auto-fill', roles:['EMPLOYEE','MANAGER','FINANCE','ADMIN'] },
+    { key:'cancel_expenses', label:'Cancel own expenses', roles:['EMPLOYEE','MANAGER','FINANCE','ADMIN'] },
+    { key:'approve_expenses', label:'Approve / Reject / Return expenses', roles:['MANAGER','FINANCE','ADMIN'] },
+    { key:'view_team_expenses', label:'View team expenses', roles:['MANAGER','FINANCE','ADMIN'] },
+    { key:'view_reports', label:'View reports & analytics', roles:['MANAGER','FINANCE','ADMIN'] },
+    { key:'export_reports', label:'Export Excel reports', roles:['MANAGER','FINANCE','ADMIN'] },
+    { key:'second_approval', label:'Second-level approval (Finance)', roles:['FINANCE','ADMIN'] },
+    { key:'mark_reimbursed', label:'Mark expenses as reimbursed', roles:['FINANCE','ADMIN'] },
+    { key:'edit_categories', label:'Edit categories & GL codes', roles:['FINANCE','ADMIN'] },
+    { key:'manage_settings', label:'Manage app settings', roles:['FINANCE','ADMIN'] },
+    { key:'manage_users', label:'Manage users', roles:['ADMIN'] },
+    { key:'toggle_access', label:'Activate / deactivate user access', roles:['ADMIN'] },
+    { key:'reset_passwords', label:'Reset any user password', roles:['ADMIN'] },
+    { key:'upload_branding', label:'Upload logo & wallpaper', roles:['ADMIN'] },
+    { key:'change_branding', label:'Change colors & branding', roles:['ADMIN'] },
+  ];
+
+  const ROLES = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'];
+  const ROLE_COLORS = {
+    EMPLOYEE:'bg-blue-50 text-blue-700',
+    MANAGER:'bg-purple-50 text-purple-700',
+    FINANCE:'bg-amber-50 text-amber-700',
+    ADMIN:'bg-green-50 text-green-700',
+  };
+
+  return (
+    <div>
+      <h2 className="text-sm font-medium text-gray-700 mb-1">Role permissions</h2>
+      <p className="text-xs text-gray-400 mb-4">View which roles have access to each feature. Role assignments are managed per user in the Users page.</p>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-gray-100">
+              <th className="text-left py-2 pr-4 text-gray-500 font-medium w-1/2">Permission</th>
+              {ROLES.map(r => (
+                <th key={r} className="text-center py-2 px-2">
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[r]}`}>{r}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ALL_PERMS.map((perm, i) => (
+              <tr key={perm.key} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                <td className="py-2 pr-4 text-gray-700">{perm.label}</td>
+                {ROLES.map(role => (
+                  <td key={role} className="text-center py-2 px-2">
+                    {perm.roles.includes(role) ? (
+                      <span className="text-green-500 font-bold">✓</span>
+                    ) : (
+                      <span className="text-gray-200">—</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-5 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+        <p className="text-xs font-medium text-blue-800 mb-1">🔐 User access management</p>
+        <p className="text-xs text-blue-700 mb-3">To grant or remove access for a specific user: go to Users, click their <strong>Active/Inactive</strong> badge to toggle login access, or use <strong>Reset pwd</strong> to change their password.</p>
+        <button onClick={() => navigate('/users')}
+          className="px-4 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90"
+          style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>
+          → Manage users & access
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { settings, refresh, applyTheme } = useOrg();
   const { user } = useAuth();
@@ -251,42 +331,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {tab === 'Access Control' && isAdmin && (
-          <div>
-            <h2 className="text-sm font-medium text-gray-700 mb-1">Access control</h2>
-            <p className="text-xs text-gray-400 mb-4">Manage users directly from the Users page. Click Active/Inactive to toggle access.</p>
-            <div className="space-y-3">
-              {[
-                { role:'EMPLOYEE', color:'bg-blue-50 text-blue-700', perms:['Submit expenses','View own expenses','Upload receipts (AI auto-fill)','Cancel own expenses','Change own password','View own profile'] },
-                { role:'MANAGER', color:'bg-purple-50 text-purple-700', perms:['All Employee permissions','Approve / Reject / Return expenses','View team expenses','View reports & analytics','Export Excel reports'] },
-                { role:'FINANCE', color:'bg-amber-50 text-amber-700', perms:['All Manager permissions','Second-level approval','Mark as reimbursed','Edit categories & GL codes','Manage settings','Manage users'] },
-                { role:'ADMIN', color:'bg-green-50 text-green-700', perms:['All Finance permissions','Activate / deactivate users','Reset any user password','Upload logo & wallpaper','Change branding & colors','Full access'] },
-              ].map(r => (
-                <div key={r.role} className="border border-gray-100 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${r.color}`}>{r.role}</span>
-                    <button onClick={() => navigate('/users')}
-                      className="text-xs text-brand-400 hover:text-brand-600">
-                      Manage {r.role.toLowerCase()}s →
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {r.perms.map(p => <span key={p} className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded-lg">✓ {p}</span>)}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-5 p-4 bg-amber-50 border border-amber-100 rounded-xl">
-              <p className="text-xs font-medium text-amber-800 mb-1">⚡ Quick access management</p>
-              <p className="text-xs text-amber-700 mb-3">To activate/deactivate a user or reset their password, go to the Users page and click on their status badge or use the Reset pwd button.</p>
-              <button onClick={() => navigate('/users')}
-                className="px-4 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90"
-                style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>
-                → Go to Users page
-              </button>
-            </div>
-          </div>
-        )}
+        {tab === 'Access Control' && isAdmin && <AccessControlTab settings={settings} navigate={navigate} />}
 
         {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
 

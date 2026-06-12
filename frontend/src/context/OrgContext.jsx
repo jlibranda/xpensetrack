@@ -19,29 +19,32 @@ const DEFAULT = {
   defaultPassword: 'Welcome123',
 };
 
+export function applyThemeToDOM(s) {
+  if (!s) return;
+  if (s.primaryColor) {
+    document.documentElement.style.setProperty('--brand-color', s.primaryColor);
+  }
+  if (s.darkMode) {
+    document.documentElement.classList.add('dark');
+    document.documentElement.style.colorScheme = 'dark';
+  } else {
+    document.documentElement.classList.remove('dark');
+    document.documentElement.style.colorScheme = 'light';
+  }
+  if (s.wallpaperUrl) {
+    document.body.style.backgroundImage = `url(${s.wallpaperUrl})`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundAttachment = 'fixed';
+  } else {
+    document.body.style.backgroundImage = '';
+    document.body.style.backgroundSize = '';
+    document.body.style.backgroundPosition = '';
+  }
+}
+
 export function OrgProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULT);
-
-  const applyTheme = (s) => {
-    if (!s) return;
-    // Primary color
-    if (s.primaryColor) document.documentElement.style.setProperty('--brand-color', s.primaryColor);
-    // Dark mode
-    if (s.darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    // Wallpaper
-    if (s.wallpaperUrl) {
-      document.body.style.backgroundImage = `url(${s.wallpaperUrl})`;
-      document.body.style.backgroundSize = 'cover';
-      document.body.style.backgroundPosition = 'center';
-      document.body.style.backgroundAttachment = 'fixed';
-    } else {
-      document.body.style.backgroundImage = '';
-    }
-  };
 
   const load = () => {
     if (!localStorage.getItem('token')) return;
@@ -49,17 +52,26 @@ export function OrgProvider({ children }) {
       if (s) {
         const parsed = {
           ...s,
-          categories: Array.isArray(s.categories) ? s.categories : s.categories?.split(',').map(c=>c.trim()).filter(Boolean) || DEFAULT.categories,
-          expenseTypes: Array.isArray(s.expenseTypes) ? s.expenseTypes : s.expenseTypes?.split(',').map(t=>t.trim()).filter(Boolean) || DEFAULT.expenseTypes,
+          categories: Array.isArray(s.categories) ? s.categories : (s.categories?.split(',').map(c=>c.trim()).filter(Boolean) || DEFAULT.categories),
+          expenseTypes: Array.isArray(s.expenseTypes) ? s.expenseTypes : (s.expenseTypes?.split(',').map(t=>t.trim()).filter(Boolean) || DEFAULT.expenseTypes),
           categoryGlCodes: s.categoryGlCodes || {},
         };
         setSettings(parsed);
-        applyTheme(parsed);
+        applyThemeToDOM(parsed);
       }
     }).catch(() => {});
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  }, []);
+
+  const applyTheme = (s) => {
+    applyThemeToDOM(s);
+    setSettings(prev => ({ ...prev, ...s }));
+  };
 
   return (
     <OrgContext.Provider value={{ settings, refresh: load, applyTheme }}>
