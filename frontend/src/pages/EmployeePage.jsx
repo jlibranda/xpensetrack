@@ -125,10 +125,11 @@ export default function EmployeePage() {
               <>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {user.approvers.map((a, i) => (
-                    <span key={a.id} className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-lg bg-brand-50 border border-brand-100 text-gray-800">
-                      <span className="font-bold text-brand-600">{i + 1}.</span>
-                      <span className="font-semibold">{a.firstName} {a.lastName}</span>
-                      <span className="text-gray-400 text-xs">({a.role}{a.employeeNumber ? ` · ${a.employeeNumber}` : ''})</span>
+                    <span key={a.id} className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg"
+                      style={{ backgroundColor: 'rgba(29,158,117,0.15)', border: '1px solid rgba(29,158,117,0.45)' }}>
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-white shrink-0" style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>{i + 1}</span>
+                      <span className="approver-name font-bold">{a.firstName} {a.lastName}</span>
+                      <span className="approver-meta text-xs">({a.role}{a.employeeNumber ? ` · ${a.employeeNumber}` : ''})</span>
                     </span>
                   ))}
                 </div>

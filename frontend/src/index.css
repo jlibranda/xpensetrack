@@ -137,3 +137,9 @@ html.dark body.has-wallpaper { background-color: transparent !important; }
 html.dark .trail-name { color: #ffffff; }
 .trail-role { color: #6b7280; }
 html.dark .trail-role { color: #cbd5e1; }
+
+/* Employee approval-flow chips: readable in both themes */
+.approver-name { color: #111827; }
+html.dark .approver-name { color: #ffffff; }
+.approver-meta { color: #6b7280; }
+html.dark .approver-meta { color: #cbd5e1; }

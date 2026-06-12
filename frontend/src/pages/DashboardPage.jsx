@@ -15,6 +15,12 @@ const STATUS_BADGE = {
 
 export default function DashboardPage() {
   const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
+  // Names of approver(s) currently pending on an expense.
+  const pendingApprovers = (e) => {
+    if (e.status !== 'PENDING') return '';
+    const names = (e.approvals || []).filter(a => a.status === 'PENDING').map(a => personName(a.approver));
+    return [...new Set(names)].join(', ');
+  };
   const [expenses, setExpenses] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -126,6 +132,7 @@ export default function DashboardPage() {
               <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium">Description</th>
               <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium hidden md:table-cell">Category</th>
               <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium hidden md:table-cell">Employee</th>
+              <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium hidden lg:table-cell">Pending With</th>
               <th className="px-4 py-2.5 text-right text-xs text-gray-600 font-medium font-medium">Amount</th>
               <th className="px-4 py-2.5 text-right text-xs text-gray-600 font-medium font-medium">Status</th>
             </tr></thead>
@@ -136,6 +143,11 @@ export default function DashboardPage() {
                   <td className="px-4 py-3 text-gray-900">{e.title}</td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell capitalize">{e.category.toLowerCase()}</td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{personName(e.submittedBy)}</td>
+                  <td className="px-4 py-3 hidden lg:table-cell">
+                    {pendingApprovers(e)
+                      ? <span className="text-amber-600 text-xs font-medium">{pendingApprovers(e)}</span>
+                      : <span className="text-gray-300 text-xs">—</span>}
+                  </td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">{format(e.amountPhp)}</td>
                   <td className="px-4 py-3 text-right">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[e.status]}`}>{e.status}</span>

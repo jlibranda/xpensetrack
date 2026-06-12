@@ -145,30 +145,45 @@ router.post('/check-duplicate', authenticate, async (req, res) => {
     const { amount, expenseDate, orNumber, merchant, excludeId } = req.body;
     if (!amount || !expenseDate) return res.json({ duplicates: [] });
 
+    // Use a wide ±1 day window to be timezone-safe, then filter to the exact
+    // calendar day by comparing date strings.
     const day = new Date(expenseDate);
-    const start = new Date(day); start.setHours(0,0,0,0);
-    const end = new Date(day); end.setHours(23,59,59,999);
+    const wideStart = new Date(day); wideStart.setDate(wideStart.getDate() - 1);
+    const wideEnd = new Date(day); wideEnd.setDate(wideEnd.getDate() + 1);
+    const targetDay = String(expenseDate).slice(0, 10);
 
-    const orMatch = orNumber ? { orNumber: { equals: String(orNumber).trim(), mode: 'insensitive' } } : null;
-    const merchMatch = merchant ? { merchant: { equals: String(merchant).trim(), mode: 'insensitive' } } : null;
-    const orConds = [orMatch, merchMatch].filter(Boolean);
-
+    // Core match: same user, same amount, not cancelled, within the wide window.
     const where = {
       submittedById: req.user.id,
       amount: Number(amount),
-      expenseDate: { gte: start, lte: end },
+      expenseDate: { gte: wideStart, lte: wideEnd },
       status: { not: 'CANCELLED' },
     };
     if (excludeId) where.id = { not: excludeId };
-    if (orConds.length) where.OR = orConds;
 
-    const duplicates = await prisma.expense.findMany({
+    let candidates = await prisma.expense.findMany({
       where,
       select: { id: true, title: true, merchant: true, orNumber: true, amount: true, currency: true, expenseDate: true, status: true },
-      take: 5,
+      take: 20,
     });
-    res.json({ duplicates });
-  } catch(err){ res.status(500).json({ error: err.message }); }
+
+    // Keep only those whose expense date matches the exact target calendar day.
+    candidates = candidates.filter(c => new Date(c.expenseDate).toISOString().slice(0, 10) === targetDay);
+
+    // If a merchant or OR number was given, prefer rows that also share one of them;
+    // but if none share it, still treat the amount+date matches as possible duplicates.
+    const m = (merchant || '').trim().toLowerCase();
+    const orn = (orNumber || '').trim().toLowerCase();
+    if (m || orn) {
+      const strong = candidates.filter(c =>
+        (m && (c.merchant || '').trim().toLowerCase() === m) ||
+        (orn && (c.orNumber || '').trim().toLowerCase() === orn)
+      );
+      if (strong.length) candidates = strong;
+    }
+
+    res.json({ duplicates: candidates.slice(0, 5) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.patch('/:id', authenticate, async (req, res) => {
