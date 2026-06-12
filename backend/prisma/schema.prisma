@@ -10,12 +10,18 @@ datasource db {
 
 model User {
   id             String          @id @default(cuid())
+  employeeNumber String?         @unique
   email          String          @unique
-  name           String
+  firstName      String
+  lastName       String
   passwordHash   String
   role           Role            @default(EMPLOYEE)
   department     String?
   costCenter     String?
+  position       String?
+  phoneNumber    String?
+  hireDate       DateTime?
+  isActive       Boolean         @default(true)
   managerId      String?
   manager        User?           @relation("Reports", fields: [managerId], references: [id])
   reports        User[]          @relation("Reports")
@@ -41,6 +47,7 @@ model Expense {
   currency      Currency      @default(PHP)
   amountPhp     Float
   category      String
+  glCode        String?
   expenseType   String        @default("REIMBURSEMENT")
   receiptId     String?
   receipt       Receipt?      @relation(fields: [receiptId], references: [id])
@@ -114,8 +121,12 @@ model OrgSettings {
   approvalLevels       Int      @default(2)
   primaryColor         String   @default("#1D9E75")
   logoUrl              String?
+  wallpaperUrl         String?
+  darkMode             Boolean  @default(false)
   categories           String   @default("MEALS,TRAVEL,ACCOMMODATION,SUPPLIES,COMMUNICATIONS,OTHER")
+  categoryGlCodes      String   @default("{}")
   expenseTypes         String   @default("REIMBURSEMENT,CASH_ADVANCE")
+  defaultPassword      String   @default("Welcome123")
   updatedAt            DateTime @updatedAt
 }
 

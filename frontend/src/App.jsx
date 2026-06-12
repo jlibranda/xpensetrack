@@ -1,4 +1,3 @@
-// src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
@@ -16,6 +15,7 @@ import ReportsPage from './pages/ReportsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import UsersPage from './pages/UsersPage';
+import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 
 function PrivateRoute({ children, roles }) {
@@ -35,8 +35,6 @@ function PrivateRoute({ children, roles }) {
 
 function AppRoutes() {
   const { loading } = useAuth();
-
-  // Don't render routes until auth is resolved — prevents flash/blink
   if (loading) return (
     <div className="flex items-center justify-center h-screen bg-gray-50">
       <div className="text-center">
@@ -45,7 +43,6 @@ function AppRoutes() {
       </div>
     </div>
   );
-
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -59,7 +56,8 @@ function AppRoutes() {
         <Route path="approvals" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
         <Route path="reports" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
         <Route path="analytics" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
-        <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE']}><UsersPage /></PrivateRoute>} />
+        <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
+        <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />
         <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>

@@ -1,6 +1,7 @@
 // src/pages/ApprovalsPage.jsx
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { useNotifications } from '../context/NotificationContext';
 import { useCurrency } from '../context/CurrencyContext';
 import ReceiptImage from '../components/ReceiptImage';
 
@@ -19,6 +20,7 @@ export default function ApprovalsPage() {
   const [selected, setSelected] = useState(null);
   const [actioning, setActioning] = useState(null);
   const { format } = useCurrency();
+  const { load: refreshNotif } = useNotifications();
 
   const load = async () => {
     setLoading(true);
@@ -44,6 +46,7 @@ export default function ApprovalsPage() {
       setNotes(n => { const c = {...n}; delete c[id]; return c; });
       setSelected(null);
       await load();
+      refreshNotif();
     } catch(err) {
       alert(err.error || 'Action failed. Please try again.');
     } finally { setActioning(null); }
