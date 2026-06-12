@@ -28,6 +28,7 @@ function AccessControlTab({ settings, navigate }) {
     reset_passwords: ['ADMIN'],
     upload_branding: ['ADMIN'],
     change_branding: ['ADMIN'],
+    impersonate_user: ['ADMIN'],
   };
 
   const PERM_LABELS = {
@@ -48,6 +49,7 @@ function AccessControlTab({ settings, navigate }) {
     reset_passwords: 'Reset any user password',
     upload_branding: 'Upload logo & wallpaper',
     change_branding: 'Change colors & branding',
+    impersonate_user: 'Login as / access user account',
   };
 
   const saved = (() => { try { return JSON.parse(localStorage.getItem('xpense_perms') || 'null'); } catch(e) { return null; } })();
