@@ -10,64 +10,131 @@ const TABS = ['General','Branding','Categories','Expense Types','Password','Acce
 
 // Separate component for Access Control tab
 function AccessControlTab({ settings, navigate }) {
-  const ALL_PERMS = [
-    { key:'submit_expenses', label:'Submit expenses', roles:['EMPLOYEE','MANAGER','FINANCE','ADMIN'] },
-    { key:'view_own_expenses', label:'View own expenses', roles:['EMPLOYEE','MANAGER','FINANCE','ADMIN'] },
-    { key:'upload_receipts', label:'Upload receipts & AI auto-fill', roles:['EMPLOYEE','MANAGER','FINANCE','ADMIN'] },
-    { key:'cancel_expenses', label:'Cancel own expenses', roles:['EMPLOYEE','MANAGER','FINANCE','ADMIN'] },
-    { key:'approve_expenses', label:'Approve / Reject / Return expenses', roles:['MANAGER','FINANCE','ADMIN'] },
-    { key:'view_team_expenses', label:'View team expenses', roles:['MANAGER','FINANCE','ADMIN'] },
-    { key:'view_reports', label:'View reports & analytics', roles:['MANAGER','FINANCE','ADMIN'] },
-    { key:'export_reports', label:'Export Excel reports', roles:['MANAGER','FINANCE','ADMIN'] },
-    { key:'second_approval', label:'Second-level approval (Finance)', roles:['FINANCE','ADMIN'] },
-    { key:'mark_reimbursed', label:'Mark expenses as reimbursed', roles:['FINANCE','ADMIN'] },
-    { key:'edit_categories', label:'Edit categories & GL codes', roles:['FINANCE','ADMIN'] },
-    { key:'manage_settings', label:'Manage app settings', roles:['FINANCE','ADMIN'] },
-    { key:'manage_users', label:'Manage users', roles:['ADMIN'] },
-    { key:'toggle_access', label:'Activate / deactivate user access', roles:['ADMIN'] },
-    { key:'reset_passwords', label:'Reset any user password', roles:['ADMIN'] },
-    { key:'upload_branding', label:'Upload logo & wallpaper', roles:['ADMIN'] },
-    { key:'change_branding', label:'Change colors & branding', roles:['ADMIN'] },
-  ];
+  const DEFAULT_PERMS = {
+    submit_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
+    view_own_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
+    upload_receipts: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
+    cancel_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
+    approve_expenses: ['MANAGER','FINANCE','ADMIN'],
+    view_team_expenses: ['MANAGER','FINANCE','ADMIN'],
+    view_reports: ['MANAGER','FINANCE','ADMIN'],
+    export_reports: ['MANAGER','FINANCE','ADMIN'],
+    second_approval: ['FINANCE','ADMIN'],
+    mark_reimbursed: ['FINANCE','ADMIN'],
+    edit_categories: ['FINANCE','ADMIN'],
+    manage_settings: ['FINANCE','ADMIN'],
+    manage_users: ['ADMIN'],
+    toggle_access: ['ADMIN'],
+    reset_passwords: ['ADMIN'],
+    upload_branding: ['ADMIN'],
+    change_branding: ['ADMIN'],
+  };
 
+  const PERM_LABELS = {
+    submit_expenses: 'Submit expenses',
+    view_own_expenses: 'View own expenses',
+    upload_receipts: 'Upload receipts & AI auto-fill',
+    cancel_expenses: 'Cancel own expenses',
+    approve_expenses: 'Approve / Reject / Return expenses',
+    view_team_expenses: 'View team expenses',
+    view_reports: 'View reports & analytics',
+    export_reports: 'Export Excel reports',
+    second_approval: 'Second-level approval (Finance)',
+    mark_reimbursed: 'Mark expenses as reimbursed',
+    edit_categories: 'Edit categories & GL codes',
+    manage_settings: 'Manage app settings',
+    manage_users: 'Manage users',
+    toggle_access: 'Activate / deactivate user access',
+    reset_passwords: 'Reset any user password',
+    upload_branding: 'Upload logo & wallpaper',
+    change_branding: 'Change colors & branding',
+  };
+
+  const saved = (() => { try { return JSON.parse(localStorage.getItem('xpense_perms') || 'null'); } catch(e) { return null; } })();
+  const [perms, setPerms] = useState(saved || DEFAULT_PERMS);
+  const [saved2, setSaved2] = useState(false);
   const ROLES = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'];
+  const LOCKED = ['ADMIN']; // Admin always has all perms
   const ROLE_COLORS = {
-    EMPLOYEE:'bg-blue-50 text-blue-700',
-    MANAGER:'bg-purple-50 text-purple-700',
-    FINANCE:'bg-amber-50 text-amber-700',
-    ADMIN:'bg-green-50 text-green-700',
+    EMPLOYEE:'bg-blue-50 text-blue-700 border border-blue-200',
+    MANAGER:'bg-purple-50 text-purple-700 border border-purple-200',
+    FINANCE:'bg-amber-50 text-amber-700 border border-amber-200',
+    ADMIN:'bg-green-50 text-green-700 border border-green-200',
+  };
+
+  const toggle = (permKey, role) => {
+    if (role === 'ADMIN') return; // Admin always has everything
+    setPerms(prev => {
+      const current = prev[permKey] || [];
+      const next = current.includes(role) ? current.filter(r => r !== role) : [...current, role];
+      // Ensure hierarchy: if EMPLOYEE has it, MANAGER should too etc.
+      return { ...prev, [permKey]: next };
+    });
+  };
+
+  const savePerms = () => {
+    localStorage.setItem('xpense_perms', JSON.stringify(perms));
+    setSaved2(true);
+    setTimeout(() => setSaved2(false), 2000);
+  };
+
+  const resetPerms = () => {
+    setPerms(DEFAULT_PERMS);
+    localStorage.removeItem('xpense_perms');
   };
 
   return (
     <div>
-      <h2 className="text-sm font-medium text-gray-700 mb-1">Role permissions</h2>
-      <p className="text-xs text-gray-400 mb-4">View which roles have access to each feature. Role assignments are managed per user in the Users page.</p>
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-sm font-medium text-gray-700">Role permissions</h2>
+        <div className="flex gap-2">
+          <button onClick={resetPerms} className="px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg text-xs hover:bg-gray-50">Reset defaults</button>
+          <button onClick={savePerms}
+            className={`px-3 py-1.5 text-white rounded-lg text-xs font-medium transition-colors ${saved2 ? 'bg-green-500' : 'hover:opacity-90'}`}
+            style={saved2 ? {} : {backgroundColor: settings?.primaryColor||'#1D9E75'}}>
+            {saved2 ? '✓ Saved!' : 'Save permissions'}
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-gray-400 mb-4">Check/uncheck to configure which roles can access each feature. ADMIN always has full access.</p>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-xl border border-gray-100">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-left py-2 pr-4 text-gray-500 font-medium w-1/2">Permission</th>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="text-left py-3 px-4 text-gray-500 font-medium">Permission</th>
               {ROLES.map(r => (
-                <th key={r} className="text-center py-2 px-2">
+                <th key={r} className="text-center py-3 px-3 min-w-[90px]">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[r]}`}>{r}</span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {ALL_PERMS.map((perm, i) => (
-              <tr key={perm.key} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                <td className="py-2 pr-4 text-gray-700">{perm.label}</td>
-                {ROLES.map(role => (
-                  <td key={role} className="text-center py-2 px-2">
-                    {perm.roles.includes(role) ? (
-                      <span className="text-green-500 font-bold">✓</span>
-                    ) : (
-                      <span className="text-gray-200">—</span>
-                    )}
-                  </td>
-                ))}
+            {Object.keys(DEFAULT_PERMS).map((key, i) => (
+              <tr key={key} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                <td className="py-2.5 px-4 text-gray-700 font-medium">{PERM_LABELS[key]}</td>
+                {ROLES.map(role => {
+                  const hasAccess = (perms[key] || []).includes(role);
+                  const isAdmin = role === 'ADMIN';
+                  return (
+                    <td key={role} className="text-center py-2.5 px-3">
+                      <button
+                        onClick={() => toggle(key, role)}
+                        disabled={isAdmin}
+                        title={isAdmin ? 'Admin always has full access' : (hasAccess ? 'Click to remove access' : 'Click to grant access')}
+                        className={`w-6 h-6 rounded flex items-center justify-center mx-auto transition-all ${
+                          isAdmin
+                            ? 'bg-green-100 text-green-600 cursor-default'
+                            : hasAccess
+                              ? 'bg-green-500 text-white hover:bg-red-400 cursor-pointer shadow-sm'
+                              : 'bg-gray-100 text-gray-300 hover:bg-green-100 hover:text-green-500 cursor-pointer'
+                        }`}>
+                        {hasAccess || isAdmin ? '✓' : '✗'}
+                      </button>
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -75,8 +142,8 @@ function AccessControlTab({ settings, navigate }) {
       </div>
 
       <div className="mt-5 p-4 bg-blue-50 border border-blue-100 rounded-xl">
-        <p className="text-xs font-medium text-blue-800 mb-1">🔐 User access management</p>
-        <p className="text-xs text-blue-700 mb-3">To grant or remove access for a specific user: go to Users, click their <strong>Active/Inactive</strong> badge to toggle login access, or use <strong>Reset pwd</strong> to change their password.</p>
+        <p className="text-xs font-medium text-blue-800 mb-1">🔐 User login access</p>
+        <p className="text-xs text-blue-700 mb-3">To block or restore a user's login, go to Users and click their <strong>Active/Inactive</strong> badge. Use <strong>Reset pwd</strong> to change their password.</p>
         <button onClick={() => navigate('/users')}
           className="px-4 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90"
           style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>

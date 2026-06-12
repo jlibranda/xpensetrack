@@ -143,7 +143,8 @@ export default function Layout() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
-        <header className={`h-14 border-b flex items-center justify-end px-6 gap-3 shrink-0 ${headerBg}`}>
+        <header className={`h-14 border-b flex items-center justify-end px-6 gap-3 shrink-0 ${headerBg}`}
+          style={settings?.wallpaperUrl ? {backgroundColor: darkMode ? 'rgba(31,41,55,0.92)' : 'rgba(255,255,255,0.92)', backdropFilter:'blur(8px)'} : {}}>
           {/* Dark mode toggle */}
           <button onClick={toggleDarkMode}
             className={`p-2 rounded-lg transition-colors text-lg ${darkMode ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
@@ -201,7 +202,11 @@ export default function Layout() {
           </button>
         </header>
 
-        <main className={`flex-1 overflow-y-auto p-6 ${darkMode ? 'text-gray-100' : ''}`}>
+        <main className={`flex-1 overflow-y-auto p-6 ${darkMode ? 'text-gray-100' : ''}`}
+          style={settings?.wallpaperUrl ? {
+            backdropFilter: 'blur(0px)',
+            backgroundColor: darkMode ? 'rgba(17,24,39,0.85)' : 'rgba(243,244,246,0.88)',
+          } : {}}>
           <Outlet />
         </main>
       </div>
