@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 const userSelect = {
   id:true, employeeNumber:true, firstName:true, lastName:true,
   email:true, role:true, department:true, costCenter:true,
-  position:true, phoneNumber:true, hireDate:true, isActive:true, managerId:true,
+  position:true, payrollAccount:true, isActive:true, managerId:true,
 };
 
 // GET all users
@@ -38,12 +38,11 @@ router.get('/:id', authenticate, async (req, res) => {
 // PATCH update user
 router.patch('/:id', authenticate, requireRole('ADMIN'), async (req, res) => {
   try {
-    const { role, department, managerId, costCenter, position, phoneNumber, hireDate, isActive, employeeNumber, firstName, lastName } = req.body;
+    const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName } = req.body;
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: { role, department, managerId: managerId||null, costCenter: costCenter||null,
-        position: position||null, phoneNumber: phoneNumber||null, isActive,
-        hireDate: hireDate ? new Date(hireDate) : null,
+        position: position||null, payrollAccount: payrollAccount||null, isActive,
         employeeNumber: employeeNumber||null, firstName, lastName },
       select: userSelect,
     });
@@ -104,7 +103,8 @@ router.post('/bulk', authenticate, requireRole('ADMIN'), async (req, res) => {
           email: u.email.toLowerCase().trim(), passwordHash,
           role: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'].includes(u.role?.toUpperCase()) ? u.role.toUpperCase() : 'EMPLOYEE',
           department: u.department?.trim()||null, costCenter: u.costCenter?.trim()||null,
-          employeeNumber: u.employeeNumber?.trim()||null, position: u.position?.trim()||null },
+          employeeNumber: u.employeeNumber?.trim()||null, position: u.position?.trim()||null,
+          payrollAccount: u.payrollAccount?.trim()||null },
         select: { id:true, firstName:true, lastName:true, email:true, role:true },
       });
       results.created.push(created);

@@ -197,7 +197,7 @@ export default function AddExpensePage() {
             <select value={form.category} onChange={e=>set('category',e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400">
               {categories.map(c => (
-                <option key={c} value={c}>{(ICONS[c]||'📎')} {c.charAt(0) + c.slice(1).toLowerCase()}</option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>

@@ -1,8 +1,9 @@
+// src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import { NotificationProvider } from './context/NotificationContext';
-import { OrgProvider } from './context/OrgContext';
+import { OrgProvider, useOrg } from './context/OrgContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -21,10 +22,11 @@ import ProfilePage from './pages/ProfilePage';
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
   if (loading) return (
-    <div className="flex items-center justify-center h-screen bg-gray-50">
+    <div className="flex items-center justify-center h-screen" style={{backgroundColor:'#eef0f5'}}>
       <div className="text-center">
-        <div className="w-10 h-10 rounded-xl bg-brand-400 flex items-center justify-center text-white text-lg font-bold mx-auto mb-3">X</div>
-        <p className="text-sm text-gray-400">Loading...</p>
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3"
+          style={{backgroundColor:'var(--brand-color,#1D9E75)'}}>X</div>
+        <p className="text-sm text-gray-500">Loading...</p>
       </div>
     </div>
   );
@@ -35,34 +37,56 @@ function PrivateRoute({ children, roles }) {
 
 function AppRoutes() {
   const { loading } = useAuth();
+  const { settings } = useOrg();
+
   if (loading) return (
-    <div className="flex items-center justify-center h-screen bg-gray-50">
+    <div className="flex items-center justify-center h-screen" style={{backgroundColor:'#eef0f5'}}>
       <div className="text-center">
-        <div className="w-10 h-10 rounded-xl bg-brand-400 flex items-center justify-center text-white text-lg font-bold mx-auto mb-3">X</div>
-        <p className="text-sm text-gray-400">Loading...</p>
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3"
+          style={{backgroundColor:'var(--brand-color,#1D9E75)'}}>X</div>
+        <p className="text-sm text-gray-500">Loading...</p>
       </div>
     </div>
   );
+
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-        <Route index element={<DashboardPage />} />
-        <Route path="expenses" element={<ExpensesPage />} />
-        <Route path="expenses/new" element={<AddExpensePage />} />
-        <Route path="expenses/:id/edit" element={<AddExpensePage />} />
-        <Route path="approvals" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
-        <Route path="reports" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
-        <Route path="analytics" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
-        <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
-        <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />
-        <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
-        <Route path="profile" element={<ProfilePage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      {/* Wallpaper layer — always behind everything */}
+      {settings?.wallpaperUrl && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundImage: `url('${settings.wallpaperUrl}')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          opacity: 0.12,
+          zIndex: 0,
+          pointerEvents: 'none',
+        }} />
+      )}
+      <div style={{ position: 'relative', zIndex: 1, height: '100vh' }}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<DashboardPage />} />
+            <Route path="expenses" element={<ExpensesPage />} />
+            <Route path="expenses/new" element={<AddExpensePage />} />
+            <Route path="expenses/:id/edit" element={<AddExpensePage />} />
+            <Route path="approvals" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
+            <Route path="reports" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
+            <Route path="analytics" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
+            <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
+            <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />
+            <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
+            <Route path="profile" element={<ProfilePage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </>
   );
 }
 

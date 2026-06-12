@@ -19,8 +19,7 @@ model User {
   department     String?
   costCenter     String?
   position       String?
-  phoneNumber    String?
-  hireDate       DateTime?
+  payrollAccount String?
   isActive       Boolean         @default(true)
   managerId      String?
   manager        User?           @relation("Reports", fields: [managerId], references: [id])

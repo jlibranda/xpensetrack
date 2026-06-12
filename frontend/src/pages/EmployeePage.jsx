@@ -108,8 +108,7 @@ export default function EmployeePage() {
               ['Department', user.department || '—'],
               ['Position', user.position || '—'],
               ['Cost Center', user.costCenter || '—'],
-              ['Phone', user.phoneNumber || '—'],
-              ['Hire Date', user.hireDate ? new Date(user.hireDate).toLocaleDateString('en-PH') : '—'],
+              ['Payroll Account', user.payrollAccount || '—'],
               ['Manager/Approver', user.manager ? `${user.manager.lastName}, ${user.manager.firstName}` : '—'],
               ['Total Expenses', user._count?.expenses || 0],
             ].map(([label, value]) => (

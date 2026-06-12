@@ -30,7 +30,7 @@ export default function UsersPage() {
   const navigate = useNavigate();
 
   const emptyForm = { firstName:'', lastName:'', email:'', password:'', role:'EMPLOYEE',
-    department:'', managerId:'', costCenter:'', position:'', phoneNumber:'', hireDate:'', employeeNumber:'' };
+    department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'' };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -46,8 +46,8 @@ export default function UsersPage() {
     setEditUser(u);
     setForm({ firstName:u.firstName||'', lastName:u.lastName||'', email:u.email,
       password:'', role:u.role, department:u.department||'', managerId:u.managerId||'',
-      costCenter:u.costCenter||'', position:u.position||'', phoneNumber:u.phoneNumber||'',
-      hireDate: u.hireDate ? u.hireDate.split('T')[0] : '', employeeNumber:u.employeeNumber||'' });
+      costCenter:u.costCenter||'', position:u.position||'', payrollAccount:u.payrollAccount||'',
+      employeeNumber:u.employeeNumber||'' });
     setMsg({text:'',ok:true}); setTab('add');
   };
 
@@ -89,6 +89,25 @@ export default function UsersPage() {
       await api.post(`/users/${u.id}/reset-password`, { newPassword: pwd });
       alert('Password reset successfully!');
     } catch(err) { alert(err.error||'Failed'); }
+  };
+
+  const replicateUser = (u) => {
+    setEditUser(null);
+    setForm({
+      firstName: u.firstName + ' (Copy)',
+      lastName: u.lastName,
+      email: '',
+      password: settings?.defaultPassword || 'Welcome123',
+      role: u.role,
+      department: u.department||'',
+      managerId: u.managerId||'',
+      costCenter: u.costCenter||'',
+      position: u.position||'',
+      payrollAccount: u.payrollAccount||'',
+      employeeNumber: '',
+    });
+    setMsg({text:'Replicated from ' + u.firstName + ' ' + u.lastName + ' — update name and email then save.',ok:true});
+    setTab('add');
   };
 
   const parseBulk = (text) => {
@@ -194,7 +213,7 @@ export default function UsersPage() {
               ['department','Department','e.g. Sales'],
               ['position','Position','e.g. Sales Rep'],
               ['costCenter','Cost center','e.g. CC-001'],
-              ['phoneNumber','Phone','e.g. 09XX-XXX-XXXX'],
+              ['payrollAccount','Payroll account no.','e.g. PA-00123'],
             ].map(([k,label,ph]) => (
               <div key={k}>
                 <label className="block text-xs text-gray-500 mb-1">{label}</label>
@@ -202,11 +221,6 @@ export default function UsersPage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
               </div>
             ))}
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Hire date</label>
-              <input type="date" value={form.hireDate} onChange={e=>setF('hireDate',e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
-            </div>
             <div className="col-span-2">
               <label className="block text-xs text-gray-500 mb-1">Approver / Manager</label>
               <select value={form.managerId} onChange={e=>setF('managerId',e.target.value)}
@@ -336,8 +350,9 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => navigate(`/users/${u.id}`)} className="text-xs text-gray-400 hover:text-gray-600">View</button>
+                            <button onClick={() => navigate(`/users/${u.id}`)} className="text-xs px-2 py-1 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">View</button>
                             <button onClick={() => openEdit(u)} className="text-xs text-brand-400 hover:text-brand-600 font-medium">Edit</button>
+                            <button onClick={() => replicateUser(u)} className="text-xs text-purple-500 hover:text-purple-700 font-medium">Replicate</button>
                             <button onClick={() => resetPassword(u)} className="text-xs text-amber-500 hover:text-amber-700">Reset pwd</button>
                           </div>
                         </td>
