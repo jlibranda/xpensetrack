@@ -51,11 +51,12 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('xpense_theme');
-    setUser(null);
-    // Clean up theme
-    document.documentElement.classList.remove('dark');
-    const wallEl = document.getElementById('wallpaper-bg');
-    if (wallEl) wallEl.remove();
+    localStorage.removeItem('xpense_perms');
+    localStorage.removeItem('xpense_roles');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_name');
+    // Full page reload — wipes all React component state so login is always fresh
+    window.location.href = '/login';
   };
 
   return (

@@ -38,12 +38,19 @@ router.get('/:id', authenticate, async (req, res) => {
 // PATCH update user
 router.patch('/:id', authenticate, requireRole('ADMIN'), async (req, res) => {
   try {
-    const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName } = req.body;
+    const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName, newPassword } = req.body;
+    const updateData = {
+      role, department, managerId: managerId||null, costCenter: costCenter||null,
+      position: position||null, payrollAccount: payrollAccount||null, isActive,
+      employeeNumber: employeeNumber||null, firstName, lastName,
+    };
+    if (newPassword) {
+      if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      updateData.passwordHash = await bcrypt.hash(newPassword, 12);
+    }
     const user = await prisma.user.update({
       where: { id: req.params.id },
-      data: { role, department, managerId: managerId||null, costCenter: costCenter||null,
-        position: position||null, payrollAccount: payrollAccount||null, isActive,
-        employeeNumber: employeeNumber||null, firstName, lastName },
+      data: updateData,
       select: userSelect,
     });
     res.json(user);

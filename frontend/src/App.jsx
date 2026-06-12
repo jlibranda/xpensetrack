@@ -1,10 +1,9 @@
 // src/App.jsx
-import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import { NotificationProvider } from './context/NotificationContext';
-import { OrgProvider, useOrg } from './context/OrgContext';
+import { OrgProvider } from './context/OrgContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -19,25 +18,6 @@ import SettingsPage from './pages/SettingsPage';
 import UsersPage from './pages/UsersPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
-
-// Applies wallpaper directly to document.body — most reliable approach
-function WallpaperApplier() {
-  const { settings } = useOrg();
-
-  useEffect(() => {
-    if (settings?.wallpaperUrl) {
-      document.body.style.backgroundImage = `url("${settings.wallpaperUrl}")`;
-      document.body.style.backgroundSize = 'cover';
-      document.body.style.backgroundPosition = 'center';
-      document.body.style.backgroundAttachment = 'fixed';
-      document.body.style.backgroundRepeat = 'no-repeat';
-    } else {
-      document.body.style.backgroundImage = 'none';
-    }
-  }, [settings?.wallpaperUrl]);
-
-  return null;
-}
 
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -96,7 +76,6 @@ export default function App() {
         <OrgProvider>
           <CurrencyProvider>
             <NotificationProvider>
-              <WallpaperApplier />
               <AppRoutes />
             </NotificationProvider>
           </CurrencyProvider>

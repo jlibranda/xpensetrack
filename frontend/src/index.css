@@ -97,3 +97,18 @@ html.dark .bg-blue-50 { background-color: #172554 !important; }
 html.dark .text-blue-700 { color: #93c5fd !important; }
 html.dark .bg-purple-50 { background-color: #3b0764 !important; }
 html.dark .text-purple-700 { color: #d8b4fe !important; }
+
+/* Wallpaper background layer */
+#wallpaper-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* When a wallpaper is active, let it show through the opaque body color */
+body.has-wallpaper { background-color: transparent !important; }
+html.dark body.has-wallpaper { background-color: transparent !important; }
