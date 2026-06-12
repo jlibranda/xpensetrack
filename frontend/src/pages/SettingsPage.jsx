@@ -311,7 +311,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1 flex-wrap">
-        {TABS.filter(t => t!=='Access Control' || isAdmin).map(t => (
+        {TABS.filter(t => (t!=='Access Control' && t!=='Branding' && t!=='Password') || isAdmin).map(t => (
           <button key={t} onClick={()=>setTab(t)}
             className={`px-3 py-1.5 rounded-md text-xs transition-colors ${tab===t?'bg-white font-medium shadow-sm':'text-gray-500 hover:text-gray-700'}`}>
             {t}
@@ -337,18 +337,10 @@ export default function SettingsPage() {
                 <option value="USD">USD — US Dollar ($)</option>
               </select>
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Approval levels</label>
-              <select value={s?.approvalLevels||2} onChange={e=>set('approvalLevels',Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400">
-                <option value={1}>1 — Manager only</option>
-                <option value={2}>2 — Manager + Finance</option>
-              </select>
-            </div>
           </div>
         )}
 
-        {tab === 'Branding' && (
+        {tab === 'Branding' && isAdmin && (
           <div className="space-y-5">
             <h2 className="text-sm font-medium text-gray-700 mb-3">Branding & appearance</h2>
             {/* Logo */}
@@ -463,7 +455,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {tab === 'Password' && (
+        {tab === 'Password' && isAdmin && (
           <div>
             <h2 className="text-sm font-medium text-gray-700 mb-4">Password manager</h2>
             <div className="bg-amber-500 border border-amber-600 rounded-lg p-3 mb-4 text-xs text-white font-medium">

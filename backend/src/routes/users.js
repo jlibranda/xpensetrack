@@ -41,6 +41,26 @@ router.get('/:id', authenticate, async (req, res) => {
     if (user.role === 'ADMIN' && req.user.role !== 'ADMIN' && req.user.id !== user.id) {
       return res.status(403).json({ error: 'Forbidden' });
     }
+
+    // Resolve the full approver chain for display:
+    //  #1 = manager, then the additional approverIds in order.
+    const additionalIds = (user.approverIds || '').split(',').map(s => s.trim()).filter(Boolean);
+    const orderedIds = [];
+    if (user.managerId) orderedIds.push(user.managerId);
+    orderedIds.push(...additionalIds);
+    const uniqueIds = [...new Set(orderedIds)];
+
+    let approverList = [];
+    if (uniqueIds.length) {
+      const people = await prisma.user.findMany({
+        where: { id: { in: uniqueIds } },
+        select: { id: true, firstName: true, lastName: true, role: true, employeeNumber: true },
+      });
+      const byId = {};
+      for (const p of people) byId[p.id] = p;
+      approverList = uniqueIds.map(id => byId[id]).filter(Boolean);
+    }
+    user.approvers = approverList;
     res.json(user);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });

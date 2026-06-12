@@ -35,6 +35,7 @@ export default function Layout() {
   const isAdmin = ['ADMIN','FINANCE'].includes(user?.role);
   const brandColor = settings?.primaryColor || '#1D9E75';
   const darkMode = settings?.darkMode || false;
+  const hasWallpaper = !!settings?.wallpaperUrl;
   const initials = `${user?.firstName?.[0]||''}${user?.lastName?.[0]||''}`.toUpperCase() || 'U';
 
   useEffect(() => {
@@ -225,7 +226,9 @@ export default function Layout() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-6"
-          style={darkMode ? { backgroundColor: '#0f172a' } : { backgroundColor: '#f8fafc' }}>
+          style={hasWallpaper
+            ? { backgroundColor: 'transparent' }
+            : (darkMode ? { backgroundColor: '#0f172a' } : { backgroundColor: '#f8fafc' })}>
           <Outlet />
         </main>
       </div>

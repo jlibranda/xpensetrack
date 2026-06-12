@@ -129,18 +129,9 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     if (submitter.managerId) approverIds.push(submitter.managerId);
     approverIds.push(...additional);
 
-    // No approver/manager assigned -> auto-approve on submission.
+    // No approver/manager assigned -> block submission (do NOT auto-approve).
     if (approverIds.length === 0) {
-      await prisma.$transaction([
-        prisma.expense.update({ where: { id: expense.id }, data: { status: 'APPROVED' } }),
-        prisma.approval.deleteMany({ where: { expenseId: expense.id } }),
-      ]);
-      await createNotification(req.user.id, 'EXPENSE_APPROVED',
-        'Expense auto-approved',
-        `Your expense "${expense.title}" was approved automatically (no approver assigned).`,
-        '/expenses'
-      );
-      return res.json({ message: 'Submitted', expense: await prisma.expense.findUnique({ where: { id: expense.id } }) });
+      return res.status(400).json({ error: 'No approver assigned. Please ask your admin to set the Approver / Manager before submitting.' });
     }
     // De-dupe while preserving order (manager stays #1); cap at 5
     approverIds = [...new Set(approverIds)].slice(0, 5);

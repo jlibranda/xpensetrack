@@ -176,7 +176,7 @@ export default function UsersPage() {
   };
 
   const downloadApprTemplate = () => {
-    const csv = 'employee_number,approver1_number,approver2_number,approver3_number,approver4_number,approver5_number,mode,rule\nEMP-001,EMP-002,EMP-003,,,,SEQUENTIAL,ALL\nEMP-004,EMP-002,,,,,ANY_ORDER,ANY';
+    const csv = 'employee_number,last_name,first_name,approver1_number,approver2_number,approver3_number,approver4_number,approver5_number,mode,rule\nEMP-001,Dela Cruz,Juan,EMP-002,EMP-003,,,,SEQUENTIAL,ALL\nEMP-004,Reyes,Ana,EMP-002,,,,,ANY_ORDER,ANY';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
     a.download = 'approver-assignments-template.csv'; a.click();
@@ -261,7 +261,7 @@ export default function UsersPage() {
         <div className="bg-white rounded-xl border border-gray-100 p-5 mb-5">
           <div className="flex justify-between mb-4">
             <h2 className="text-sm font-medium text-gray-700">{editUser ? `Edit: ${fullName(editUser)}` : 'Add new user'}</h2>
-            <button onClick={() => setTab('list')} className="text-xs text-gray-400 hover:text-gray-600">✕ Cancel</button>
+            <button onClick={() => setTab('list')} className="text-sm font-medium px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 shadow-sm">✕ Close</button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -409,7 +409,7 @@ export default function UsersPage() {
         <div className="bg-white rounded-xl border border-gray-100 p-5 mb-5">
           <div className="flex justify-between mb-4">
             <h2 className="text-sm font-medium text-gray-700">Bulk upload</h2>
-            <button onClick={() => setTab('list')} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            <button onClick={() => setTab('list')} className="text-sm font-medium px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 shadow-sm">✕ Close</button>
           </div>
           <div className="bg-gray-50 rounded-lg p-3 mb-3 text-xs text-gray-600">
             <p className="font-medium mb-1">CSV format (default password: <code className="bg-white px-1 rounded">{settings?.defaultPassword||'Welcome123'}</code>):</p>
@@ -442,7 +442,7 @@ export default function UsersPage() {
             <h2 className="text-sm font-medium text-gray-700 mb-1">Bulk assign approvers</h2>
             <div className="bg-gray-50 rounded-lg p-3 mb-3 text-xs text-gray-600">
               <p className="font-medium mb-1">Upload a CSV or Excel file. Columns:</p>
-              <code className="break-all">employee_number, approver1_number, approver2_number … approver5_number, mode, rule</code>
+              <code className="break-all">employee_number, last_name, first_name, approver1_number … approver5_number, mode, rule</code>
               <p className="mt-1">Use employee numbers (e.g. EMP-001). approver1 becomes the employee's manager (approver #1); up to 5 approvers total. mode = SEQUENTIAL | ANY_ORDER. rule = ALL | ANY.</p>
             </div>
             <div className="flex gap-2 mb-3 flex-wrap">

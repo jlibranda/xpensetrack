@@ -50,7 +50,7 @@ export default function EmployeePage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-5">
-        <button onClick={() => navigate('/users')} className="text-sm text-gray-400 hover:text-gray-600 mb-2">← Back to users</button>
+        <button onClick={() => navigate('/users')} className="inline-flex items-center gap-1 text-sm font-medium px-3 py-1.5 mb-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 shadow-sm">← Back to users</button>
         <div className="flex items-start gap-4">
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-bold shrink-0"
             style={{background:'linear-gradient(135deg,#1D9E75,#0F6E56)'}}>
@@ -118,6 +118,30 @@ export default function EmployeePage() {
               </div>
             ))}
           </div>
+
+          <div className="mt-5 pt-4 border-t border-gray-50">
+            <p className="text-xs text-gray-400 mb-2">Approval flow</p>
+            {(user.approvers && user.approvers.length > 0) ? (
+              <>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {user.approvers.map((a, i) => (
+                    <span key={a.id} className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-lg bg-brand-50 border border-brand-100 text-gray-800">
+                      <span className="font-bold text-brand-600">{i + 1}.</span>
+                      {a.lastName}, {a.firstName} <span className="text-gray-400 text-xs">({a.role})</span>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500">
+                  Order: <span className="font-medium text-gray-700">{user.approvalMode === 'ANY_ORDER' ? 'Any order' : 'Sequential'}</span>
+                  {'  ·  '}
+                  Completion: <span className="font-medium text-gray-700">{user.approvalRule === 'ANY' ? 'Any one is enough' : 'All must approve'}</span>
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-amber-600">No approver assigned — this employee cannot submit expenses until an approver is set.</p>
+            )}
+          </div>
+
           <div className="mt-4 pt-4 border-t border-gray-50 flex gap-2">
             <button onClick={() => navigate('/users', { state: { editUserId: id } })}
               className="px-4 py-2 bg-brand-400 text-white rounded-lg text-sm font-medium hover:bg-brand-600">
