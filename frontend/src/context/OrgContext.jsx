@@ -33,8 +33,10 @@ export function applyThemeToDOM(s) {
   }
   if (s.wallpaperUrl) {
     document.body.classList.add('has-wallpaper');
+    document.documentElement.style.setProperty('--wallpaper-url', `url('${s.wallpaperUrl}')`);
   } else {
     document.body.classList.remove('has-wallpaper');
+    document.documentElement.style.removeProperty('--wallpaper-url');
     document.body.style.backgroundImage = '';
   }
 }

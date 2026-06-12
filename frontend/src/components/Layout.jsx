@@ -64,18 +64,9 @@ export default function Layout() {
     }`;
 
   return (
-    <div className={`flex h-screen font-sans ${hasWallpaper ? '' : mainBg}`}
-      style={hasWallpaper ? {
-        backgroundImage: `url(${settings.wallpaperUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundAttachment: 'fixed',
-      } : {}}>
+    <div className={`flex h-screen font-sans ${mainBg}`}>
       {/* Sidebar */}
-      <aside className="w-52 flex flex-col shrink-0" style={{ 
-        backgroundColor: hasWallpaper ? (darkMode ? 'rgba(15,15,26,0.92)' : 'rgba(26,26,46,0.92)') : sidebarBg,
-        backdropFilter: hasWallpaper ? 'blur(8px)' : 'none',
-      }}>
+      <aside className="w-52 flex flex-col shrink-0" style={{ backgroundColor: sidebarBg }}>
         {/* Logo */}
         <div className="px-4 py-4 border-b border-white/10">
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate('/')}>
@@ -153,12 +144,7 @@ export default function Layout() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
-        <header className={`h-14 border-b flex items-center justify-end px-6 gap-3 shrink-0 ${hasWallpaper ? '' : headerBg}`}
-          style={hasWallpaper ? {
-            backgroundColor: darkMode ? 'rgba(31,41,55,0.88)' : 'rgba(255,255,255,0.88)',
-            backdropFilter: 'blur(12px)',
-            borderBottomColor: 'rgba(229,231,235,0.5)',
-          } : {}}>
+        <header className={`h-14 border-b flex items-center justify-end px-6 gap-3 shrink-0 ${headerBg}`}>
           {/* Dark mode toggle */}
           <button onClick={toggleDarkMode}
             className={`p-2 rounded-lg transition-colors text-lg ${darkMode ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
@@ -216,10 +202,7 @@ export default function Layout() {
           </button>
         </header>
 
-        <main className={`flex-1 overflow-y-auto p-6 ${darkMode ? 'text-gray-100' : ''}`}
-          style={hasWallpaper ? {
-            backgroundColor: darkMode ? 'rgba(17,24,39,0.75)' : 'rgba(255,255,255,0.15)',
-          } : {}}>
+        <main className={`flex-1 overflow-y-auto p-6`}>
           <Outlet />
         </main>
       </div>

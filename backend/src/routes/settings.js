@@ -12,13 +12,16 @@ const OLD_DEFAULT_CATEGORIES = ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COM
 async function getOrCreate() {
   let s = await prisma.orgSettings.findFirst();
   if (!s) {
-    s = await prisma.orgSettings.create({ data: { categories: NEW_DEFAULT_CATEGORIES } });
+    s = await prisma.orgSettings.create({ data: { categories: "Cleaning,Education and Training,Entertainment/Meals,Equipment,Facility Maintenance and Repair,Furniture and Fixtures,General Office Expense,Hardware,Miscellaneous,Mobile Device,Non-Capital Small Tools Equipment and Furniture,Office Rent,Parking,Printing,Recruiting,Travel - Air Ticket (International),Travel - Air Ticket (Domestic),Travel - Others,Travel - Hotel (Domestic)" } });
   } else {
-    // Auto-migrate old default categories to new ones
-    const currentCats = s.categories.split(',').map(c => c.trim());
-    const isOldDefault = currentCats.every(c => OLD_DEFAULT_CATEGORIES.includes(c)) && currentCats.length <= 6;
-    if (isOldDefault) {
-      s = await prisma.orgSettings.update({ where: { id: s.id }, data: { categories: NEW_DEFAULT_CATEGORIES } });
+    // Always ensure new categories are set if they don't include our custom ones
+    const hasCleaning = s.categories.includes('Cleaning');
+    const hasEntertainment = s.categories.includes('Entertainment');
+    if (!hasCleaning || !hasEntertainment) {
+      s = await prisma.orgSettings.update({
+        where: { id: s.id },
+        data: { categories: "Cleaning,Education and Training,Entertainment/Meals,Equipment,Facility Maintenance and Repair,Furniture and Fixtures,General Office Expense,Hardware,Miscellaneous,Mobile Device,Non-Capital Small Tools Equipment and Furniture,Office Rent,Parking,Printing,Recruiting,Travel - Air Ticket (International),Travel - Air Ticket (Domestic),Travel - Others,Travel - Hotel (Domestic)" }
+      });
     }
   }
   return s;
@@ -101,6 +104,19 @@ router.get('/public', async (req, res) => {
       logoUrl: s.logoUrl,
       wallpaperUrl: s.wallpaperUrl,
     });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+
+// POST /api/settings/reset-categories — force reset to new default categories
+router.post('/reset-categories', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res) => {
+  try {
+    const s = await getOrCreate();
+    const updated = await prisma.orgSettings.update({
+      where: { id: s.id },
+      data: { categories: "Cleaning,Education and Training,Entertainment/Meals,Equipment,Facility Maintenance and Repair,Furniture and Fixtures,General Office Expense,Hardware,Miscellaneous,Mobile Device,Non-Capital Small Tools Equipment and Furniture,Office Rent,Parking,Printing,Recruiting,Travel - Air Ticket (International),Travel - Air Ticket (Domestic),Travel - Others,Travel - Hotel (Domestic)" }
+    });
+    res.json({ message: 'Categories reset to defaults', categories: updated.categories.split(',') });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 

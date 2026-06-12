@@ -389,7 +389,14 @@ export default function SettingsPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium text-gray-700">Expense categories & GL codes</h2>
-              <button onClick={addCat} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">+ Add</button>
+              <div className="flex gap-2">
+                <button onClick={async () => {
+                  await api.post('/settings/reset-categories');
+                  refresh();
+                  window.location.reload();
+                }} className="px-3 py-1.5 text-xs border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-50">↺ Reset to defaults</button>
+                <button onClick={addCat} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">+ Add</button>
+              </div>
             </div>
             <div className="space-y-2">
               {cats.map((cat, i) => (
