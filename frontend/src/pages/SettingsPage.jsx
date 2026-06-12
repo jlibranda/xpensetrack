@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useOrg } from '../context/OrgContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
+import toast from '../lib/toast';
 
 const TABS = ['General','Branding','Categories','Expense Types','Password','Access Control'];
 
@@ -244,7 +245,7 @@ export default function SettingsPage() {
     setFxBusy(true); setFxMsg('');
     try {
       const r = await api.patch('/settings/exchange-rate', { usdPhpRate: Number(fxRateInput), auto: false });
-      setFx(r); setFxRateInput(String(r.usdPhpRate)); setFxMsg('✅ Manual rate saved');
+      setFx(r); setFxRateInput(String(r.usdPhpRate)); setFxMsg('✅ Manual rate saved'); toast.success('Exchange rate saved');
     } catch (e) { setFxMsg('❌ ' + (e.error || 'Failed')); }
     finally { setFxBusy(false); }
   };
@@ -261,7 +262,7 @@ export default function SettingsPage() {
     try {
       const r = await api.post('/settings/exchange-rate/refresh', {});
       if (r.error) setFxMsg('❌ ' + r.error);
-      else { const cur = await api.get('/settings/exchange-rate'); setFx(cur); setFxRateInput(String(cur.usdPhpRate)); setFxMsg('✅ Rate refreshed'); }
+      else { const cur = await api.get('/settings/exchange-rate'); setFx(cur); setFxRateInput(String(cur.usdPhpRate)); setFxMsg('✅ Rate refreshed'); toast.success('Exchange rate refreshed'); }
     } catch (e) { setFxMsg('❌ ' + (e.error || 'Failed')); }
     finally { setFxBusy(false); }
   };
@@ -292,7 +293,7 @@ export default function SettingsPage() {
       const updated = await api.patch('/settings', payload);
       applyTheme(updated);
       refresh();
-      setMsg('✅ Settings saved!');
+      setMsg('✅ Settings saved!'); toast.success('Settings saved');
       setForm(null);
       setTimeout(() => setMsg(''), 3000);
     } catch(err) { setMsg('❌ ' + (err.error||'Failed')); }
@@ -316,7 +317,7 @@ export default function SettingsPage() {
       applyTheme(newSettings);
       localStorage.setItem('xpense_theme', JSON.stringify(newSettings));
       refresh();
-      setMsg('✅ Wallpaper updated!');
+      setMsg('✅ Wallpaper updated!'); toast.success('Wallpaper updated');
       setTimeout(()=>setMsg(''),3000);
     }
     catch(err) { setMsg('❌ Failed to upload wallpaper'); }
@@ -329,7 +330,7 @@ export default function SettingsPage() {
       applyTheme(newSettings);
       localStorage.setItem('xpense_theme', JSON.stringify(newSettings));
       refresh();
-      setMsg('✅ Wallpaper removed');
+      setMsg('✅ Wallpaper removed'); toast.success('Wallpaper removed');
       setTimeout(()=>setMsg(''),2000);
     }
     catch(err) { setMsg('❌ Failed'); }

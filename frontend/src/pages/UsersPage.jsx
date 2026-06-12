@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
+import toast from '../lib/toast';
 import { useOrg } from '../context/OrgContext';
 
 const ROLES = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'];
@@ -227,7 +228,7 @@ export default function UsersPage() {
     setDeletingUsers(true); setMsg({text:'',ok:true});
     try {
       const r = await api.post('/users/bulk-delete', { userIds: selectedIds });
-      setMsg({ text: `Deleted ${r.deleted} employee(s)${r.skipped ? `, skipped ${r.skipped} (protected)` : ''}`, ok: true });
+      toast.success(`Deleted ${r.deleted} employee(s)`); setMsg({ text: `Deleted ${r.deleted} employee(s)${r.skipped ? `, skipped ${r.skipped} (protected)` : ''}`, ok: true });
       setSelectedIds([]);
       await load();
     } catch (e) { setMsg({ text: e.error || 'Delete failed', ok: false }); }

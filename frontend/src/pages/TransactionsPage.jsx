@@ -1,6 +1,7 @@
 // src/pages/TransactionsPage.jsx
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import toast from '../lib/toast';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
@@ -71,7 +72,7 @@ export default function TransactionsPage() {
     const date = procDate[id] || new Date().toISOString().slice(0, 10);
     try {
       await api.post(`/expenses/${id}/mark-processed`, { processedDate: date });
-      setMsg({ text: 'Marked processed', ok: true });
+      setMsg({ text: 'Marked processed', ok: true }); toast.success('Marked as processed');
       await load();
     } catch (e) { setMsg({ text: e.error || 'Failed', ok: false }); }
   };
@@ -90,7 +91,7 @@ export default function TransactionsPage() {
     setDeleting(true); setMsg({ text: '', ok: true });
     try {
       const r = await api.post('/expenses/bulk-delete', { from: delFrom || undefined, to: delTo || undefined, status: delStatus || undefined });
-      setMsg({ text: `Deleted ${r.deleted} transaction(s)`, ok: true });
+      setMsg({ text: `Deleted ${r.deleted} transaction(s)`, ok: true }); toast.success(`Deleted ${r.deleted} transaction(s)`);
       setShowDelete(false); setDelFrom(''); setDelTo(''); setDelStatus('');
       await load();
     } catch (e) { setMsg({ text: e.error || 'Delete failed', ok: false }); }

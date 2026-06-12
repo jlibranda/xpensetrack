@@ -5,6 +5,7 @@ import { CurrencyProvider } from './context/CurrencyContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { OrgProvider } from './context/OrgContext';
 import Layout from './components/Layout';
+import Toaster from './components/Toaster';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -81,6 +82,7 @@ export default function App() {
           <CurrencyProvider>
             <NotificationProvider>
               <AppRoutes />
+              <Toaster />
             </NotificationProvider>
           </CurrencyProvider>
         </OrgProvider>

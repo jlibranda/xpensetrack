@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../lib/api';
+import toast from '../lib/toast';
 import { useOrg } from '../context/OrgContext';
 
 const ICONS = { MEALS:'🍽️', TRAVEL:'✈️', ACCOMMODATION:'🏨', SUPPLIES:'📦', COMMUNICATIONS:'📱', OTHER:'📎' };
@@ -83,8 +84,11 @@ export default function AddExpensePage() {
   };
 
   const handleSubmit = async (action) => {
+    if (submitting) return; // guard against double-press / rapid clicks
     if (!form.merchant || !form.amount || !form.expenseDate) { setError('Merchant, amount, and date are required.'); return; }
     if (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0) { setError('Enter a valid amount.'); return; }
+
+    setSubmitting(true); setError('');
 
     // Duplicate detection — warn (don't block) if a similar expense already exists.
     if (!dupAcknowledged) {
@@ -99,12 +103,11 @@ export default function AddExpensePage() {
         if (duplicates && duplicates.length > 0) {
           setDupes(duplicates);
           setPendingAction(action);
+          setSubmitting(false); // re-enable so user can choose in the modal
           return; // pause and show the warning modal
         }
       } catch (e) { /* if the check fails, don't block submission */ }
     }
-
-    setSubmitting(true); setError('');
     try {
       const payload = { ...form, title: form.title || form.merchant, receiptId: receiptId || null };
       let expense;
@@ -115,9 +118,9 @@ export default function AddExpensePage() {
       }
       if (action === 'submit') {
         await api.post(`/expenses/${expense.id}/submit`);
-        setSuccess('✅ Submitted for approval!');
+        setSuccess('✅ Submitted for approval!'); toast.success('Expense submitted for approval');
       } else {
-        setSuccess('💾 Saved as draft!');
+        setSuccess('💾 Saved as draft!'); toast.success('Saved as draft');
       }
       setTimeout(() => navigate('/expenses'), 1800);
     } catch(err) {

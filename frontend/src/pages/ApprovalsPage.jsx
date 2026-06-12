@@ -1,6 +1,7 @@
 // src/pages/ApprovalsPage.jsx
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import toast from '../lib/toast';
 import { useNotifications } from '../context/NotificationContext';
 import { useCurrency } from '../context/CurrencyContext';
 import ReceiptImage from '../components/ReceiptImage';
@@ -50,6 +51,7 @@ export default function ApprovalsPage() {
       setSelected(null);
       await load();
       refreshNotif();
+      toast.success(type === 'approve' ? 'Expense approved' : type === 'reject' ? 'Expense rejected' : 'Returned to submitter');
     } catch(err) {
       alert(err.error || 'Action failed. Please try again.');
     } finally { setActioning(null); }
