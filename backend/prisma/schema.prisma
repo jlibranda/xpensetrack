@@ -24,7 +24,6 @@ model User {
   managerId      String?
   manager        User?           @relation("Reports", fields: [managerId], references: [id])
   reports        User[]          @relation("Reports")
-  notifications    Notification[]
   expenses       Expense[]       @relation("SubmittedBy")
   approvals      Approval[]
   passwordResets PasswordReset[]
@@ -136,7 +135,6 @@ model OrgSettings {
 model Notification {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String
   title     String
   message   String

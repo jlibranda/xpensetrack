@@ -74,7 +74,6 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
       include: {
         submittedBy: { select: { firstName: true, lastName: true, email: true, department: true } },
         approvals: { include: { approver: { select: { firstName: true, lastName: true } } }, orderBy: { level: 'asc' } },
-        receipt: { select: { id: true } },
       },
       orderBy: { expenseDate: 'desc' },
     });
@@ -95,7 +94,7 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
       'Status': e.status,
       'Approver': e.approvals[0]?.approver ? `${e.approvals[0].approver.firstName||''} ${e.approvals[0].approver.lastName||''}`.trim() : '',
       'Approval Notes': e.approvals[0]?.notes || '',
-      'Receipt': e.receipt ? 'Attached' : '',
+      'Receipt': e.receiptUrl && !e.receiptUrl.startsWith('data:') ? e.receiptUrl : (e.receiptUrl ? 'Attached' : ''),
     }));
 
     const wb = XLSX.utils.book_new();

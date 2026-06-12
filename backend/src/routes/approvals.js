@@ -27,7 +27,7 @@ router.get('/history', authenticate, requireRole('MANAGER','FINANCE','ADMIN'), a
   try {
     const approvals = await prisma.approval.findMany({
       where:{ approverId:req.user.id, status:{not:'PENDING'} },
-      include:{ expense:{ include:{ submittedBy:{select:{id:true,firstName:true,lastName:true}}, receipt:{select:{id:true,mimeType:true}} } } },
+      include:{ expense:{ include:{ submittedBy:{select:{id:true,name:true}}, receipt:{select:{id:true,mimeType:true}} } } },
       orderBy:{ updatedAt:'desc' },
       take:100,
     });

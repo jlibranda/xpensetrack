@@ -54,7 +54,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
 
   const [perms, setPerms] = useState(() => {
     const ac = settings?.accessControl;
-    return ac && Object.keys(ac).length > 0 ? { ...DEFAULT_PERMS, ...ac } : DEFAULT_PERMS;
+    return (ac && Object.keys(ac).length > 0) ? { ...DEFAULT_PERMS, ...ac } : DEFAULT_PERMS;
   });
   const [saved2, setSaved2] = useState(false);
   const [saving2, setSaving2] = useState(false);

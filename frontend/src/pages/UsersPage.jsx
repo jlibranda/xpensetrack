@@ -34,12 +34,9 @@ export default function UsersPage() {
     department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'' };
   const [form, setForm] = useState(emptyForm);
 
-  // Check if impersonation is enabled in access control settings
-
-
   const { user: currentUser } = useAuth();
 
-  // Read role permissions from Access Control settings (stored in DB via settings.accessControl)
+  // Read role permissions from Access Control settings (DB-backed via settings.accessControl)
   const getRolePerm = (permKey, defaultRoles = ['ADMIN']) => {
     const userRole = currentUser?.role || 'EMPLOYEE';
     const perms = settings?.accessControl;

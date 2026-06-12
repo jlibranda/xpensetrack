@@ -55,7 +55,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('xpense_roles');
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_name');
-    // Full page reload resets all React component state for a clean login
+    // Full page reload — wipes all React component state so login is always fresh
     window.location.href = '/login';
   };
 

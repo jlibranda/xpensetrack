@@ -63,7 +63,7 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
         expenseTypes: Array.isArray(expenseTypes) ? expenseTypes.join(',') : expenseTypes,
         categoryGlCodes: categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined,
         defaultPassword: defaultPassword || undefined,
-        accessControlJson: accessControl ? JSON.stringify(accessControl) : undefined,
+        accessControlJson: accessControl !== undefined ? JSON.stringify(accessControl) : undefined,
       },
     });
     res.json(parseSettings(updated));
