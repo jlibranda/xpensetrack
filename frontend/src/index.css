@@ -24,16 +24,16 @@ p, td, th, label, span { color: inherit; }
 .text-gray-500 { color: #64748b !important; }
 .text-gray-400 { color: #94a3b8 !important; }
 
-/* Cards - slightly off-white with visible border */
+/* Cards - solid but slightly transparent when wallpaper present */
 .bg-white {
-  background-color: #ffffff !important;
+  background-color: rgba(255,255,255,0.93) !important;
   border-color: #d1d9e6 !important;
 }
 .bg-gray-50 {
-  background-color: #f0f4f9 !important;
+  background-color: rgba(240,244,249,0.93) !important;
 }
 .bg-gray-100 {
-  background-color: #e2e8f0 !important;
+  background-color: rgba(226,232,240,0.93) !important;
 }
 
 /* Inputs */

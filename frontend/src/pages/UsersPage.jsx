@@ -91,23 +91,17 @@ export default function UsersPage() {
     } catch(err) { alert(err.error||'Failed'); }
   };
 
-  const replicateUser = (u) => {
-    setEditUser(null);
-    setForm({
-      firstName: u.firstName + ' (Copy)',
-      lastName: u.lastName,
-      email: '',
-      password: settings?.defaultPassword || 'Welcome123',
-      role: u.role,
-      department: u.department||'',
-      managerId: u.managerId||'',
-      costCenter: u.costCenter||'',
-      position: u.position||'',
-      payrollAccount: u.payrollAccount||'',
-      employeeNumber: '',
-    });
-    setMsg({text:'Replicated from ' + u.firstName + ' ' + u.lastName + ' — update name and email then save.',ok:true});
-    setTab('add');
+  const impersonateUser = async (u) => {
+    if (!window.confirm(`Access account of ${u.firstName} ${u.lastName}? You can return to admin by clicking "Return to Admin" in the top bar.`)) return;
+    try {
+      const res = await api.post(`/users/${u.id}/impersonate`);
+      // Save current admin token so we can return
+      localStorage.setItem('admin_token', localStorage.getItem('token'));
+      localStorage.setItem('admin_name', `${window.__currentUser?.firstName || ''} ${window.__currentUser?.lastName || ''}`.trim());
+      // Switch to impersonated user
+      localStorage.setItem('token', res.token);
+      window.location.href = '/';
+    } catch(err) { alert(err.error || 'Failed to access user account'); }
   };
 
   const parseBulk = (text) => {
@@ -352,7 +346,7 @@ export default function UsersPage() {
                           <div className="flex items-center justify-end gap-2">
                             <button onClick={() => navigate(`/users/${u.id}`)} className="text-xs px-2 py-1 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">View</button>
                             <button onClick={() => openEdit(u)} className="text-xs text-brand-400 hover:text-brand-600 font-medium">Edit</button>
-                            <button onClick={() => replicateUser(u)} className="text-xs text-purple-500 hover:text-purple-700 font-medium">Replicate</button>
+                            <button onClick={() => impersonateUser(u)} className="text-xs text-purple-600 hover:text-purple-800 font-medium" title="Login as this user">Access</button>
                             <button onClick={() => resetPassword(u)} className="text-xs text-amber-500 hover:text-amber-700">Reset pwd</button>
                           </div>
                         </td>

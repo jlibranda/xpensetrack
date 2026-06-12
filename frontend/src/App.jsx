@@ -1,4 +1,5 @@
 // src/App.jsx
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
@@ -19,13 +20,32 @@ import UsersPage from './pages/UsersPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 
+// Applies wallpaper directly to document.body — most reliable approach
+function WallpaperApplier() {
+  const { settings } = useOrg();
+
+  useEffect(() => {
+    if (settings?.wallpaperUrl) {
+      document.body.style.backgroundImage = `url("${settings.wallpaperUrl}")`;
+      document.body.style.backgroundSize = 'cover';
+      document.body.style.backgroundPosition = 'center';
+      document.body.style.backgroundAttachment = 'fixed';
+      document.body.style.backgroundRepeat = 'no-repeat';
+    } else {
+      document.body.style.backgroundImage = 'none';
+    }
+  }, [settings?.wallpaperUrl]);
+
+  return null;
+}
+
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
   if (loading) return (
-    <div className="flex items-center justify-center h-screen" style={{backgroundColor:'#eef0f5'}}>
+    <div className="flex items-center justify-center h-screen">
       <div className="text-center">
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3"
-          style={{backgroundColor:'var(--brand-color,#1D9E75)'}}>X</div>
+          style={{ backgroundColor: 'var(--brand-color, #1D9E75)' }}>X</div>
         <p className="text-sm text-gray-500">Loading...</p>
       </div>
     </div>
@@ -37,56 +57,35 @@ function PrivateRoute({ children, roles }) {
 
 function AppRoutes() {
   const { loading } = useAuth();
-  const { settings } = useOrg();
-
   if (loading) return (
-    <div className="flex items-center justify-center h-screen" style={{backgroundColor:'#eef0f5'}}>
+    <div className="flex items-center justify-center h-screen">
       <div className="text-center">
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3"
-          style={{backgroundColor:'var(--brand-color,#1D9E75)'}}>X</div>
+          style={{ backgroundColor: 'var(--brand-color, #1D9E75)' }}>X</div>
         <p className="text-sm text-gray-500">Loading...</p>
       </div>
     </div>
   );
-
   return (
-    <>
-      {/* Wallpaper layer — always behind everything */}
-      {settings?.wallpaperUrl && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundImage: `url('${settings.wallpaperUrl}')`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          opacity: 0.12,
-          zIndex: 0,
-          pointerEvents: 'none',
-        }} />
-      )}
-      <div style={{ position: 'relative', zIndex: 1, height: '100vh' }}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-            <Route index element={<DashboardPage />} />
-            <Route path="expenses" element={<ExpensesPage />} />
-            <Route path="expenses/new" element={<AddExpensePage />} />
-            <Route path="expenses/:id/edit" element={<AddExpensePage />} />
-            <Route path="approvals" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
-            <Route path="reports" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
-            <Route path="analytics" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
-            <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
-            <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />
-            <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
-            <Route path="profile" element={<ProfilePage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
-    </>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+        <Route index element={<DashboardPage />} />
+        <Route path="expenses" element={<ExpensesPage />} />
+        <Route path="expenses/new" element={<AddExpensePage />} />
+        <Route path="expenses/:id/edit" element={<AddExpensePage />} />
+        <Route path="approvals" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
+        <Route path="reports" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
+        <Route path="analytics" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
+        <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
+        <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />
+        <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
+        <Route path="profile" element={<ProfilePage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
@@ -97,6 +96,7 @@ export default function App() {
         <OrgProvider>
           <CurrencyProvider>
             <NotificationProvider>
+              <WallpaperApplier />
               <AppRoutes />
             </NotificationProvider>
           </CurrencyProvider>

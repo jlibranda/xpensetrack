@@ -115,4 +115,27 @@ router.post('/bulk', authenticate, requireRole('ADMIN'), async (req, res) => {
   res.json(results);
 });
 
+
+// POST /api/users/:id/impersonate — Admin logs in AS another user
+router.post('/:id/impersonate', authenticate, requireRole('ADMIN'), async (req, res) => {
+  try {
+    const jwt = require('jsonwebtoken');
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    if (!target.isActive) return res.status(400).json({ error: 'Cannot impersonate inactive user' });
+    // Issue a token for the target user, but embed the admin's id so we can return
+    const token = jwt.sign(
+      { userId: target.id, impersonatedBy: req.user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: '2h' }
+    );
+    const { passwordHash, ...safeUser } = target;
+    safeUser.name = `${target.firstName} ${target.lastName}`.trim();
+    safeUser._impersonating = true;
+    safeUser._originalAdminId = req.user.id;
+    safeUser._originalAdminName = `${req.user.firstName} ${req.user.lastName}`.trim();
+    res.json({ user: safeUser, token });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

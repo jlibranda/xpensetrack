@@ -58,8 +58,30 @@ export default function Layout() {
 
   const sidebarBg = darkMode ? '#0f172a' : '#1e293b';
 
+  const adminToken = localStorage.getItem('admin_token');
+  const adminName = localStorage.getItem('admin_name');
+  const isImpersonating = !!adminToken;
+
+  const returnToAdmin = () => {
+    localStorage.setItem('token', adminToken);
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_name');
+    window.location.href = '/users';
+  };
+
   return (
-    <div className="flex h-screen">
+    <div className="flex flex-col h-screen">
+      {isImpersonating && (
+        <div className="flex items-center justify-between px-4 py-2 text-white text-xs font-medium z-50 shrink-0"
+          style={{backgroundColor:'#7c3aed'}}>
+          <span>👁 Viewing as <strong>{user?.firstName} {user?.lastName}</strong> ({user?.role}) — accessed by admin {adminName}</span>
+          <button onClick={returnToAdmin}
+            className="px-3 py-1 bg-white text-purple-700 rounded-lg font-bold hover:bg-purple-50">
+            ← Return to Admin
+          </button>
+        </div>
+      )}
+      <div className="flex flex-1 overflow-hidden">
       {/* Sidebar */}
       <aside className="w-52 flex flex-col shrink-0 z-10" style={{ backgroundColor: sidebarBg }}>
         <div className="px-4 py-4 border-b border-white/10">
@@ -206,6 +228,7 @@ export default function Layout() {
           style={darkMode ? { backgroundColor: '#0f172a' } : { backgroundColor: '#f8fafc' }}>
           <Outlet />
         </main>
+      </div>
       </div>
     </div>
   );
