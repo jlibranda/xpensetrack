@@ -6,85 +6,95 @@
   --brand-color: #1D9E75;
 }
 
-/* ── Wallpaper watermark ─────────────────────── */
-body.has-wallpaper {
-  position: relative;
+/* ── Base text — always sharp and readable ─── */
+body {
+  color: #111827;
+  font-size: 14px;
 }
-body.has-wallpaper::before {
-  content: '';
+
+/* All text defaults stronger */
+p, span, label, td, th, li, div {
+  color: inherit;
+}
+
+h1, h2, h3 { color: #111827; font-weight: 600; }
+.text-gray-900 { color: #111827 !important; }
+.text-gray-700 { color: #374151 !important; }
+.text-gray-600 { color: #4b5563 !important; }
+.text-gray-500 { color: #6b7280 !important; }
+.text-gray-400 { color: #9ca3af !important; }
+
+/* ── Wallpaper — fixed behind everything ──── */
+#wallpaper-bg {
   position: fixed;
   inset: 0;
-  background-image: var(--wallpaper-url);
   background-size: cover;
   background-position: center;
-  background-attachment: fixed;
-  opacity: 0.18; /* Watermark effect - subtle */
-  z-index: 0;
+  background-repeat: no-repeat;
+  opacity: 0.15;
+  z-index: -1;
   pointer-events: none;
 }
-body.has-wallpaper > * {
-  position: relative;
-  z-index: 1;
+
+/* ── Dark mode — strong contrast ─────────── */
+html.dark {
+  color-scheme: dark;
 }
-
-/* Wallpaper mode - cards solid so text is readable */
-body.has-wallpaper .bg-white {
-  background-color: rgba(255, 255, 255, 0.96) !important;
+html.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
 }
-body.has-wallpaper .bg-gray-50 {
-  background-color: rgba(249, 250, 251, 0.96) !important;
+html.dark h1,
+html.dark h2,
+html.dark h3 { color: #f8fafc; }
+html.dark .text-gray-900 { color: #f8fafc !important; }
+html.dark .text-gray-800 { color: #f1f5f9 !important; }
+html.dark .text-gray-700 { color: #e2e8f0 !important; }
+html.dark .text-gray-600 { color: #cbd5e1 !important; }
+html.dark .text-gray-500 { color: #94a3b8 !important; }
+html.dark .text-gray-400 { color: #64748b !important; }
+
+html.dark .bg-white { background-color: #1e293b !important; }
+html.dark .bg-gray-50 { background-color: #0f172a !important; }
+html.dark .bg-gray-100 { background-color: #1e293b !important; }
+html.dark .bg-gray-200 { background-color: #334155 !important; }
+
+html.dark .border-gray-100 { border-color: #334155 !important; }
+html.dark .border-gray-200 { border-color: #475569 !important; }
+
+html.dark input:not([type="color"]):not([type="date"]),
+html.dark select,
+html.dark textarea {
+  background-color: #334155 !important;
+  border-color: #475569 !important;
+  color: #f1f5f9 !important;
 }
+html.dark input::placeholder,
+html.dark textarea::placeholder { color: #94a3b8 !important; }
 
-/* ── Dark mode ───────────────────────────────── */
-.dark { color-scheme: dark; }
-.dark body { background-color: #111827; }
+html.dark table thead tr { background-color: #1e293b !important; }
+html.dark table th { color: #94a3b8 !important; border-color: #334155 !important; }
+html.dark table tbody tr { border-color: #334155 !important; }
+html.dark table tbody tr:hover td { background-color: #334155 !important; }
+html.dark table td { color: #e2e8f0 !important; }
 
-/* Text visibility in dark mode */
-.dark .text-gray-900,
-.dark h1, .dark h2, .dark h3, .dark p,
-.dark td, .dark th, .dark label,
-.dark .text-sm, .dark .text-xs { color: #f3f4f6; }
+html.dark .hover\:bg-gray-50:hover { background-color: #1e293b !important; }
+html.dark .hover\:bg-gray-100:hover { background-color: #334155 !important; }
 
-.dark .text-gray-700 { color: #e5e7eb !important; }
-.dark .text-gray-600 { color: #d1d5db !important; }
-.dark .text-gray-500 { color: #9ca3af !important; }
-.dark .text-gray-400 { color: #6b7280 !important; }
+html.dark .rounded-xl,
+html.dark .rounded-2xl { border-color: #334155; }
 
-/* Backgrounds in dark mode */
-.dark .bg-white { background-color: #1f2937 !important; }
-.dark .bg-gray-50 { background-color: #111827 !important; }
-.dark .bg-gray-100 { background-color: #374151 !important; }
-.dark .bg-gray-800 { background-color: #0f172a !important; }
+/* Status badges stay colored in dark mode */
+html.dark .bg-green-50 { background-color: #052e16 !important; }
+html.dark .text-green-700 { color: #86efac !important; }
+html.dark .bg-red-50 { background-color: #450a0a !important; }
+html.dark .text-red-700 { color: #fca5a5 !important; }
+html.dark .bg-amber-50 { background-color: #451a03 !important; }
+html.dark .text-amber-700 { color: #fcd34d !important; }
+html.dark .bg-blue-50 { background-color: #172554 !important; }
+html.dark .text-blue-700 { color: #93c5fd !important; }
+html.dark .bg-purple-50 { background-color: #3b0764 !important; }
+html.dark .text-purple-700 { color: #d8b4fe !important; }
 
-/* Borders */
-.dark .border-gray-100 { border-color: #374151 !important; }
-.dark .border-gray-200 { border-color: #4b5563 !important; }
-
-/* Form inputs */
-.dark input:not([type="color"]),
-.dark select,
-.dark textarea {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #f9fafb !important;
-}
-.dark input::placeholder,
-.dark textarea::placeholder { color: #6b7280 !important; }
-
-/* Tables */
-.dark table thead tr { background-color: #1f2937 !important; }
-.dark table th { color: #9ca3af !important; border-color: #374151 !important; }
-.dark table td { border-color: #374151 !important; color: #e5e7eb !important; }
-.dark table tr:hover td { background-color: #374151 !important; }
-
-/* Hover states */
-.dark .hover\:bg-gray-50:hover { background-color: #374151 !important; }
-.dark .hover\:bg-gray-100:hover { background-color: #4b5563 !important; }
-
-/* Cards and panels */
-.dark .rounded-xl { border-color: #374151; }
-
-/* Dark mode + wallpaper */
-body.has-wallpaper.dark::before { opacity: 0.12; }
-body.has-wallpaper.dark .bg-white { background-color: rgba(31, 41, 55, 0.97) !important; }
-body.has-wallpaper.dark .bg-gray-50 { background-color: rgba(17, 24, 39, 0.97) !important; }
+/* Wallpaper + dark mode combo */
+html.dark #wallpaper-bg { opacity: 0.08; }
