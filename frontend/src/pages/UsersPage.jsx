@@ -31,6 +31,7 @@ export default function UsersPage() {
   const [apprResult, setApprResult] = useState(null);
   const [apprLoading, setApprLoading] = useState(false);
   const { settings } = useOrg();
+  const dark = !!settings?.darkMode;
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -175,7 +176,7 @@ export default function UsersPage() {
   };
 
   const downloadApprTemplate = () => {
-    const csv = 'employee_email,approver1_email,approver2_email,approver3_email,mode,rule\njuan@co.com,maria@co.com,jose@co.com,,SEQUENTIAL,ALL\nana@co.com,maria@co.com,,,ANY_ORDER,ANY';
+    const csv = 'employee_number,approver1_number,approver2_number,approver3_number,approver4_number,approver5_number,mode,rule\nEMP-001,EMP-002,EMP-003,,,,SEQUENTIAL,ALL\nEMP-004,EMP-002,,,,,ANY_ORDER,ANY';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
     a.download = 'approver-assignments-template.csv'; a.click();
@@ -207,6 +208,27 @@ export default function UsersPage() {
     if (filterActive === 'inactive' && u.isActive) return false;
     return true;
   });
+
+  const downloadEmployeeList = () => {
+    const esc = (v) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = ['employeeNumber','lastName','firstName','email','role','department','position','costCenter','status'];
+    const lines = [header.join(',')];
+    filtered.forEach(u => {
+      lines.push([
+        u.employeeNumber||'', u.lastName||'', u.firstName||'', u.email||'',
+        u.role||'', u.department||'', u.position||'', u.costCenter||'',
+        u.isActive ? 'Active' : 'Inactive',
+      ].map(esc).join(','));
+    });
+    const statusLabel = filterActive === 'all' ? 'all' : filterActive;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+    a.download = `employees-${statusLabel}-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  };
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -292,30 +314,32 @@ export default function UsersPage() {
               </select>
             </div>
 
-            <div className="col-span-2 border border-gray-200 rounded-lg p-3 bg-gray-50/50">
+            <div className="col-span-2 border rounded-lg p-3" style={{borderColor: dark?'#475569':'#e5e7eb', backgroundColor: dark?'#0f172a':'#f9fafb'}}>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-medium text-gray-700">Approval flow</label>
-                <span className="text-xs text-gray-400">{1 + (form.approverIds||[]).length}/5 approvers</span>
+                <label className="block text-xs font-semibold" style={{color: dark?'#e2e8f0':'#374151'}}>Approval flow</label>
+                <span className="text-xs" style={{color: dark?'#94a3b8':'#9ca3af'}}>{1 + (form.approverIds||[]).length}/5 approvers</span>
               </div>
 
               {/* Approver #1 = the Manager dropdown above (locked) */}
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-bold w-5 text-center" style={{color:settings?.primaryColor||'#1D9E75'}}>1.</span>
-                <div className="flex-1 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-800 font-medium">
+                <div className="flex-1 px-3 py-2 border rounded-lg text-sm font-medium"
+                  style={{backgroundColor: dark?'#1e293b':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
                   {form.managerId
-                    ? <>{fullName(managers.find(m=>m.id===form.managerId)||{})} <span className="text-gray-500 font-normal">(from Approver / Manager above)</span></>
-                    : <span className="text-amber-600 font-normal">Set the "Approver / Manager" above — that person is approver #1</span>}
+                    ? <>{fullName(managers.find(m=>m.id===form.managerId)||{})} <span className="font-normal" style={{color: dark?'#94a3b8':'#6b7280'}}>(from Approver / Manager above)</span></>
+                    : <span className="font-normal" style={{color:'#d97706'}}>Set the "Approver / Manager" above — that person is approver #1</span>}
                 </div>
               </div>
 
               {/* Additional approvers #2..#5 */}
               {(form.approverIds||[]).map((id, i) => (
                 <div key={i} className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-bold w-5 text-center text-gray-500">{i+2}.</span>
+                  <span className="text-xs font-bold w-5 text-center" style={{color: dark?'#94a3b8':'#6b7280'}}>{i+2}.</span>
                   <select value={id} onChange={e=>{
                       const cur=[...(form.approverIds||[])]; cur[i]=e.target.value; setF('approverIds',cur);
                     }}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                    style={{backgroundColor: dark?'#1e293b':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
                     <option value="">— Select approver —</option>
                     {managers.filter(m=>m.id!==editUser?.id && m.id!==form.managerId && (!(form.approverIds||[]).includes(m.id) || m.id===id))
                       .map(m=><option key={m.id} value={m.id}>{fullName(m)} ({m.role})</option>)}
@@ -331,24 +355,27 @@ export default function UsersPage() {
                     if (!form.managerId) { setMsg({text:'Set the Approver / Manager (approver #1) first.',ok:false}); return; }
                     setF('approverIds',[...(form.approverIds||[]), '']);
                   }}
-                  className="text-xs px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-white mb-3">
+                  className="text-xs px-3 py-1.5 border rounded-lg mb-3"
+                  style={{borderColor: dark?'#475569':'#d1d5db', color: dark?'#cbd5e1':'#4b5563'}}>
                   + Add approver
                 </button>
               )}
 
               <div className="grid grid-cols-2 gap-3 mt-1">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Order</label>
+                  <label className="block text-xs mb-1" style={{color: dark?'#94a3b8':'#6b7280'}}>Order</label>
                   <select value={form.approvalMode} onChange={e=>setF('approvalMode',e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    style={{backgroundColor: dark?'#1e293b':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
                     <option value="SEQUENTIAL">Sequential (one after another)</option>
                     <option value="ANY_ORDER">Any order (all at once)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Completion</label>
+                  <label className="block text-xs mb-1" style={{color: dark?'#94a3b8':'#6b7280'}}>Completion</label>
                   <select value={form.approvalRule} onChange={e=>setF('approvalRule',e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    style={{backgroundColor: dark?'#1e293b':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
                     <option value="ALL">All must approve</option>
                     <option value="ANY">Any one is enough</option>
                   </select>
@@ -415,8 +442,8 @@ export default function UsersPage() {
             <h2 className="text-sm font-medium text-gray-700 mb-1">Bulk assign approvers</h2>
             <div className="bg-gray-50 rounded-lg p-3 mb-3 text-xs text-gray-600">
               <p className="font-medium mb-1">Upload a CSV or Excel file. Columns:</p>
-              <code className="break-all">employee_email, approver1_email, approver2_email … approver5_email, mode, rule</code>
-              <p className="mt-1">approver1 becomes the employee's manager (approver #1). mode = SEQUENTIAL | ANY_ORDER. rule = ALL | ANY.</p>
+              <code className="break-all">employee_number, approver1_number, approver2_number … approver5_number, mode, rule</code>
+              <p className="mt-1">Use employee numbers (e.g. EMP-001). approver1 becomes the employee's manager (approver #1); up to 5 approvers total. mode = SEQUENTIAL | ANY_ORDER. rule = ALL | ANY.</p>
             </div>
             <div className="flex gap-2 mb-3 flex-wrap">
               <button onClick={downloadApprTemplate} className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-xs hover:bg-gray-50">⬇ Template</button>
@@ -430,8 +457,8 @@ export default function UsersPage() {
             </div>
             {apprResult && (
               <div className="space-y-2">
-                {apprResult.updated?.length>0 && <div className="px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-xs text-green-700">✅ Updated {apprResult.updated.length}: {apprResult.updated.map(u=>u.email).join(', ')}</div>}
-                {apprResult.errors?.length>0 && <div className="px-3 py-2 bg-red-50 border border-red-100 rounded-lg text-xs text-red-700">❌ {apprResult.errors.length} error(s): {apprResult.errors.map(e=>`row ${e.row||'?'} ${e.email||''} (${e.reason})`).join('; ')}</div>}
+                {apprResult.updated?.length>0 && <div className="px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-xs text-green-700">✅ Updated {apprResult.updated.length}: {apprResult.updated.map(u=>u.employee).join(', ')}</div>}
+                {apprResult.errors?.length>0 && <div className="px-3 py-2 bg-red-50 border border-red-100 rounded-lg text-xs text-red-700">❌ {apprResult.errors.length} error(s): {apprResult.errors.map(e=>`row ${e.row||'?'} ${e.employee||''} (${e.reason})`).join('; ')}</div>}
               </div>
             )}
           </div>
@@ -458,6 +485,11 @@ export default function UsersPage() {
               <option value="inactive">Inactive only</option>
             </select>
             <span className="text-xs text-gray-400">{filtered.length} shown</span>
+            <button onClick={downloadEmployeeList} disabled={!filtered.length}
+              className="ml-auto text-xs px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              title="Download the currently filtered list as CSV">
+              ⬇ Download list
+            </button>
           </div>
 
           {loading ? <div className="py-12 text-center text-sm text-gray-400">Loading...</div> : (

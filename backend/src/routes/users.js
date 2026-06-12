@@ -197,15 +197,15 @@ router.post('/:id/impersonate', authenticate, requirePermission('impersonate_use
 });
 
 // ===== Bulk upload approver assignments (CSV or Excel) =====
-// Expected columns (header row, case-insensitive). Email-based for friendliness:
-//   employee_email        (required) - the employee being configured
-//   approver1_email       (optional) - becomes the employee's manager (approver #1)
-//   approver2_email .. approver5_email  (optional) - additional approvers (#2..#5)
+// Keyed by EMPLOYEE NUMBER (not email). Columns (header row, case-insensitive):
+//   employee_number       (required) - the employee being configured
+//   approver1_number      (optional) - becomes the employee's manager (approver #1)
+//   approver2_number .. approver5_number  (optional) - additional approvers (#2..#5)
 //   mode                  (optional) - SEQUENTIAL | ANY_ORDER  (default SEQUENTIAL)
 //   rule                  (optional) - ALL | ANY               (default ALL)
 //
-// A single "approvers" column with comma/semicolon-separated emails is also accepted
-// as an alternative to approver1..approver5 (first one becomes manager).
+// A single "approvers" column with comma/semicolon-separated employee numbers is also
+// accepted as an alternative to approver1..approver5 (first one becomes manager).
 router.post('/bulk-approvers', authenticate, requireRole('ADMIN'), upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -216,10 +216,13 @@ router.post('/bulk-approvers', authenticate, requireRole('ADMIN'), upload.single
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
     if (!rows.length) return res.status(400).json({ error: 'File has no data rows' });
 
-    // Build a lowercase email -> id map once.
-    const allUsers = await prisma.user.findMany({ select: { id: true, email: true } });
-    const emailToId = {};
-    for (const u of allUsers) emailToId[u.email.toLowerCase()] = u.id;
+    // Build an employeeNumber -> id map (case-insensitive, trimmed).
+    const allUsers = await prisma.user.findMany({ select: { id: true, employeeNumber: true } });
+    const numToId = {};
+    for (const u of allUsers) {
+      if (u.employeeNumber) numToId[String(u.employeeNumber).toLowerCase().trim()] = u.id;
+    }
+    const resolveNum = (val) => numToId[String(val).toLowerCase().trim()];
 
     // normalise header keys to lowercase for lookup
     const lc = (obj) => {
@@ -232,34 +235,34 @@ router.post('/bulk-approvers', authenticate, requireRole('ADMIN'), upload.single
 
     for (let i = 0; i < rows.length; i++) {
       const row = lc(rows[i]);
-      const empEmail = String(row['employee_email'] || row['employee'] || row['email'] || '').toLowerCase().trim();
-      if (!empEmail) { results.errors.push({ row: i + 2, reason: 'Missing employee_email' }); continue; }
+      const empNum = String(row['employee_number'] || row['employee_no'] || row['employee'] || row['emp_no'] || '').trim();
+      if (!empNum) { results.errors.push({ row: i + 2, reason: 'Missing employee_number' }); continue; }
 
-      const empId = emailToId[empEmail];
-      if (!empId) { results.errors.push({ row: i + 2, email: empEmail, reason: 'Employee not found' }); continue; }
+      const empId = resolveNum(empNum);
+      if (!empId) { results.errors.push({ row: i + 2, employee: empNum, reason: 'Employee number not found' }); continue; }
 
-      // Collect approver emails — either approver1..5 columns, or a single "approvers" column.
-      let approverEmails = [];
+      // Collect approver employee numbers — either approver1..5 columns, or a single "approvers" column.
+      let approverNums = [];
       if (row['approvers']) {
-        approverEmails = String(row['approvers']).split(/[;,]/).map(s => s.trim()).filter(Boolean);
+        approverNums = String(row['approvers']).split(/[;,]/).map(s => s.trim()).filter(Boolean);
       } else {
         for (let n = 1; n <= 5; n++) {
-          const v = row[`approver${n}_email`] || row[`approver${n}`];
-          if (v) approverEmails.push(String(v).trim());
+          const v = row[`approver${n}_number`] || row[`approver${n}_no`] || row[`approver${n}`];
+          if (v !== undefined && String(v).trim() !== '') approverNums.push(String(v).trim());
         }
       }
 
-      // Resolve emails -> ids
+      // Resolve employee numbers -> ids
       const resolved = [];
-      let badEmail = null;
-      for (const em of approverEmails) {
-        const id = emailToId[em.toLowerCase()];
-        if (!id) { badEmail = em; break; }
+      let bad = null;
+      for (const num of approverNums) {
+        const id = resolveNum(num);
+        if (!id) { bad = num; break; }
         resolved.push(id);
       }
-      if (badEmail) { results.errors.push({ row: i + 2, email: empEmail, reason: `Approver not found: ${badEmail}` }); continue; }
+      if (bad) { results.errors.push({ row: i + 2, employee: empNum, reason: `Approver number not found: ${bad}` }); continue; }
 
-      if (resolved.length === 0) { results.errors.push({ row: i + 2, email: empEmail, reason: 'No approvers given' }); continue; }
+      if (resolved.length === 0) { results.errors.push({ row: i + 2, employee: empNum, reason: 'No approvers given' }); continue; }
 
       // First approver = manager (#1); the rest are additional (#2..#5), excluding self & manager, cap 4.
       const managerId = resolved[0];
@@ -280,9 +283,9 @@ router.post('/bulk-approvers', authenticate, requireRole('ADMIN'), upload.single
             approvalRule: rule,
           },
         });
-        results.updated.push({ email: empEmail, approvers: resolved.length, mode, rule });
+        results.updated.push({ employee: empNum, approvers: resolved.length, mode, rule });
       } catch (e) {
-        results.errors.push({ row: i + 2, email: empEmail, reason: e.message });
+        results.errors.push({ row: i + 2, employee: empNum, reason: e.message });
       }
     }
 
