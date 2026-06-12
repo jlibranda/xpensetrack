@@ -4,6 +4,8 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const multer = require('multer');
 const prisma = new PrismaClient();
+const { refreshUsdPhpRate, getUsdPhpRate } = require('../lib/fxrate');
+const { logAudit } = require('../lib/audit');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const NEW_DEFAULT_CATEGORIES = "Cleaning,Education and Training,Entertainment/Meals,Equipment,Facility Maintenance and Repair,Furniture and Fixtures,General Office Expense,Hardware,Miscellaneous,Mobile Device,Non-Capital Small Tools Equipment and Furniture,Office Rent,Parking,Printing,Recruiting,Travel - Air Ticket (International),Travel - Air Ticket (Domestic),Travel - Others,Travel - Hotel (Domestic)";
@@ -124,6 +126,45 @@ router.post('/reset-categories', authenticate, requireRole('ADMIN', 'FINANCE'), 
     });
     res.json({ message: 'Categories reset to defaults', categories: updated.categories.split(',') });
   } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/settings/exchange-rate — current USD->PHP rate (any authenticated user)
+router.get('/exchange-rate', authenticate, async (req, res) => {
+  try {
+    const s = await getOrCreate();
+    res.json({
+      usdPhpRate: s.usdPhpRate || 56,
+      auto: s.usdPhpRateAuto,
+      updatedAt: s.usdPhpRateUpdatedAt,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /api/settings/exchange-rate — admin sets manual rate or toggles auto mode
+router.patch('/exchange-rate', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res) => {
+  try {
+    const { usdPhpRate, auto } = req.body;
+    const s = await getOrCreate();
+    const data = {};
+    if (typeof auto === 'boolean') data.usdPhpRateAuto = auto;
+    if (usdPhpRate !== undefined && usdPhpRate !== null && !isNaN(Number(usdPhpRate))) {
+      data.usdPhpRate = Number(usdPhpRate);
+      data.usdPhpRateUpdatedAt = new Date();
+    }
+    const updated = await prisma.orgSettings.update({ where: { id: s.id }, data });
+    await logAudit(req.user, 'EXCHANGE_RATE_UPDATED', { targetType: 'SETTINGS', details: `USD→PHP set to ${updated.usdPhpRate} (${updated.usdPhpRateAuto ? 'auto' : 'manual'})` });
+    // If they just switched back to auto, fetch a fresh rate immediately.
+    if (data.usdPhpRateAuto === true) { refreshUsdPhpRate().catch(() => {}); }
+    res.json({ usdPhpRate: updated.usdPhpRate, auto: updated.usdPhpRateAuto, updatedAt: updated.usdPhpRateUpdatedAt });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/settings/exchange-rate/refresh — admin forces an immediate auto-fetch
+router.post('/exchange-rate/refresh', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res) => {
+  try {
+    const result = await refreshUsdPhpRate();
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

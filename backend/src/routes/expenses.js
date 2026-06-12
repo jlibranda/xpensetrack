@@ -5,10 +5,15 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const { sendApprovalRequestEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
+const { getUsdPhpRate } = require('../lib/fxrate');
 const prisma = new PrismaClient();
 
-const PHP_USD = 56;
-const toPhp = (amt, cur) => cur === 'USD' ? amt * PHP_USD : amt;
+// Convert an amount to PHP using the org's current USD->PHP rate.
+const toPhp = async (amt, cur) => {
+  if (cur !== 'USD') return amt;
+  const rate = await getUsdPhpRate();
+  return amt * rate;
+};
 
 const expenseInclude = {
   submittedBy: { select: { id:true, firstName:true, lastName:true, email:true, department:true, costCenter:true } },
@@ -119,11 +124,12 @@ router.post('/', authenticate, async (req, res) => {
     const { title, description, amount, currency='PHP', category='OTHER',
             expenseType='REIMBURSEMENT', receiptId, costCenter, expenseDate } = req.body;
     if(!title||!amount||!expenseDate) return res.status(400).json({error:'title, amount, expenseDate required'});
+    const amountPhp = await toPhp(Number(amount), currency);
     const expense = await prisma.expense.create({
       data: {
         title, description: description||null,
         amount: Number(amount), currency,
-        amountPhp: toPhp(Number(amount), currency),
+        amountPhp,
         category, expenseType,
         receiptId: receiptId || null,
         costCenter: costCenter || req.user.costCenter || null,
@@ -193,6 +199,7 @@ router.patch('/:id', authenticate, async (req, res) => {
     if(e.submittedById!==req.user.id && req.user.role==='EMPLOYEE') return res.status(403).json({error:'Forbidden'});
     if(!['DRAFT','REJECTED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
     const { title, orNumber, merchant, description, amount, currency, category, expenseType, receiptId, costCenter, expenseDate } = req.body;
+    const amountPhp = amount ? await toPhp(Number(amount), currency||e.currency) : undefined;
     const updated = await prisma.expense.update({
       where:{id:req.params.id},
       data:{
@@ -200,7 +207,7 @@ router.patch('/:id', authenticate, async (req, res) => {
         amount: amount ? Number(amount) : undefined,
         currency, category, expenseType,
         receiptId: receiptId !== undefined ? (receiptId||null) : undefined,
-        costCenter, amountPhp: amount ? toPhp(Number(amount), currency||e.currency) : undefined,
+        costCenter, amountPhp,
         expenseDate: expenseDate ? new Date(expenseDate) : undefined,
         status: 'DRAFT',
       },

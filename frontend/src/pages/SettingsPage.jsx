@@ -1,5 +1,5 @@
 // src/pages/SettingsPage.jsx
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrg } from '../context/OrgContext';
 import { useAuth } from '../context/AuthContext';
@@ -230,6 +230,42 @@ export default function SettingsPage() {
   const isFinance = ['FINANCE','ADMIN'].includes(user?.role);
   const isAdmin = user?.role === 'ADMIN';
 
+  // Exchange rate (USD -> PHP) — separate from the main settings form.
+  const [fx, setFx] = useState(null);          // { usdPhpRate, auto, updatedAt }
+  const [fxRateInput, setFxRateInput] = useState('');
+  const [fxBusy, setFxBusy] = useState(false);
+  const [fxMsg, setFxMsg] = useState('');
+
+  useEffect(() => {
+    api.get('/settings/exchange-rate').then(r => { setFx(r); setFxRateInput(String(r.usdPhpRate)); }).catch(() => {});
+  }, []);
+
+  const saveFxManual = async () => {
+    setFxBusy(true); setFxMsg('');
+    try {
+      const r = await api.patch('/settings/exchange-rate', { usdPhpRate: Number(fxRateInput), auto: false });
+      setFx(r); setFxRateInput(String(r.usdPhpRate)); setFxMsg('✅ Manual rate saved');
+    } catch (e) { setFxMsg('❌ ' + (e.error || 'Failed')); }
+    finally { setFxBusy(false); }
+  };
+  const enableAuto = async () => {
+    setFxBusy(true); setFxMsg('');
+    try {
+      const r = await api.patch('/settings/exchange-rate', { auto: true });
+      setFx(r); setFxRateInput(String(r.usdPhpRate)); setFxMsg('✅ Auto-update enabled');
+    } catch (e) { setFxMsg('❌ ' + (e.error || 'Failed')); }
+    finally { setFxBusy(false); }
+  };
+  const refreshNow = async () => {
+    setFxBusy(true); setFxMsg('');
+    try {
+      const r = await api.post('/settings/exchange-rate/refresh', {});
+      if (r.error) setFxMsg('❌ ' + r.error);
+      else { const cur = await api.get('/settings/exchange-rate'); setFx(cur); setFxRateInput(String(cur.usdPhpRate)); setFxMsg('✅ Rate refreshed'); }
+    } catch (e) { setFxMsg('❌ ' + (e.error || 'Failed')); }
+    finally { setFxBusy(false); }
+  };
+
   const s = form || settings;
   const set = (k,v) => setForm(f=>({...(f||settings),[k]:v}));
 
@@ -337,6 +373,50 @@ export default function SettingsPage() {
                 <option value="PHP">PHP — Philippine Peso (₱)</option>
                 <option value="USD">USD — US Dollar ($)</option>
               </select>
+            </div>
+
+            {/* USD -> PHP exchange rate */}
+            <div className="border border-gray-100 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-sm font-medium text-gray-700">USD → PHP exchange rate</p>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${fx?.auto ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {fx?.auto ? 'Auto-updating' : 'Manual'}
+                </span>
+              </div>
+              <p className="text-2xl font-bold text-gray-900">₱{fx ? Number(fx.usdPhpRate).toFixed(4) : '—'} <span className="text-sm font-normal text-gray-400">= $1</span></p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {fx?.updatedAt ? `Last updated ${new Date(fx.updatedAt).toLocaleString('en-PH')}` : 'Not yet updated'}
+              </p>
+
+              {isFinance && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">Set rate manually (e.g. official BSP reference rate)</label>
+                      <input type="number" step="0.0001" value={fxRateInput} onChange={e=>setFxRateInput(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+                    </div>
+                    <button onClick={saveFxManual} disabled={fxBusy}
+                      className="px-3 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-60" style={{ backgroundColor: '#2563eb' }}>
+                      Save manual
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={enableAuto} disabled={fxBusy || fx?.auto}
+                      className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                      Use auto-update
+                    </button>
+                    <button onClick={refreshNow} disabled={fxBusy}
+                      className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                      ↻ Refresh now
+                    </button>
+                    {fxMsg && <span className="text-xs text-gray-500">{fxMsg}</span>}
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Auto-update pulls a live market rate (close to BSP) daily. BSP has no free public feed, so for the exact official reference rate, switch to Manual and enter BSP's published number.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

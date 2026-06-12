@@ -59,6 +59,8 @@ app.use((err, req, res, next) => {
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`XpenseTrack API v4 running on port ${PORT}`);
+  // Begin periodic USD->PHP rate refresh (auto mode only).
+  try { require('./lib/fxrate').startFxRefresh(); } catch (e) { console.error('fxrate start failed:', e.message); }
 });
 
 server.on('error', (err) => {

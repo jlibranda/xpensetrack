@@ -5,26 +5,45 @@ import { useAuth } from '../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
 
+const readDark = () => {
+  try { const v = localStorage.getItem('personal_dark'); return v === 'true'; } catch { return false; }
+};
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [dark, setDark] = useState(readDark());
   const [branding, setBranding] = useState({ companyName:'XpenseTrack', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null });
   const { login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Login screen is always light — clear any dark theme left over from a prior session
-    document.documentElement.classList.remove('dark');
     fetch(`${API_BASE}/settings/public`)
       .then(r => r.json())
       .then(s => { if (s?.primaryColor) setBranding(s); })
       .catch(() => {});
   }, []);
 
+  const toggleDark = () => {
+    const next = !dark;
+    setDark(next);
+    try { localStorage.setItem('personal_dark', String(next)); } catch {}
+  };
+
   const bg = branding.primaryColor || '#1D9E75';
+  const hasWall = !!branding.wallpaperUrl;
+
+  // Theme-aware colors
+  const pageBg = dark ? '#0f172a' : '#f3f4f6';
+  const cardBg = dark ? '#1e293b' : '#ffffff';
+  const inputBg = dark ? '#0f172a' : '#ffffff';
+  const inputBorder = dark ? '#334155' : '#e5e7eb';
+  const textMain = dark ? '#f1f5f9' : '#111827';
+  const textSub = dark ? '#94a3b8' : '#6b7280';
+  const labelColor = dark ? '#cbd5e1' : '#6b7280';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,25 +53,37 @@ export default function LoginPage() {
       await login(email, password);
       navigate('/');
     } catch(err) {
-      // Error stays visible — never auto-dismisses
       setError(err.error || 'Invalid email or password. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Clear error only when user starts typing again
   const handleEmailChange = (e) => { setEmail(e.target.value); if (error) setError(''); };
   const handlePasswordChange = (e) => { setPassword(e.target.value); if (error) setError(''); };
 
+  // On a wallpaper, header text stays white for contrast; otherwise theme-aware.
+  const headTitle = hasWall ? '#ffffff' : textMain;
+  const headSub = hasWall ? 'rgba(255,255,255,0.7)' : textSub;
+  const footText = hasWall ? 'rgba(255,255,255,0.6)' : textSub;
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative"
-      style={branding.wallpaperUrl ? {
+      style={hasWall ? {
         backgroundImage: `url(${branding.wallpaperUrl})`,
         backgroundSize: 'cover', backgroundPosition: 'center',
-      } : { backgroundColor: '#f3f4f6' }}>
+      } : { backgroundColor: pageBg }}>
 
-      {branding.wallpaperUrl && <div className="absolute inset-0 bg-black/50" />}
+      {/* Overlay: darker in dark mode for readability */}
+      {hasWall && <div className="absolute inset-0" style={{ backgroundColor: dark ? 'rgba(15,23,42,0.7)' : 'rgba(0,0,0,0.5)' }} />}
+
+      {/* Dark/Light toggle */}
+      <button onClick={toggleDark}
+        title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+        className="absolute top-4 right-4 z-20 p-2 rounded-lg text-lg shadow"
+        style={{ backgroundColor: dark ? '#334155' : '#ffffff', color: dark ? '#fbbf24' : '#475569' }}>
+        {dark ? '☀️' : '🌙'}
+      </button>
 
       <div className="w-full max-w-sm relative z-10">
         <div className="text-center mb-6">
@@ -64,31 +95,33 @@ export default function LoginPage() {
               {branding.companyName?.[0] || 'X'}
             </div>
           )}
-          <h1 className={`text-xl font-semibold ${branding.wallpaperUrl ? 'text-white' : 'text-gray-900'}`}>
+          <h1 className="text-xl font-semibold" style={{ color: headTitle }}>
             {branding.companyName || 'XpenseTrack'}
           </h1>
-          <p className={`text-sm mt-1 ${branding.wallpaperUrl ? 'text-white/70' : 'text-gray-500'}`}>
+          <p className="text-sm mt-1" style={{ color: headSub }}>
             Sign in to your account
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-6 space-y-4">
-          {/* Error stays until user types again */}
+        <form onSubmit={handleSubmit} className="rounded-2xl shadow-xl p-6 space-y-4"
+          style={{ backgroundColor: cardBg }}>
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-sm text-red-700 flex items-start gap-2">
+            <div className="rounded-lg px-3 py-2.5 text-sm flex items-start gap-2"
+              style={{ backgroundColor: dark ? 'rgba(220,38,38,0.15)' : '#fef2f2', border: `1px solid ${dark ? 'rgba(220,38,38,0.4)' : '#fecaca'}`, color: dark ? '#fca5a5' : '#b91c1c' }}>
               <span className="shrink-0 mt-0.5">⚠️</span>
               <span>{error}</span>
             </div>
           )}
           <div>
-            <label className="block text-xs text-gray-500 mb-1.5">Email address</label>
+            <label className="block text-xs mb-1.5" style={{ color: labelColor }}>Email address</label>
             <input type="email" required value={email} onChange={handleEmailChange}
               placeholder="you@company.com" autoFocus
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all" />
+              className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none transition-all"
+              style={{ backgroundColor: inputBg, border: `1px solid ${inputBorder}`, color: textMain }} />
           </div>
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs text-gray-500">Password</label>
+              <label className="text-xs" style={{ color: labelColor }}>Password</label>
               <Link to="/forgot-password" className="text-xs hover:underline" style={{ color: bg }}>
                 Forgot password?
               </Link>
@@ -96,11 +129,13 @@ export default function LoginPage() {
             <div className="relative">
               <input type={showPassword ? 'text' : 'password'} required value={password} onChange={handlePasswordChange}
                 placeholder="••••••••"
-                className="w-full px-3 py-2.5 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all" />
+                className="w-full px-3 py-2.5 pr-10 rounded-lg text-sm focus:outline-none transition-all"
+                style={{ backgroundColor: inputBg, border: `1px solid ${inputBorder}`, color: textMain }} />
               <button type="button" onClick={() => setShowPassword(s => !s)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 title={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1"
+                style={{ color: textSub }}>
                 {showPassword ? '🙈' : '👁️'}
               </button>
             </div>
@@ -111,7 +146,7 @@ export default function LoginPage() {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-        <p className={`text-center text-xs mt-4 ${branding.wallpaperUrl ? 'text-white/60' : 'text-gray-400'}`}>
+        <p className="text-center text-xs mt-4" style={{ color: footText }}>
           Contact your admin to create an account.
         </p>
       </div>
