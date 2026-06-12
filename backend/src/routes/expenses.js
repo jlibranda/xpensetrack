@@ -120,16 +120,19 @@ router.post('/:id/submit', authenticate, async (req, res) => {
 
     const submitter = expense.submittedBy;
 
-    // Build the approver list from the employee's per-user settings.
-    let approverIds = (submitter.approverIds || '')
+    // Approver #1 is ALWAYS the assigned manager. Additional approvers (#2..#5)
+    // come from approverIds. Manager + up to 4 more = 5 total.
+    const additional = (submitter.approverIds || '')
       .split(',').map(s => s.trim()).filter(Boolean);
 
-    // Fallback: if no approvers are configured, use the assigned manager.
+    let approverIds = [];
+    if (submitter.managerId) approverIds.push(submitter.managerId);
+    approverIds.push(...additional);
+
     if (approverIds.length === 0) {
-      if (submitter.manager) approverIds = [submitter.manager.id];
-      else return res.status(400).json({ error: 'No approver assigned. Please ask your admin to set your approver(s) before submitting.' });
+      return res.status(400).json({ error: 'No approver assigned. Please ask your admin to set the Approver / Manager before submitting.' });
     }
-    // De-dupe while preserving order; cap at 5
+    // De-dupe while preserving order (manager stays #1); cap at 5
     approverIds = [...new Set(approverIds)].slice(0, 5);
 
     const mode = submitter.approvalMode || 'SEQUENTIAL'; // ordering: SEQUENTIAL | ANY_ORDER

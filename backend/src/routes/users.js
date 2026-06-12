@@ -3,6 +3,9 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const { authenticate, requireRole, requirePermission } = require('../middleware/auth');
+const multer = require('multer');
+const XLSX = require('xlsx');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const prisma = new PrismaClient();
 
 const userSelect = {
@@ -70,8 +73,12 @@ router.patch('/:id', authenticate, requirePermission('manage_users'), async (req
       const ids = Array.isArray(approverIds)
         ? approverIds
         : String(approverIds||'').split(',').map(s => s.trim()).filter(Boolean);
-      // de-dupe, drop self, cap at 5
-      const cleaned = [...new Set(ids)].filter(id => id && id !== req.params.id).slice(0, 5);
+      // These are the ADDITIONAL approvers (#2..#5). Manager is always #1, so:
+      //  - drop self, drop the manager (no duplicate), de-dupe, cap at 4 additional.
+      const mgr = managerId !== undefined ? managerId : target.managerId;
+      const cleaned = [...new Set(ids)]
+        .filter(id => id && id !== req.params.id && id !== mgr)
+        .slice(0, 4);
       updateData.approverIds = cleaned.length ? cleaned.join(',') : null;
     }
     if (approvalMode !== undefined) updateData.approvalMode = approvalMode === 'ANY_ORDER' ? 'ANY_ORDER' : 'SEQUENTIAL';
@@ -187,6 +194,100 @@ router.post('/:id/impersonate', authenticate, requirePermission('impersonate_use
     safeUser._originalAdminName = `${req.user.firstName} ${req.user.lastName}`.trim();
     res.json({ user: safeUser, token });
   } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// ===== Bulk upload approver assignments (CSV or Excel) =====
+// Expected columns (header row, case-insensitive). Email-based for friendliness:
+//   employee_email        (required) - the employee being configured
+//   approver1_email       (optional) - becomes the employee's manager (approver #1)
+//   approver2_email .. approver5_email  (optional) - additional approvers (#2..#5)
+//   mode                  (optional) - SEQUENTIAL | ANY_ORDER  (default SEQUENTIAL)
+//   rule                  (optional) - ALL | ANY               (default ALL)
+//
+// A single "approvers" column with comma/semicolon-separated emails is also accepted
+// as an alternative to approver1..approver5 (first one becomes manager).
+router.post('/bulk-approvers', authenticate, requireRole('ADMIN'), upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    // SheetJS reads CSV and Excel from the same buffer.
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    if (!rows.length) return res.status(400).json({ error: 'File has no data rows' });
+
+    // Build a lowercase email -> id map once.
+    const allUsers = await prisma.user.findMany({ select: { id: true, email: true } });
+    const emailToId = {};
+    for (const u of allUsers) emailToId[u.email.toLowerCase()] = u.id;
+
+    // normalise header keys to lowercase for lookup
+    const lc = (obj) => {
+      const o = {};
+      for (const k of Object.keys(obj)) o[k.trim().toLowerCase()] = obj[k];
+      return o;
+    };
+
+    const results = { updated: [], errors: [] };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = lc(rows[i]);
+      const empEmail = String(row['employee_email'] || row['employee'] || row['email'] || '').toLowerCase().trim();
+      if (!empEmail) { results.errors.push({ row: i + 2, reason: 'Missing employee_email' }); continue; }
+
+      const empId = emailToId[empEmail];
+      if (!empId) { results.errors.push({ row: i + 2, email: empEmail, reason: 'Employee not found' }); continue; }
+
+      // Collect approver emails — either approver1..5 columns, or a single "approvers" column.
+      let approverEmails = [];
+      if (row['approvers']) {
+        approverEmails = String(row['approvers']).split(/[;,]/).map(s => s.trim()).filter(Boolean);
+      } else {
+        for (let n = 1; n <= 5; n++) {
+          const v = row[`approver${n}_email`] || row[`approver${n}`];
+          if (v) approverEmails.push(String(v).trim());
+        }
+      }
+
+      // Resolve emails -> ids
+      const resolved = [];
+      let badEmail = null;
+      for (const em of approverEmails) {
+        const id = emailToId[em.toLowerCase()];
+        if (!id) { badEmail = em; break; }
+        resolved.push(id);
+      }
+      if (badEmail) { results.errors.push({ row: i + 2, email: empEmail, reason: `Approver not found: ${badEmail}` }); continue; }
+
+      if (resolved.length === 0) { results.errors.push({ row: i + 2, email: empEmail, reason: 'No approvers given' }); continue; }
+
+      // First approver = manager (#1); the rest are additional (#2..#5), excluding self & manager, cap 4.
+      const managerId = resolved[0];
+      const additional = [...new Set(resolved.slice(1))]
+        .filter(id => id && id !== empId && id !== managerId)
+        .slice(0, 4);
+
+      const mode = String(row['mode'] || '').toUpperCase() === 'ANY_ORDER' ? 'ANY_ORDER' : 'SEQUENTIAL';
+      const rule = String(row['rule'] || '').toUpperCase() === 'ANY' ? 'ANY' : 'ALL';
+
+      try {
+        await prisma.user.update({
+          where: { id: empId },
+          data: {
+            managerId,
+            approverIds: additional.length ? additional.join(',') : null,
+            approvalMode: mode,
+            approvalRule: rule,
+          },
+        });
+        results.updated.push({ email: empEmail, approvers: resolved.length, mode, rule });
+      } catch (e) {
+        results.errors.push({ row: i + 2, email: empEmail, reason: e.message });
+      }
+    }
+
+    res.json(results);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

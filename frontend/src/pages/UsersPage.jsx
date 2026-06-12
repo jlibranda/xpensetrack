@@ -24,9 +24,12 @@ export default function UsersPage() {
   const [filterRole, setFilterRole] = useState('');
   const [filterActive, setFilterActive] = useState('all');
   const fileRef = useRef();
+  const apprFileRef = useRef();
   const [bulkText, setBulkText] = useState('');
   const [bulkResult, setBulkResult] = useState(null);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [apprResult, setApprResult] = useState(null);
+  const [apprLoading, setApprLoading] = useState(false);
   const { settings } = useOrg();
   const navigate = useNavigate();
 
@@ -88,7 +91,9 @@ export default function UsersPage() {
     setSaving(true); setMsg({text:'',ok:true});
     try {
       if (editUser) {
-        await api.patch(`/users/${editUser.id}`, { ...form, managerId: form.managerId||null, hireDate: form.hireDate||null });
+        // approverIds = additional approvers only (#2..#5); strip empty slots
+        const additional = (form.approverIds||[]).filter(Boolean);
+        await api.patch(`/users/${editUser.id}`, { ...form, approverIds: additional, managerId: form.managerId||null, hireDate: form.hireDate||null });
         setMsg({text:'Updated!',ok:true});
       } else {
         await api.post('/auth/register', { ...form });
@@ -152,6 +157,27 @@ export default function UsersPage() {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
     a.download = 'users-template.csv'; a.click();
+  };
+
+  const downloadApprTemplate = () => {
+    const csv = 'employee_email,approver1_email,approver2_email,approver3_email,mode,rule\njuan@co.com,maria@co.com,jose@co.com,,SEQUENTIAL,ALL\nana@co.com,maria@co.com,,,ANY_ORDER,ANY';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+    a.download = 'approver-assignments-template.csv'; a.click();
+  };
+
+  const handleApprUpload = async (file) => {
+    if (!file) return;
+    setApprLoading(true); setApprResult(null); setMsg({text:'',ok:true});
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await api.post('/users/bulk-approvers', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setApprResult(r);
+      await load();
+    } catch (e) {
+      setMsg({ text: e.error || 'Upload failed', ok: false });
+    } finally { setApprLoading(false); if (apprFileRef.current) apprFileRef.current.value=''; }
   };
 
   const managers = users.filter(u=>['MANAGER','FINANCE','ADMIN'].includes(u.role));
@@ -253,29 +279,49 @@ export default function UsersPage() {
 
             <div className="col-span-2 border border-gray-200 rounded-lg p-3 bg-gray-50/50">
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-medium text-gray-700">Approval flow — pick 1 to 5 approvers (in order)</label>
-                <span className="text-xs text-gray-400">{(form.approverIds||[]).length}/5 selected</span>
+                <label className="block text-xs font-medium text-gray-700">Approval flow</label>
+                <span className="text-xs text-gray-400">{1 + (form.approverIds||[]).length}/5 approvers</span>
               </div>
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {managers.filter(m=>m.id!==editUser?.id).map(m=>{
-                  const list = form.approverIds||[];
-                  const idx = list.indexOf(m.id);
-                  const sel = idx !== -1;
-                  return (
-                    <button key={m.id} type="button"
-                      onClick={()=>{
-                        const cur = [...(form.approverIds||[])];
-                        if (sel) { setF('approverIds', cur.filter(id=>id!==m.id)); }
-                        else { if (cur.length>=5) { setMsg({text:'Maximum of 5 approvers',ok:false}); return; } setF('approverIds',[...cur,m.id]); }
-                      }}
-                      className={`text-xs px-2 py-1 rounded-lg border ${sel?'text-white border-transparent':'text-gray-600 border-gray-200 hover:bg-white'}`}
-                      style={sel?{backgroundColor:settings?.primaryColor||'#1D9E75'}:{}}>
-                      {sel && <span className="font-bold mr-1">{idx+1}.</span>}{fullName(m)} <span className="opacity-60">({m.role})</span>
-                    </button>
-                  );
-                })}
+
+              {/* Approver #1 = the Manager dropdown above (locked) */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-bold w-5 text-center" style={{color:settings?.primaryColor||'#1D9E75'}}>1.</span>
+                <div className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700">
+                  {form.managerId
+                    ? <>{fullName(managers.find(m=>m.id===form.managerId)||{})} <span className="text-gray-400">(from Approver / Manager above)</span></>
+                    : <span className="text-amber-600">Set the "Approver / Manager" above — that person is approver #1</span>}
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              {/* Additional approvers #2..#5 */}
+              {(form.approverIds||[]).map((id, i) => (
+                <div key={i} className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-bold w-5 text-center text-gray-500">{i+2}.</span>
+                  <select value={id} onChange={e=>{
+                      const cur=[...(form.approverIds||[])]; cur[i]=e.target.value; setF('approverIds',cur);
+                    }}
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                    <option value="">— Select approver —</option>
+                    {managers.filter(m=>m.id!==editUser?.id && m.id!==form.managerId && (!(form.approverIds||[]).includes(m.id) || m.id===id))
+                      .map(m=><option key={m.id} value={m.id}>{fullName(m)} ({m.role})</option>)}
+                  </select>
+                  <button type="button" onClick={()=>setF('approverIds',(form.approverIds||[]).filter((_,idx)=>idx!==i))}
+                    className="text-xs px-2 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50">Remove</button>
+                </div>
+              ))}
+
+              {(1 + (form.approverIds||[]).length) < 5 && (
+                <button type="button"
+                  onClick={()=>{
+                    if (!form.managerId) { setMsg({text:'Set the Approver / Manager (approver #1) first.',ok:false}); return; }
+                    setF('approverIds',[...(form.approverIds||[]), '']);
+                  }}
+                  className="text-xs px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-white mb-3">
+                  + Add approver
+                </button>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 mt-1">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Order</label>
                   <select value={form.approvalMode} onChange={e=>setF('approvalMode',e.target.value)}
@@ -293,7 +339,6 @@ export default function UsersPage() {
                   </select>
                 </div>
               </div>
-              <p className="text-xs text-gray-400 mt-2">If no approvers are picked, the single "Approver / Manager" above is used as a fallback.</p>
             </div>
 
 
@@ -349,6 +394,32 @@ export default function UsersPage() {
             style={{background:settings?.primaryColor||'#1D9E75'}}>
             {bulkLoading ? 'Uploading...' : `Upload ${parseBulk(bulkText).length||0} users`}
           </button>
+
+          {/* ---- Bulk approver assignments (CSV / Excel) ---- */}
+          <div className="mt-6 pt-5 border-t border-gray-100">
+            <h2 className="text-sm font-medium text-gray-700 mb-1">Bulk assign approvers</h2>
+            <div className="bg-gray-50 rounded-lg p-3 mb-3 text-xs text-gray-600">
+              <p className="font-medium mb-1">Upload a CSV or Excel file. Columns:</p>
+              <code className="break-all">employee_email, approver1_email, approver2_email … approver5_email, mode, rule</code>
+              <p className="mt-1">approver1 becomes the employee's manager (approver #1). mode = SEQUENTIAL | ANY_ORDER. rule = ALL | ANY.</p>
+            </div>
+            <div className="flex gap-2 mb-3 flex-wrap">
+              <button onClick={downloadApprTemplate} className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-xs hover:bg-gray-50">⬇ Template</button>
+              <button onClick={()=>apprFileRef.current.click()} disabled={apprLoading}
+                className="px-3 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-60"
+                style={{background:settings?.primaryColor||'#1D9E75'}}>
+                {apprLoading ? 'Uploading…' : '📂 Upload CSV / Excel'}
+              </button>
+              <input ref={apprFileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
+                onChange={e=>handleApprUpload(e.target.files[0])} />
+            </div>
+            {apprResult && (
+              <div className="space-y-2">
+                {apprResult.updated?.length>0 && <div className="px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-xs text-green-700">✅ Updated {apprResult.updated.length}: {apprResult.updated.map(u=>u.email).join(', ')}</div>}
+                {apprResult.errors?.length>0 && <div className="px-3 py-2 bg-red-50 border border-red-100 rounded-lg text-xs text-red-700">❌ {apprResult.errors.length} error(s): {apprResult.errors.map(e=>`row ${e.row||'?'} ${e.email||''} (${e.reason})`).join('; ')}</div>}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
