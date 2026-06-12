@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requirePermission } = require('../middleware/auth');
 const prisma = new PrismaClient();
 
 const userSelect = {
@@ -36,7 +36,7 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // PATCH update user
-router.patch('/:id', authenticate, requireRole('ADMIN'), async (req, res) => {
+router.patch('/:id', authenticate, requirePermission('manage_users'), async (req, res) => {
   try {
     const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName } = req.body;
     const user = await prisma.user.update({
@@ -51,7 +51,7 @@ router.patch('/:id', authenticate, requireRole('ADMIN'), async (req, res) => {
 });
 
 // POST toggle active status
-router.post('/:id/toggle-active', authenticate, requireRole('ADMIN'), async (req, res) => {
+router.post('/:id/toggle-active', authenticate, requirePermission('toggle_access'), async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!user) return res.status(404).json({ error: 'Not found' });
@@ -65,7 +65,7 @@ router.post('/:id/toggle-active', authenticate, requireRole('ADMIN'), async (req
 });
 
 // POST reset password
-router.post('/:id/reset-password', authenticate, requireRole('ADMIN'), async (req, res) => {
+router.post('/:id/reset-password', authenticate, requirePermission('reset_passwords'), async (req, res) => {
   try {
     const { newPassword } = req.body;
     if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Min 6 characters' });
@@ -76,7 +76,7 @@ router.post('/:id/reset-password', authenticate, requireRole('ADMIN'), async (re
 });
 
 // POST bulk create
-router.post('/bulk', authenticate, requireRole('ADMIN'), async (req, res) => {
+router.post('/bulk', authenticate, requirePermission('manage_users'), async (req, res) => {
   const { users } = req.body;
   if (!Array.isArray(users) || users.length === 0) return res.status(400).json({ error: 'users array required' });
 
@@ -117,7 +117,7 @@ router.post('/bulk', authenticate, requireRole('ADMIN'), async (req, res) => {
 
 
 // POST /api/users/:id/impersonate — Admin logs in AS another user
-router.post('/:id/impersonate', authenticate, requireRole('ADMIN'), async (req, res) => {
+router.post('/:id/impersonate', authenticate, requirePermission('impersonate_user'), async (req, res) => {
   try {
     const jwt = require('jsonwebtoken');
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
