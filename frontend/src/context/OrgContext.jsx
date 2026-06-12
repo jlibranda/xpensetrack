@@ -10,7 +10,7 @@ const DEFAULT = {
   logoUrl: null,
   wallpaperUrl: null,
   darkMode: false,
-  categories: ['Cleaning', 'Education and Training', 'Entertainment/Meals', 'Equipment', 'Facility Maintenance and Repair', 'Furniture and Fixtures', 'General Office Expense', 'Hardware', 'Miscellaneous', 'Mobile Device', 'Non-Capital Small Tools Equipment and Furniture', 'Office Rent', 'Parking', 'Printing', 'Recruiting', 'Travel - Air Ticket (International)', 'Travel - Air Ticket (Domestic)', 'Travel - Others', 'Travel - Hotel (Domestic)'],
+  categories: ['Cleaning','Education and Training','Entertainment/Meals','Equipment','Facility Maintenance and Repair','Furniture and Fixtures','General Office Expense','Hardware','Miscellaneous','Mobile Device','Non-Capital Small Tools Equipment and Furniture','Office Rent','Parking','Printing','Recruiting','Travel - Air Ticket (International)','Travel - Air Ticket (Domestic)','Travel - Others','Travel - Hotel (Domestic)'],
   expenseTypes: ['REIMBURSEMENT','CASH_ADVANCE'],
   categoryGlCodes: {},
   defaultCurrency: 'PHP',
@@ -19,26 +19,35 @@ const DEFAULT = {
   defaultPassword: 'Welcome123',
 };
 
+// Inject or update the wallpaper background div
+function setWallpaperDiv(url) {
+  let el = document.getElementById('wallpaper-bg');
+  if (url) {
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'wallpaper-bg';
+      document.body.prepend(el);
+    }
+    el.style.backgroundImage = `url('${url}')`;
+  } else {
+    if (el) el.remove();
+  }
+}
+
 export function applyThemeToDOM(s) {
   if (!s) return;
+  // Brand color
   if (s.primaryColor) {
     document.documentElement.style.setProperty('--brand-color', s.primaryColor);
   }
+  // Dark mode
   if (s.darkMode) {
     document.documentElement.classList.add('dark');
-    document.documentElement.style.colorScheme = 'dark';
   } else {
     document.documentElement.classList.remove('dark');
-    document.documentElement.style.colorScheme = 'light';
   }
-  if (s.wallpaperUrl) {
-    document.body.classList.add('has-wallpaper');
-    document.documentElement.style.setProperty('--wallpaper-url', `url('${s.wallpaperUrl}')`);
-  } else {
-    document.body.classList.remove('has-wallpaper');
-    document.documentElement.style.removeProperty('--wallpaper-url');
-    document.body.style.backgroundImage = '';
-  }
+  // Wallpaper
+  setWallpaperDiv(s.wallpaperUrl || null);
 }
 
 export function OrgProvider({ children }) {
@@ -50,8 +59,12 @@ export function OrgProvider({ children }) {
       if (s) {
         const parsed = {
           ...s,
-          categories: Array.isArray(s.categories) ? s.categories : (s.categories?.split(',').map(c=>c.trim()).filter(Boolean) || DEFAULT.categories),
-          expenseTypes: Array.isArray(s.expenseTypes) ? s.expenseTypes : (s.expenseTypes?.split(',').map(t=>t.trim()).filter(Boolean) || DEFAULT.expenseTypes),
+          categories: Array.isArray(s.categories)
+            ? s.categories
+            : (s.categories?.split(',').map(c => c.trim()).filter(Boolean) || DEFAULT.categories),
+          expenseTypes: Array.isArray(s.expenseTypes)
+            ? s.expenseTypes
+            : (s.expenseTypes?.split(',').map(t => t.trim()).filter(Boolean) || DEFAULT.expenseTypes),
           categoryGlCodes: s.categoryGlCodes || {},
         };
         setSettings(parsed);
@@ -68,7 +81,7 @@ export function OrgProvider({ children }) {
 
   const applyTheme = (s) => {
     applyThemeToDOM(s);
-    setSettings(prev => ({ ...prev, ...s }));
+    if (s) setSettings(prev => ({ ...prev, ...s }));
   };
 
   return (

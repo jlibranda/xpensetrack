@@ -5,11 +5,11 @@ import { applyThemeToDOM } from './OrgContext';
 
 const AuthContext = createContext(null);
 
-// Apply cached theme immediately on page load (before React renders)
-const cachedTheme = localStorage.getItem('xpense_theme');
-if (cachedTheme) {
-  try { applyThemeToDOM(JSON.parse(cachedTheme)); } catch(e) {}
-}
+// Apply cached theme immediately on page load (before React mounts)
+try {
+  const cached = localStorage.getItem('xpense_theme');
+  if (cached) applyThemeToDOM(JSON.parse(cached));
+} catch(e) {}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -17,30 +17,28 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      Promise.all([
-        api.get('/auth/me'),
-        api.get('/settings').catch(() => null),
-      ]).then(([u, s]) => {
-        setUser(u);
-        if (s) {
-          applyThemeToDOM(s);
-          localStorage.setItem('xpense_theme', JSON.stringify(s));
-        }
-      }).catch(() => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('xpense_theme');
-      }).finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    if (!token) { setLoading(false); return; }
+
+    Promise.all([
+      api.get('/auth/me'),
+      api.get('/settings').catch(() => null),
+    ]).then(([u, s]) => {
+      setUser(u);
+      if (s) {
+        applyThemeToDOM(s);
+        localStorage.setItem('xpense_theme', JSON.stringify(s));
+      }
+    }).catch(() => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('xpense_theme');
+    }).finally(() => setLoading(false));
   }, []);
 
   const login = async (email, password) => {
     const { user, token } = await api.post('/auth/login', { email, password });
     localStorage.setItem('token', token);
     setUser(user);
-    // Apply + cache theme immediately after login
+    // Apply theme right after login
     api.get('/settings').then(s => {
       if (s) {
         applyThemeToDOM(s);
@@ -54,9 +52,10 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('token');
     localStorage.removeItem('xpense_theme');
     setUser(null);
-    document.body.style.backgroundImage = '';
-    document.body.style.backgroundSize = '';
+    // Clean up theme
     document.documentElement.classList.remove('dark');
+    const wallEl = document.getElementById('wallpaper-bg');
+    if (wallEl) wallEl.remove();
   };
 
   return (
