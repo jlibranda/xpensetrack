@@ -118,9 +118,14 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     if(expense.submittedById!==req.user.id) return res.status(403).json({error:'Forbidden'});
     if(!['DRAFT','REJECTED','CANCELLED'].includes(expense.status)) return res.status(400).json({error:'Already submitted'});
 
+    // Level 1 approver = the submitter's assigned manager.
+    // Every user must have an assigned approver; if none, block submission
+    // with a clear message rather than silently routing to an admin.
     const manager = expense.submittedBy.manager;
-    const fallback = await prisma.user.findFirst({ where:{role:{in:['ADMIN','FINANCE']}} });
-    const approverId = manager?.id || fallback?.id || req.user.id;
+    if (!manager) {
+      return res.status(400).json({ error: 'No approver assigned. Please ask your admin to set your manager before submitting.' });
+    }
+    const approverId = manager.id;
 
     await prisma.$transaction([
       prisma.expense.update({where:{id:expense.id}, data:{status:'PENDING'}}),
@@ -128,16 +133,13 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       prisma.approval.create({data:{expenseId:expense.id, approverId, level:1, status:'PENDING'}}),
     ]);
 
-    // Notify approver
-    const approver = manager || fallback;
-    if(approver) {
-      await sendApprovalRequestEmail(approver.email, `${approver.firstName||''} ${approver.lastName||''}`.trim(), expense).catch(()=>{});
-      await createNotification(approverId, 'APPROVAL_REQUEST',
-        'New expense to approve',
-        `${expense.submittedBy.firstName} ${expense.submittedBy.lastName} submitted "${expense.title}" for approval`,
-        '/approvals'
-      );
-    }
+    // Notify the manager (level 1 approver)
+    await sendApprovalRequestEmail(manager.email, `${manager.firstName||''} ${manager.lastName||''}`.trim(), expense).catch(()=>{});
+    await createNotification(approverId, 'APPROVAL_REQUEST',
+      'New expense to approve',
+      `${expense.submittedBy.firstName} ${expense.submittedBy.lastName} submitted "${expense.title}" for approval`,
+      '/approvals'
+    );
     // Notify submitter their expense is pending
     await createNotification(req.user.id, 'EXPENSE_SUBMITTED',
       'Expense submitted',

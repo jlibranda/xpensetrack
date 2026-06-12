@@ -14,8 +14,12 @@ const expenseInclude = {
 
 router.get('/pending', authenticate, requireRole('MANAGER','FINANCE','ADMIN'), async (req,res) => {
   try {
+    // ADMIN sees every pending approval (override capability); others see only their own.
+    const where = req.user.role === 'ADMIN'
+      ? { status:'PENDING' }
+      : { approverId:req.user.id, status:'PENDING' };
     const approvals = await prisma.approval.findMany({
-      where:{ approverId:req.user.id, status:'PENDING' },
+      where,
       include:{ expense:{ include: expenseInclude } },
       orderBy:{ createdAt:'desc' },
     });
@@ -43,7 +47,7 @@ router.post('/:id/approve', authenticate, requireRole('MANAGER','FINANCE','ADMIN
       include:{ expense:{ include:{submittedBy:true} } },
     });
     if(!approval) return res.status(404).json({error:'Not found'});
-    if(approval.approverId!==req.user.id) return res.status(403).json({error:'Not your approval'});
+    if(approval.approverId!==req.user.id && req.user.role!=='ADMIN') return res.status(403).json({error:'Not your approval'});
     if(approval.status!=='PENDING') return res.status(400).json({error:'Already actioned'});
 
     const settings = await prisma.orgSettings.findFirst();
@@ -52,13 +56,34 @@ router.post('/:id/approve', authenticate, requireRole('MANAGER','FINANCE','ADMIN
 
     let finalStatus = 'APPROVED';
     if(approval.level===1 && levels>=2) {
-      const finance = await prisma.user.findFirst({where:{role:{in:['FINANCE','ADMIN']}, id:{not:req.user.id}}});
-      if(finance) {
-        await prisma.approval.create({data:{expenseId:approval.expenseId, approverId:finance.id, level:2, status:'PENDING'}});
-        finalStatus = 'PENDING';
-        await createNotification(finance.id, 'APPROVAL_REQUEST', 'Expense needs finance approval',
-          `"${approval.expense.title}" was approved by manager and needs your review`, '/approvals');
+      // Level 2 = the ASSIGNED level-1 approver's manager (walk one step up the
+      // chain). We base this on the approval's assigned approver, NOT on whoever
+      // clicked approve — otherwise an ADMIN override would mis-route the chain.
+      // If that manager doesn't exist, fall back to a FINANCE user. Never auto-route to ADMIN.
+      const assignedApprover = await prisma.user.findUnique({
+        where: { id: approval.approverId },
+        include: { manager: true },
+      });
+      let nextApprover = assignedApprover?.manager || null;
+
+      // Don't let the chain loop back to the submitter or the assigned approver
+      if (nextApprover && (nextApprover.id === approval.expense.submittedById || nextApprover.id === approval.approverId)) {
+        nextApprover = null;
       }
+      // Fallback: a FINANCE user (never ADMIN automatically), excluding submitter & assigned approver
+      if (!nextApprover) {
+        nextApprover = await prisma.user.findFirst({
+          where: { role: 'FINANCE', id: { notIn: [approval.approverId, approval.expense.submittedById] } },
+        });
+      }
+
+      if (nextApprover) {
+        await prisma.approval.create({data:{expenseId:approval.expenseId, approverId:nextApprover.id, level:2, status:'PENDING'}});
+        finalStatus = 'PENDING';
+        await createNotification(nextApprover.id, 'APPROVAL_REQUEST', 'Expense needs second-level approval',
+          `"${approval.expense.title}" was approved at level 1 and needs your review`, '/approvals');
+      }
+      // If no eligible level-2 approver exists, level-1 approval is final (status stays APPROVED).
     }
     await prisma.expense.update({where:{id:approval.expenseId}, data:{status:finalStatus}});
 
@@ -81,7 +106,7 @@ router.post('/:id/reject', authenticate, requireRole('MANAGER','FINANCE','ADMIN'
       include:{ expense:{include:{submittedBy:true}} },
     });
     if(!approval) return res.status(404).json({error:'Not found'});
-    if(approval.approverId!==req.user.id) return res.status(403).json({error:'Not your approval'});
+    if(approval.approverId!==req.user.id && req.user.role!=='ADMIN') return res.status(403).json({error:'Not your approval'});
     if(approval.status!=='PENDING') return res.status(400).json({error:'Already actioned'});
     await Promise.all([
       prisma.approval.update({where:{id:approval.id}, data:{status:'REJECTED',notes}}),
@@ -103,7 +128,7 @@ router.post('/:id/return', authenticate, requireRole('MANAGER','FINANCE','ADMIN'
       include:{ expense:{include:{submittedBy:true}} },
     });
     if(!approval) return res.status(404).json({error:'Not found'});
-    if(approval.approverId!==req.user.id) return res.status(403).json({error:'Not your approval'});
+    if(approval.approverId!==req.user.id && req.user.role!=='ADMIN') return res.status(403).json({error:'Not your approval'});
     await Promise.all([
       prisma.approval.update({where:{id:approval.id}, data:{status:'REJECTED', notes:`[RETURNED] ${notes}`}}),
       prisma.expense.update({where:{id:approval.expenseId}, data:{status:'REJECTED'}}),
