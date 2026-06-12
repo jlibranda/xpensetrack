@@ -109,7 +109,8 @@ export default function ExpensesPage() {
             <div>
               {expenses.map(e => (
                 <div key={e.id} onClick={() => setSelected(selected?.id === e.id ? null : e)}
-                  className={`flex items-center gap-3 px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors ${selected?.id === e.id ? 'bg-brand-50' : ''}`}>
+                  className={`flex items-center gap-3 px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors ${selected?.id === e.id ? 'border-l-4' : 'border-l-4 border-l-transparent'}`}
+                  style={selected?.id === e.id ? { borderLeftColor: 'var(--brand-color,#1D9E75)', backgroundColor: 'rgba(29,158,117,0.12)' } : {}}>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{e.merchant || e.title}</p>
                       {e.orNumber && <p className="text-xs text-gray-400">OR: {e.orNumber}</p>}
@@ -161,7 +162,7 @@ export default function ExpensesPage() {
                 <p className="text-xs font-medium text-gray-500 mb-1.5">Approval Trail</p>
                 {[...selected.approvals].sort((a,b)=>(a.stepOrder||a.level||0)-(b.stepOrder||b.level||0)).map((a, i) => (
                   <div key={i} className="flex items-start gap-2 mb-2">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs mt-0.5 shrink-0 ${a.status === 'APPROVED' ? 'bg-green-100 text-green-700' : a.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs mt-0.5 shrink-0 ${a.status === 'APPROVED' ? 'bg-green-100 text-green-700' : a.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-red-100 text-red-700'}`}>
                       {a.status === 'APPROVED' ? '✓' : a.status === 'REJECTED' ? '✗' : '…'}
                     </div>
                     <div className="flex-1">
@@ -169,7 +170,7 @@ export default function ExpensesPage() {
                         <span className="font-semibold">{personName(a.approver)}</span>
                         {a.approver?.role && <span className="text-gray-400"> ({a.approver.role})</span>}
                       </p>
-                      <p className={`text-xs font-medium ${a.status === 'APPROVED' ? 'text-green-600' : a.status === 'REJECTED' ? 'text-red-600' : 'text-amber-600'}`}>
+                      <p className={`text-xs font-medium ${a.status === 'APPROVED' ? 'text-green-600' : a.status === 'REJECTED' ? 'text-red-600' : 'text-red-600'}`}>
                         {a.status === 'APPROVED' ? 'Approved' : a.status === 'REJECTED' ? 'Rejected / Returned' : 'Pending approval'}
                       </p>
                       {a.notes && <p className="text-xs text-gray-500 italic mt-0.5">{a.notes}</p>}
