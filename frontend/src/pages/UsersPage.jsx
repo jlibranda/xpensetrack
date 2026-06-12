@@ -30,7 +30,7 @@ export default function UsersPage() {
   const { settings } = useOrg();
   const navigate = useNavigate();
 
-  const emptyForm = { firstName:'', lastName:'', email:'', password:'', role:'EMPLOYEE',
+  const emptyForm = { firstName:'', lastName:'', email:'', password:'', newPassword:'', role:'EMPLOYEE',
     department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'' };
   const [form, setForm] = useState(emptyForm);
 
@@ -82,7 +82,7 @@ export default function UsersPage() {
     setSaving(true); setMsg({text:'',ok:true});
     try {
       if (editUser) {
-        await api.patch(`/users/${editUser.id}`, { ...form, managerId: form.managerId||null, hireDate: form.hireDate||null });
+        await api.patch(`/users/${editUser.id}`, { ...form, managerId: form.managerId||null, hireDate: form.hireDate||null, newPassword: form.newPassword||undefined });
         setMsg({text:'Updated!',ok:true});
       } else {
         await api.post('/auth/register', { ...form });
@@ -212,6 +212,14 @@ export default function UsersPage() {
                 <label className="block text-xs text-gray-500 mb-1">Password *</label>
                 <input type="text" value={form.password} onChange={e=>setF('password',e.target.value)}
                   placeholder="Temporary password"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+              </div>
+            )}
+            {editUser && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Reset Password <span className="text-gray-400 font-normal">(leave blank to keep current)</span></label>
+                <input type="text" value={form.newPassword} onChange={e=>setF('newPassword',e.target.value)}
+                  placeholder="Enter new password to reset"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
               </div>
             )}
