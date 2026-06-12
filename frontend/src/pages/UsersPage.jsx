@@ -43,16 +43,20 @@ export default function UsersPage() {
     } catch(e) { return true; }
   })();
 
-  // Check if current user's role has impersonate permission
   const { user: currentUser } = useAuth();
-  const hasImpersonateAccess = (() => {
+
+  // Read role permissions from Access Control settings
+  const getRolePerm = (permKey, defaultRoles = ['ADMIN']) => {
     try {
       const perms = JSON.parse(localStorage.getItem('xpense_perms') || 'null');
       const userRole = currentUser?.role || 'EMPLOYEE';
-      if (!perms) return userRole === 'ADMIN'; // default: only admin
-      return (perms.impersonate_user || ['ADMIN']).includes(userRole);
+      if (!perms) return defaultRoles.includes(userRole);
+      return (perms[permKey] || defaultRoles).includes(userRole);
     } catch(e) { return false; }
-  })();
+  };
+
+  const hasImpersonateAccess = getRolePerm('impersonate_user', ['ADMIN']);
+  const hasResetPasswordAccess = getRolePerm('reset_passwords', ['ADMIN']);
 
   const load = async () => {
     setLoading(true);
@@ -381,7 +385,9 @@ export default function UsersPage() {
                               title={u.isActive ? 'Click to deactivate access' : 'Click to activate access'}>
                               {u.isActive ? '✓ Active' : '✗ Inactive'}
                             </button>
-                            <button onClick={() => resetPassword(u)} className="text-xs px-2 py-1 border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-50 font-medium">Reset pwd</button>
+                            {hasResetPasswordAccess && (
+                              <button onClick={() => resetPassword(u)} className="text-xs px-2 py-1 border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-50 font-medium">Reset pwd</button>
+                            )}
                           </div>
                         </td>
                       </tr>
