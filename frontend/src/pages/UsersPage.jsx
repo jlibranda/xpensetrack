@@ -6,8 +6,10 @@ import { useOrg } from '../context/OrgContext';
 
 const ROLES = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'];
 const ROLE_BADGE = {
-  EMPLOYEE:'bg-blue-50 text-blue-700', MANAGER:'bg-purple-50 text-purple-700',
-  FINANCE:'bg-amber-50 text-amber-700', ADMIN:'bg-green-50 text-green-700',
+  EMPLOYEE:'bg-blue-600 text-white', 
+  MANAGER:'bg-purple-600 text-white',
+  FINANCE:'bg-amber-500 text-white', 
+  ADMIN:'bg-green-600 text-white',
 };
 
 export default function UsersPage() {
@@ -327,7 +329,7 @@ export default function UsersPage() {
                         <td className="px-4 py-3 text-center">
                           <button onClick={() => toggleActive(u)}
                             title={u.isActive ? 'Click to deactivate (blocks login)' : 'Click to activate (restores login)'}
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-colors ${u.isActive ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold cursor-pointer hover:opacity-80 transition-colors ${u.isActive ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
                             <span>{u.isActive ? '✓' : '✗'}</span>
                             {u.isActive ? 'Active' : 'Inactive'}
                           </button>

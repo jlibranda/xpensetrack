@@ -59,7 +59,7 @@ export default function DashboardPage() {
           { label: 'Reimbursed', value: format(expenses.filter(e=>e.status==='REIMBURSED').reduce((s,e)=>s+e.amountPhp,0)), sub: `${expenses.filter(e=>e.status==='REIMBURSED').length} claims` },
         ].map((m, i) => (
           <div key={i} className="bg-gray-50 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{m.label}</p>
+            <p className="text-xs text-gray-600 font-medium uppercase tracking-wide mb-1">{m.label}</p>
             <p className={`text-xl font-medium ${m.accent || 'text-gray-900'}`}>{loading ? '—' : m.value}</p>
             <p className="text-xs text-gray-400 mt-0.5">{m.sub}</p>
           </div>
@@ -122,11 +122,11 @@ export default function DashboardPage() {
         ) : (
           <table className="w-full text-sm">
             <thead><tr className="bg-gray-50">
-              <th className="px-4 py-2.5 text-left text-xs text-gray-500 font-medium">Description</th>
-              <th className="px-4 py-2.5 text-left text-xs text-gray-500 font-medium hidden md:table-cell">Category</th>
-              <th className="px-4 py-2.5 text-left text-xs text-gray-500 font-medium hidden md:table-cell">Employee</th>
-              <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Amount</th>
-              <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Status</th>
+              <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium">Description</th>
+              <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium hidden md:table-cell">Category</th>
+              <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium hidden md:table-cell">Employee</th>
+              <th className="px-4 py-2.5 text-right text-xs text-gray-600 font-medium font-medium">Amount</th>
+              <th className="px-4 py-2.5 text-right text-xs text-gray-600 font-medium font-medium">Status</th>
             </tr></thead>
             <tbody>
               {expenses.map(e => (

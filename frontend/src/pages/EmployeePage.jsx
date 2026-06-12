@@ -6,13 +6,18 @@ import { useCurrency } from '../context/CurrencyContext';
 import ReceiptImage from '../components/ReceiptImage';
 
 const STATUS_BADGE = {
-  DRAFT:'bg-blue-50 text-blue-700', PENDING:'bg-amber-50 text-amber-700',
-  APPROVED:'bg-green-50 text-green-700', REJECTED:'bg-red-50 text-red-700',
-  REIMBURSED:'bg-gray-100 text-gray-600', CANCELLED:'bg-gray-100 text-gray-400',
+  DRAFT:'bg-blue-600 text-white', 
+  PENDING:'bg-amber-500 text-white',
+  APPROVED:'bg-green-600 text-white', 
+  REJECTED:'bg-red-600 text-white',
+  REIMBURSED:'bg-gray-600 text-white', 
+  CANCELLED:'bg-gray-400 text-white',
 };
 const ROLE_BADGE = {
-  EMPLOYEE:'bg-blue-50 text-blue-700', MANAGER:'bg-purple-50 text-purple-700',
-  FINANCE:'bg-amber-50 text-amber-700', ADMIN:'bg-green-50 text-green-700',
+  EMPLOYEE:'bg-blue-600 text-white', 
+  MANAGER:'bg-purple-600 text-white',
+  FINANCE:'bg-amber-500 text-white', 
+  ADMIN:'bg-green-600 text-white',
 };
 
 export default function EmployeePage() {

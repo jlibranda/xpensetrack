@@ -6,9 +6,9 @@ import { useCurrency } from '../context/CurrencyContext';
 import ReceiptImage from '../components/ReceiptImage';
 
 const STATUS_BADGE = {
-  PENDING: 'bg-amber-50 text-amber-700',
-  APPROVED: 'bg-green-50 text-green-700',
-  REJECTED: 'bg-red-50 text-red-700',
+  PENDING: 'bg-amber-500 text-white',
+  APPROVED: 'bg-green-600 text-white',
+  REJECTED: 'bg-red-600 text-white',
 };
 
 export default function ApprovalsPage() {

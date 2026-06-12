@@ -58,10 +58,10 @@ function AccessControlTab({ settings, navigate }) {
   const ROLES = roles;
   const LOCKED = ['ADMIN']; // Admin always has all perms
   const ROLE_COLORS = {
-    EMPLOYEE:'bg-blue-50 text-blue-700 border border-blue-200',
-    MANAGER:'bg-purple-50 text-purple-700 border border-purple-200',
-    FINANCE:'bg-amber-50 text-amber-700 border border-amber-200',
-    ADMIN:'bg-green-50 text-green-700 border border-green-200',
+    EMPLOYEE:'bg-blue-600 text-white',
+    MANAGER:'bg-purple-600 text-white',
+    FINANCE:'bg-amber-500 text-white',
+    ADMIN:'bg-green-600 text-white',
   };
 
   const toggle = (permKey, role) => {
@@ -140,8 +140,8 @@ function AccessControlTab({ settings, navigate }) {
       <div className="overflow-x-auto rounded-xl border border-gray-100">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left py-3 px-4 text-gray-500 font-medium">Permission</th>
+            <tr className="border-b" style={{backgroundColor:'#1e293b'}}>
+              <th className="text-left py-3 px-4 font-bold text-white">Permission</th>
               {ROLES.map(r => {
                 const isDefault = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'].includes(r);
                 return (
@@ -161,7 +161,7 @@ function AccessControlTab({ settings, navigate }) {
           <tbody>
             {Object.keys(DEFAULT_PERMS).map((key, i) => (
               <tr key={key} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                <td className="py-2.5 px-4 text-gray-700 font-medium">{PERM_LABELS[key]}</td>
+                <td className="py-2.5 px-4 font-semibold" style={{color:'#111827'}}>{PERM_LABELS[key]}</td>
                 {ROLES.map(role => {
                   const hasAccess = (perms[key] || []).includes(role);
                   const isAdmin = role === 'ADMIN';
@@ -189,9 +189,9 @@ function AccessControlTab({ settings, navigate }) {
         </table>
       </div>
 
-      <div className="mt-5 p-4 bg-blue-50 border border-blue-100 rounded-xl">
-        <p className="text-xs font-medium text-blue-800 mb-1">🔐 User login access</p>
-        <p className="text-xs text-blue-700 mb-3">To block or restore a user's login, go to Users and click their <strong>Active/Inactive</strong> badge. Use <strong>Reset pwd</strong> to change their password.</p>
+      <div className="mt-5 p-4 bg-blue-600 rounded-xl">
+        <p className="text-xs font-bold text-white mb-1">🔐 User login access</p>
+        <p className="text-xs text-blue-100 mb-3">To block or restore a user's login, go to Users and click their <strong>Active/Inactive</strong> badge. Use <strong>Reset pwd</strong> to change their password.</p>
         <button onClick={() => navigate('/users')}
           className="px-4 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90"
           style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>
@@ -258,12 +258,29 @@ export default function SettingsPage() {
   const uploadWallpaper = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     const fd = new FormData(); fd.append('wallpaper', file);
-    try { const res = await api.post('/settings/wallpaper', fd, {headers:{'Content-Type':'multipart/form-data'}}); refresh(); applyTheme({...settings, wallpaperUrl: res.wallpaperUrl}); setMsg('✅ Wallpaper updated!'); setTimeout(()=>setMsg(''),3000); }
+    try {
+      const res = await api.post('/settings/wallpaper', fd, {headers:{'Content-Type':'multipart/form-data'}});
+      // Apply immediately
+      const newSettings = {...settings, wallpaperUrl: res.wallpaperUrl};
+      applyTheme(newSettings);
+      localStorage.setItem('xpense_theme', JSON.stringify(newSettings));
+      refresh();
+      setMsg('✅ Wallpaper updated!');
+      setTimeout(()=>setMsg(''),3000);
+    }
     catch(err) { setMsg('❌ Failed to upload wallpaper'); }
   };
 
   const removeWallpaper = async () => {
-    try { await api.delete('/settings/wallpaper'); refresh(); applyTheme({...settings, wallpaperUrl:null}); setMsg('✅ Wallpaper removed'); setTimeout(()=>setMsg(''),2000); }
+    try {
+      await api.delete('/settings/wallpaper');
+      const newSettings = {...settings, wallpaperUrl: null};
+      applyTheme(newSettings);
+      localStorage.setItem('xpense_theme', JSON.stringify(newSettings));
+      refresh();
+      setMsg('✅ Wallpaper removed');
+      setTimeout(()=>setMsg(''),2000);
+    }
     catch(err) { setMsg('❌ Failed'); }
   };
 
@@ -435,7 +452,7 @@ export default function SettingsPage() {
         {tab === 'Password' && (
           <div>
             <h2 className="text-sm font-medium text-gray-700 mb-4">Password manager</h2>
-            <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4 text-xs text-amber-700">
+            <div className="bg-amber-500 border border-amber-600 rounded-lg p-3 mb-4 text-xs text-white font-medium">
               ⚠️ This default password will be used when creating new users via Add User or Bulk Upload. Users should change it on first login.
             </div>
             <div>
@@ -445,9 +462,9 @@ export default function SettingsPage() {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
               <p className="text-xs text-gray-400 mt-1">Minimum 6 characters. This is shown when adding users so admins can share it with new employees.</p>
             </div>
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs font-medium text-gray-600 mb-1">Current default password:</p>
-              <code className="text-sm font-mono text-gray-800">{s?.defaultPassword||'Welcome123'}</code>
+            <div className="mt-4 p-3 bg-gray-800 rounded-lg border border-gray-600">
+              <p className="text-xs font-medium text-gray-300 mb-1">Current default password:</p>
+              <code className="text-sm font-mono text-white">{s?.defaultPassword||'Welcome123'}</code>
             </div>
           </div>
         )}
