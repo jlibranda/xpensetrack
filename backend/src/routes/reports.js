@@ -103,36 +103,37 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
     const expenses = await prisma.expense.findMany({
       where,
       include: {
-        submittedBy: { select: { firstName: true, lastName: true, email: true, department: true } },
-        approvals: { include: { approver: { select: { firstName: true, lastName: true } } }, orderBy: { level: 'asc' } },
+        submittedBy: { select: { firstName: true, lastName: true, email: true, department: true, employeeNumber: true, costCenter: true } },
+        approvals: { include: { approver: { select: { firstName: true, lastName: true } } }, orderBy: { stepOrder: 'asc' } },
       },
       orderBy: { expenseDate: 'desc' },
     });
 
+    const fmtDate = (d) => d ? new Date(d).toISOString().split('T')[0] : '';
     const rows = expenses.map(e => ({
-      'Date': e.expenseDate.toISOString().split('T')[0],
-      'Employee': `${e.submittedBy.firstName||''} ${e.submittedBy.lastName||''}`.trim(),
-      'Email': e.submittedBy.email,
+      'Date': fmtDate(e.expenseDate),
+      'Employee Number': e.submittedBy.employeeNumber || '',
+      'Employee Full Name': `${e.submittedBy.lastName||''}, ${e.submittedBy.firstName||''}`.replace(/^,\s*|,\s*$/g, '').trim(),
       'Department': e.submittedBy.department || '',
-      'Description': e.title,
+      'Cost Center': e.costCenter || e.submittedBy.costCenter || '',
+      'Description': e.title || '',
       'Notes': e.description || '',
-      'Category': e.category,
-      'Type': e.expenseType,
+      'Category': e.category || '',
+      'GL Code': e.glCode || '',
+      'Type': e.expenseType || '',
       'Amount': e.amount,
       'Currency': e.currency,
       'Amount (PHP)': Number(e.amountPhp.toFixed(2)),
-      'Cost Center': e.costCenter || '',
       'Status': e.status,
-      'Approver': e.approvals[0]?.approver ? `${e.approvals[0].approver.firstName||''} ${e.approvals[0].approver.lastName||''}`.trim() : '',
-      'Approval Notes': e.approvals[0]?.notes || '',
-      'Receipt': e.receiptUrl && !e.receiptUrl.startsWith('data:') ? e.receiptUrl : (e.receiptUrl ? 'Attached' : ''),
+      'Processed': e.processedAt ? 'Yes' : 'No',
+      'Processed / Payout Date': fmtDate(e.processedAt),
     }));
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
-      {wch:12},{wch:20},{wch:25},{wch:15},{wch:30},{wch:25},
-      {wch:15},{wch:20},{wch:12},{wch:8},{wch:14},{wch:16},{wch:12},{wch:20},{wch:25},{wch:12}
+      {wch:12},{wch:16},{wch:26},{wch:16},{wch:14},{wch:30},{wch:25},
+      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:12},{wch:11},{wch:20}
     ];
     // Bold header row
     const headerRange = XLSX.utils.decode_range(ws['!ref']);

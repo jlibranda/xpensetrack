@@ -6,13 +6,13 @@ import { useCurrency } from '../context/CurrencyContext';
 
 const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
 
-const STATUS_BADGE = {
-  DRAFT: 'bg-gray-100 text-gray-600',
-  PENDING: 'bg-amber-100 text-amber-700',
-  APPROVED: 'bg-green-100 text-green-700',
-  REJECTED: 'bg-red-100 text-red-700',
-  REIMBURSED: 'bg-blue-100 text-blue-700',
-  CANCELLED: 'bg-gray-100 text-gray-400',
+const STATUS_COLORS = {
+  DRAFT:      { bg: '#6b7280', text: '#ffffff' },
+  PENDING:    { bg: '#f59e0b', text: '#ffffff' },
+  APPROVED:   { bg: '#16a34a', text: '#ffffff' },
+  REJECTED:   { bg: '#dc2626', text: '#ffffff' },
+  REIMBURSED: { bg: '#2563eb', text: '#ffffff' },
+  CANCELLED:  { bg: '#9ca3af', text: '#ffffff' },
 };
 
 export default function TransactionsPage() {
@@ -87,6 +87,15 @@ export default function TransactionsPage() {
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
+  const exportExcel = () => {
+    const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams({ token });
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    window.open(`${base}/reports/export?${params.toString()}`, '_blank');
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -94,13 +103,20 @@ export default function TransactionsPage() {
           <h1 className="text-xl font-medium text-gray-900">All Transactions</h1>
           <p className="text-sm text-gray-500">{rows.length} shown</p>
         </div>
-        {isAdmin && (
-          <button onClick={() => setShowDelete(!showDelete)}
+        <div className="flex items-center gap-2">
+          <button onClick={exportExcel}
             className="px-3 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ backgroundColor: '#dc2626' }}>
-            🗑 Delete by date range
+            style={{ backgroundColor: '#16a34a' }}>
+            ⬇ Export Excel
           </button>
-        )}
+          {isAdmin && (
+            <button onClick={() => setShowDelete(!showDelete)}
+              className="px-3 py-2 rounded-lg text-sm font-semibold text-white"
+              style={{ backgroundColor: '#dc2626' }}>
+              🗑 Delete by date range
+            </button>
+          )}
+        </div>
       </div>
 
       {msg.text && (
@@ -184,7 +200,8 @@ export default function TransactionsPage() {
                   <td className="px-4 py-3 text-gray-600">{e.merchant || e.title}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">{format(e.amountPhp)}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[e.status] || ''}`}>{e.status}</span>
+                    <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold"
+                      style={{ backgroundColor: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).bg, color: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).text }}>{e.status}</span>
                   </td>
                   <td className="px-4 py-3">
                     {e.processedAt
