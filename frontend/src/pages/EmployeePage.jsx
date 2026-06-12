@@ -127,7 +127,8 @@ export default function EmployeePage() {
                   {user.approvers.map((a, i) => (
                     <span key={a.id} className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-lg bg-brand-50 border border-brand-100 text-gray-800">
                       <span className="font-bold text-brand-600">{i + 1}.</span>
-                      {a.lastName}, {a.firstName} <span className="text-gray-400 text-xs">({a.role})</span>
+                      <span className="font-semibold">{a.firstName} {a.lastName}</span>
+                      <span className="text-gray-400 text-xs">({a.role}{a.employeeNumber ? ` · ${a.employeeNumber}` : ''})</span>
                     </span>
                   ))}
                 </div>

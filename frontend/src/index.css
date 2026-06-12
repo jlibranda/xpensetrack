@@ -103,11 +103,30 @@ html.dark .text-purple-700 { color: #d8b4fe !important; }
 #wallpaper-bg {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
+  /* light mode base behind the faint image */
+  background-color: #eef0f5;
+}
+/* The image itself, rendered faint (watermark effect) */
+#wallpaper-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--wallpaper-url);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   background-attachment: fixed;
+  opacity: 0.18; /* watermark: faint */
+}
+/* Dark mode: black base + a dark overlay on top of the image */
+html.dark #wallpaper-bg { background-color: #000000; }
+html.dark #wallpaper-bg::before { opacity: 0.12; }
+html.dark #wallpaper-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6); /* dark overlay */
 }
 
 /* When a wallpaper is active, let it show through the opaque body color */

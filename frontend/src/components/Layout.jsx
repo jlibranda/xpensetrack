@@ -32,6 +32,7 @@ export default function Layout() {
   const notifRef = useRef();
 
   const canApprove = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
+  const isManagerOnly = user?.role === 'MANAGER'; // managers don't get Analytics
   const isAdmin = ['ADMIN','FINANCE'].includes(user?.role);
   const brandColor = settings?.primaryColor || '#1D9E75';
   const darkMode = settings?.darkMode || false;
@@ -113,7 +114,7 @@ export default function Layout() {
           {canApprove && (
             <>
               <p className="pt-3 pb-1 px-3 text-xs text-gray-400 uppercase tracking-wider font-medium">Management</p>
-              {MANAGER_NAV.map(item => (
+              {MANAGER_NAV.filter(item => !(isManagerOnly && item.to === '/analytics')).map(item => (
                 <NavLink key={item.to} to={item.to} className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
                   <span className="w-4 text-center text-sm">{item.icon}</span>

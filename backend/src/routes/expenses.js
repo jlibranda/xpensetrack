@@ -41,14 +41,66 @@ router.get('/', authenticate, async (req, res) => {
 
 router.get('/pending-count', authenticate, async (req, res) => {
   try {
-    // For employees: count their own pending expenses
-    // For managers: count pending approvals waiting for them
-    const [myPending, toApprove] = await Promise.all([
-      prisma.expense.count({ where: { submittedById: req.user.id, status: 'PENDING' } }),
-      ['MANAGER','FINANCE','ADMIN'].includes(req.user.role)
-        ? prisma.approval.count({ where: { approverId: req.user.id, status: 'PENDING' } })
-        : Promise.resolve(0),
-    ]);
+    const myPending = await prisma.expense.count({ where: { submittedById: req.user.id, status: 'PENDING' } });
+
+    let toApprove = 0;
+    if (['MANAGER','FINANCE','ADMIN'].includes(req.user.role)) {
+      if (req.user.role === 'ADMIN') {
+        // Admin can act on any pending approval; count distinct expenses with a pending row.
+        const rows = await prisma.approval.findMany({
+          where: { status: 'PENDING' },
+          select: { expenseId: true },
+          distinct: ['expenseId'],
+        });
+        toApprove = rows.length;
+      } else {
+        // For non-admins, count only approvals that are ACTUALLY actionable now.
+        // A pending row is actionable if its step is the first unsatisfied step
+        // (sequential) or always (any-order), and its step isn't already satisfied
+        // by an OR-group sibling.
+        const myRows = await prisma.approval.findMany({
+          where: { approverId: req.user.id, status: 'PENDING' },
+          select: { id: true, expenseId: true, stepOrder: true, groupKey: true },
+        });
+        const expenseIds = [...new Set(myRows.map(r => r.expenseId))];
+        const actionableExpenses = new Set();
+
+        for (const exId of expenseIds) {
+          const all = await prisma.approval.findMany({ where: { expenseId: exId } });
+          // group into steps
+          const groups = {};
+          for (const a of all) {
+            const g = a.groupKey || `lvl:${a.stepOrder}`;
+            if (!groups[g]) groups[g] = { stepOrder: a.stepOrder, rows: [] };
+            groups[g].rows.push(a);
+          }
+          const steps = Object.values(groups).map(grp => ({
+            stepOrder: grp.stepOrder,
+            satisfied: grp.rows.some(r => r.status === 'APPROVED'),
+            blocked: grp.rows.every(r => r.status === 'REJECTED'),
+            rows: grp.rows,
+          })).sort((a,b)=>a.stepOrder-b.stepOrder);
+
+          // submitter's chain mode
+          const ex = await prisma.expense.findUnique({ where: { id: exId }, select: { submittedBy: { select: { approvalMode: true } } } });
+          const mode = ex?.submittedBy?.approvalMode || 'SEQUENTIAL';
+          const firstOpen = steps.find(s => !s.satisfied && !s.blocked);
+
+          // is any of my pending rows in this expense actionable?
+          const mine = myRows.filter(r => r.expenseId === exId);
+          for (const r of mine) {
+            const myStep = steps.find(s => s.stepOrder === r.stepOrder);
+            if (!myStep || myStep.satisfied || myStep.blocked) continue;
+            if (mode === 'ANY_ORDER' || (firstOpen && firstOpen.stepOrder === r.stepOrder)) {
+              actionableExpenses.add(exId);
+              break;
+            }
+          }
+        }
+        toApprove = actionableExpenses.size;
+      }
+    }
+
     res.json({ myPending, toApprove });
   } catch(err){ res.status(500).json({error:err.message}); }
 });
@@ -129,9 +181,18 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     if (submitter.managerId) approverIds.push(submitter.managerId);
     approverIds.push(...additional);
 
-    // No approver/manager assigned -> block submission (do NOT auto-approve).
+    // No approver/manager assigned -> auto-approve on submission.
     if (approverIds.length === 0) {
-      return res.status(400).json({ error: 'No approver assigned. Please ask your admin to set the Approver / Manager before submitting.' });
+      await prisma.$transaction([
+        prisma.expense.update({ where: { id: expense.id }, data: { status: 'APPROVED' } }),
+        prisma.approval.deleteMany({ where: { expenseId: expense.id } }),
+      ]);
+      await createNotification(req.user.id, 'EXPENSE_APPROVED',
+        'Expense auto-approved',
+        `Your expense "${expense.title}" was approved automatically (no approver assigned).`,
+        '/expenses'
+      );
+      return res.json({ message: 'Submitted', expense: await prisma.expense.findUnique({ where: { id: expense.id } }) });
     }
     // De-dupe while preserving order (manager stays #1); cap at 5
     approverIds = [...new Set(approverIds)].slice(0, 5);

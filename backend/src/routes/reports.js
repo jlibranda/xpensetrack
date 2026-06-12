@@ -5,6 +5,24 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const XLSX = require('xlsx');
 const prisma = new PrismaClient();
 
+// For a MANAGER, reports are limited to employees they approve for:
+// either as the manager (#1) or listed in that employee's additional approverIds.
+// FINANCE and ADMIN see everyone (returns null = no restriction).
+async function teamScopeFilter(reqUser) {
+  if (reqUser.role !== 'MANAGER') return null; // FINANCE/ADMIN: unrestricted
+
+  const everyone = await prisma.user.findMany({ select: { id: true, managerId: true, approverIds: true } });
+  const ids = new Set();
+  for (const u of everyone) {
+    if (u.managerId === reqUser.id) { ids.add(u.id); continue; }
+    const additional = (u.approverIds || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (additional.includes(reqUser.id)) ids.add(u.id);
+  }
+  // Always allow a manager to see their own expenses too.
+  ids.add(reqUser.id);
+  return [...ids];
+}
+
 // GET /api/reports/summary
 router.get('/summary', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
   try {
@@ -15,6 +33,13 @@ router.get('/summary', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
       where.expenseDate = {};
       if (from) where.expenseDate.gte = new Date(from);
       if (to) where.expenseDate.lte = new Date(to + 'T23:59:59');
+    }
+    // Managers: restrict to their team. Combine with any userId filter.
+    const scope = await teamScopeFilter(req.user);
+    if (scope) {
+      where.submittedById = where.submittedById && scope.includes(where.submittedById)
+        ? where.submittedById
+        : { in: scope };
     }
 
     const [approved, pending, rejected, all] = await Promise.all([
@@ -67,6 +92,12 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
       where.expenseDate = {};
       if (from) where.expenseDate.gte = new Date(from);
       if (to) where.expenseDate.lte = new Date(to + 'T23:59:59');
+    }
+    const scope = await teamScopeFilter(req.user);
+    if (scope) {
+      where.submittedById = where.submittedById && scope.includes(where.submittedById)
+        ? where.submittedById
+        : { in: scope };
     }
 
     const expenses = await prisma.expense.findMany({

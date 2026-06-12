@@ -154,7 +154,7 @@ export default function UsersPage() {
     const lines = text.trim().split('\n').filter(l=>l.trim());
     const start = lines[0]?.toLowerCase().includes('email') ? 1 : 0;
     return lines.slice(start).map(line => {
-      const [lastName, firstName, email, password, role, department, costCenter, employeeNumber, position] = line.split(',').map(s=>s?.trim());
+      const [employeeNumber, lastName, firstName, email, password, role, department, costCenter, position] = line.split(',').map(s=>s?.trim());
       return { lastName, firstName, email, password: password||settings?.defaultPassword||'Welcome123', role: role||'EMPLOYEE', department, costCenter, employeeNumber, position };
     }).filter(u => u.firstName && u.email);
   };
@@ -169,7 +169,7 @@ export default function UsersPage() {
   };
 
   const downloadTemplate = () => {
-    const csv = 'lastName,firstName,email,password,role,department,costCenter,employeeNumber,position\nDela Cruz,Juan,juan@co.com,Welcome123,EMPLOYEE,Sales,CC-001,EMP-001,Sales Rep\nSantos,Maria,maria@co.com,Welcome123,MANAGER,Finance,CC-002,EMP-002,Finance Manager';
+    const csv = 'employeeNumber,lastName,firstName,email,password,role,department,costCenter,position\nEMP-001,Dela Cruz,Juan,juan@co.com,Welcome123,EMPLOYEE,Sales,CC-001,Sales Rep\nEMP-002,Santos,Maria,maria@co.com,Welcome123,MANAGER,Finance,CC-002,Finance Manager';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
     a.download = 'users-template.csv'; a.click();
@@ -413,7 +413,7 @@ export default function UsersPage() {
           </div>
           <div className="bg-gray-50 rounded-lg p-3 mb-3 text-xs text-gray-600">
             <p className="font-medium mb-1">CSV format (default password: <code className="bg-white px-1 rounded">{settings?.defaultPassword||'Welcome123'}</code>):</p>
-            <code>lastName,firstName,email,password,role,department,costCenter,employeeNumber,position</code>
+            <code>employeeNumber,lastName,firstName,email,password,role,department,costCenter,position</code>
           </div>
           <div className="flex gap-2 mb-3">
             <button onClick={downloadTemplate} className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-xs hover:bg-gray-50">⬇ Template</button>

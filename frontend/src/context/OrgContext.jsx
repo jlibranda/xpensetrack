@@ -29,7 +29,9 @@ function setWallpaperDiv(url) {
       el.id = 'wallpaper-bg';
       document.body.prepend(el);
     }
-    el.style.backgroundImage = `url('${url}')`;
+    // The image is set on a ::before via a CSS var so we can control its opacity
+    // (watermark effect) and layer a dark overlay over it in dark mode.
+    el.style.setProperty('--wallpaper-url', `url('${url}')`);
     // Body has an opaque background-color; make it transparent so the
     // wallpaper layer (z-index:-1) is visible behind the app.
     document.body.classList.add('has-wallpaper');
