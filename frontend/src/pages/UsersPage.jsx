@@ -39,14 +39,12 @@ export default function UsersPage() {
 
   const { user: currentUser } = useAuth();
 
-  // Read role permissions from Access Control settings
+  // Read role permissions from Access Control settings (stored in DB via settings.accessControl)
   const getRolePerm = (permKey, defaultRoles = ['ADMIN']) => {
-    try {
-      const perms = JSON.parse(localStorage.getItem('xpense_perms') || 'null');
-      const userRole = currentUser?.role || 'EMPLOYEE';
-      if (!perms) return defaultRoles.includes(userRole);
-      return (perms[permKey] || defaultRoles).includes(userRole);
-    } catch(e) { return false; }
+    const userRole = currentUser?.role || 'EMPLOYEE';
+    const perms = settings?.accessControl;
+    if (!perms || Object.keys(perms).length === 0) return defaultRoles.includes(userRole);
+    return (perms[permKey] || defaultRoles).includes(userRole);
   };
 
   const hasImpersonateAccess = getRolePerm('impersonate_user', ['ADMIN']);

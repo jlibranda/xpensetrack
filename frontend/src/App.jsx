@@ -20,25 +20,6 @@ import UsersPage from './pages/UsersPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 
-// Applies wallpaper directly to document.body — most reliable approach
-function WallpaperApplier() {
-  const { settings } = useOrg();
-
-  useEffect(() => {
-    if (settings?.wallpaperUrl) {
-      document.body.style.backgroundImage = `url("${settings.wallpaperUrl}")`;
-      document.body.style.backgroundSize = 'cover';
-      document.body.style.backgroundPosition = 'center';
-      document.body.style.backgroundAttachment = 'fixed';
-      document.body.style.backgroundRepeat = 'no-repeat';
-    } else {
-      document.body.style.backgroundImage = 'none';
-    }
-  }, [settings?.wallpaperUrl]);
-
-  return null;
-}
-
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
   if (loading) return (
@@ -96,7 +77,6 @@ export default function App() {
         <OrgProvider>
           <CurrencyProvider>
             <NotificationProvider>
-              <WallpaperApplier />
               <AppRoutes />
             </NotificationProvider>
           </CurrencyProvider>

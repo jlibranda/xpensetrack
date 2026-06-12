@@ -129,6 +129,7 @@ model OrgSettings {
   categoryGlCodes      String   @default("{}")
   expenseTypes         String   @default("REIMBURSEMENT,CASH_ADVANCE")
   defaultPassword      String   @default("Welcome123")
+  accessControlJson    String   @default("{}")
   updatedAt            DateTime @updatedAt
 }
 

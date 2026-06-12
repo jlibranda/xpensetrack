@@ -9,7 +9,7 @@ const TABS = ['General','Branding','Categories','Expense Types','Password','Acce
 
 
 // Separate component for Access Control tab
-function AccessControlTab({ settings, navigate }) {
+function AccessControlTab({ settings, navigate, refresh }) {
   const DEFAULT_PERMS = {
     submit_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
     view_own_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
@@ -52,11 +52,13 @@ function AccessControlTab({ settings, navigate }) {
     impersonate_user: 'Login as / access user account',
   };
 
-  const saved = (() => { try { return JSON.parse(localStorage.getItem('xpense_perms') || 'null'); } catch(e) { return null; } })();
-  const savedRoles = (() => { try { return JSON.parse(localStorage.getItem('xpense_roles') || 'null'); } catch(e) { return null; } })();
-  const [perms, setPerms] = useState(saved || DEFAULT_PERMS);
+  const [perms, setPerms] = useState(() => {
+    const ac = settings?.accessControl;
+    return ac && Object.keys(ac).length > 0 ? { ...DEFAULT_PERMS, ...ac } : DEFAULT_PERMS;
+  });
   const [saved2, setSaved2] = useState(false);
-  const [roles, setRoles] = useState(savedRoles || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']);
+  const [saving2, setSaving2] = useState(false);
+  const [roles, setRoles] = useState(['EMPLOYEE','MANAGER','FINANCE','ADMIN']);
   const ROLES = roles;
   const LOCKED = ['ADMIN']; // Admin always has all perms
   const ROLE_COLORS = {
@@ -76,16 +78,26 @@ function AccessControlTab({ settings, navigate }) {
     });
   };
 
-  const savePerms = () => {
-    localStorage.setItem('xpense_perms', JSON.stringify(perms));
-    localStorage.setItem('xpense_roles', JSON.stringify(roles));
-    setSaved2(true);
-    setTimeout(() => setSaved2(false), 2000);
+  const savePerms = async () => {
+    setSaving2(true);
+    try {
+      await api.patch('/settings', { accessControl: perms });
+      if (refresh) refresh();
+      setSaved2(true);
+      setTimeout(() => setSaved2(false), 2000);
+    } catch(e) {
+      alert('Failed to save permissions. Please try again.');
+    } finally {
+      setSaving2(false);
+    }
   };
 
-  const resetPerms = () => {
+  const resetPerms = async () => {
     setPerms(DEFAULT_PERMS);
-    localStorage.removeItem('xpense_perms');
+    try {
+      await api.patch('/settings', { accessControl: DEFAULT_PERMS });
+      if (refresh) refresh();
+    } catch(e) {}
   };
 
   return (
@@ -97,7 +109,7 @@ function AccessControlTab({ settings, navigate }) {
           <button onClick={savePerms}
             className={`px-3 py-1.5 text-white rounded-lg text-xs font-medium transition-colors ${saved2 ? 'bg-green-500' : 'hover:opacity-90'}`}
             style={saved2 ? {} : {backgroundColor: settings?.primaryColor||'#1D9E75'}}>
-            {saved2 ? '✓ Saved!' : 'Save'}
+            {saving2 ? 'Saving…' : saved2 ? '✓ Saved!' : 'Save'}
           </button>
         </div>
       </div>
@@ -471,7 +483,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {tab === 'Access Control' && isAdmin && <AccessControlTab settings={settings} navigate={navigate} />}
+        {tab === 'Access Control' && isAdmin && <AccessControlTab settings={settings} navigate={navigate} refresh={refresh} />}
 
         {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
 

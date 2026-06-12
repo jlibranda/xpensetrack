@@ -30,11 +30,14 @@ async function getOrCreate() {
 function parseSettings(s) {
   let glCodes = {};
   try { glCodes = JSON.parse(s.categoryGlCodes || '{}'); } catch(e) {}
+  let accessControl = {};
+  try { accessControl = JSON.parse(s.accessControlJson || '{}'); } catch(e) {}
   return {
     ...s,
     categories: s.categories.split(',').map(c => c.trim()).filter(Boolean),
     expenseTypes: s.expenseTypes.split(',').map(t => t.trim()).filter(Boolean),
     categoryGlCodes: glCodes,
+    accessControl,
   };
 }
 
@@ -46,7 +49,8 @@ router.get('/', authenticate, async (req, res) => {
 router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res) => {
   try {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
-            primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode } = req.body;
+            primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
+            accessControl } = req.body;
     const s = await getOrCreate();
     const updated = await prisma.orgSettings.update({
       where: { id: s.id },
@@ -59,6 +63,7 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
         expenseTypes: Array.isArray(expenseTypes) ? expenseTypes.join(',') : expenseTypes,
         categoryGlCodes: categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined,
         defaultPassword: defaultPassword || undefined,
+        accessControlJson: accessControl ? JSON.stringify(accessControl) : undefined,
       },
     });
     res.json(parseSettings(updated));

@@ -97,3 +97,14 @@ html.dark .bg-blue-50 { background-color: #172554 !important; }
 html.dark .text-blue-700 { color: #93c5fd !important; }
 html.dark .bg-purple-50 { background-color: #3b0764 !important; }
 html.dark .text-purple-700 { color: #d8b4fe !important; }
+
+/* Wallpaper background layer */
+#wallpaper-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
