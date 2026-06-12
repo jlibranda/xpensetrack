@@ -21,7 +21,7 @@ export default function AddExpensePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [form, setForm] = useState({
-    title:'', description:'', amount:'', currency:'PHP',
+    title:'', orNumber:'', merchant:'', amount:'', currency:'PHP',
     category: categories[0] || 'MEALS',
     expenseType: expenseTypes[0] || 'REIMBURSEMENT',
     expenseDate: new Date().toISOString().split('T')[0],
@@ -31,9 +31,9 @@ export default function AddExpensePage() {
     if (id) {
       api.get(`/expenses/${id}`).then(e => {
         setForm({
-          title: e.title, description: e.description||'', amount: e.amount,
-          currency: e.currency, category: e.category, expenseType: e.expenseType,
-          expenseDate: e.expenseDate.split('T')[0],
+          title: e.title, orNumber: e.orNumber||'', merchant: e.merchant||'',
+          amount: e.amount, currency: e.currency, category: e.category,
+          expenseType: e.expenseType, expenseDate: e.expenseDate.split('T')[0],
         });
         if (e.receipt?.id) {
           setReceiptId(e.receipt.id);
@@ -78,11 +78,11 @@ export default function AddExpensePage() {
   };
 
   const handleSubmit = async (action) => {
-    if (!form.title || !form.amount || !form.expenseDate) { setError('Description, amount, and date are required.'); return; }
+    if (!form.merchant || !form.amount || !form.expenseDate) { setError('Merchant, amount, and date are required.'); return; }
     if (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0) { setError('Enter a valid amount.'); return; }
     setSubmitting(true); setError('');
     try {
-      const payload = { ...form, receiptId: receiptId || null };
+      const payload = { ...form, title: form.title || form.merchant, receiptId: receiptId || null };
       let expense;
       if (id) {
         expense = await api.patch(`/expenses/${id}`, payload);
@@ -145,10 +145,17 @@ export default function AddExpensePage() {
       {/* Form */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
         <div className="space-y-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Description *</label>
-            <input value={form.title} onChange={e=>set('title',e.target.value)} placeholder="e.g. Client dinner, Grab ride"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">OR Number</label>
+              <input value={form.orNumber} onChange={e=>set('orNumber',e.target.value)} placeholder="e.g. OR-2024-001"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Merchant *</label>
+              <input value={form.merchant} onChange={e=>set('merchant',e.target.value)} placeholder="e.g. Jollibee, Grab, SM"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -196,9 +203,9 @@ export default function AddExpensePage() {
           </div>
 
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Purpose</label>
-            <textarea value={form.description} onChange={e=>set('description',e.target.value)} rows={2}
-              placeholder="Who was present? What was the business purpose?"
+            <label className="block text-xs text-gray-500 mb-1">Purpose / Notes</label>
+            <textarea value={form.title} onChange={e=>set('title',e.target.value)} rows={2}
+              placeholder="Brief description of this expense..."
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 resize-none" />
           </div>
         </div>

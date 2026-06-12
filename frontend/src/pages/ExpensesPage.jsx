@@ -110,7 +110,8 @@ export default function ExpensesPage() {
                 <div key={e.id} onClick={() => setSelected(selected?.id === e.id ? null : e)}
                   className={`flex items-center gap-3 px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors ${selected?.id === e.id ? 'bg-brand-50' : ''}`}>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{e.title}</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">{e.merchant || e.title}</p>
+                      {e.orNumber && <p className="text-xs text-gray-400">OR: {e.orNumber}</p>}
                     <p className="text-xs text-gray-400 mt-0.5">
                       {new Date(e.expenseDate).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})} · {e.category.toLowerCase()}
                     </p>

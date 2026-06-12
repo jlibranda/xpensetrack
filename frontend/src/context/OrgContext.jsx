@@ -10,7 +10,7 @@ const DEFAULT = {
   logoUrl: null,
   wallpaperUrl: null,
   darkMode: false,
-  categories: ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COMMUNICATIONS','OTHER'],
+  categories: ['Cleaning', 'Education and Training', 'Entertainment/Meals', 'Equipment', 'Facility Maintenance and Repair', 'Furniture and Fixtures', 'General Office Expense', 'Hardware', 'Miscellaneous', 'Mobile Device', 'Non-Capital Small Tools Equipment and Furniture', 'Office Rent', 'Parking', 'Printing', 'Recruiting', 'Travel - Air Ticket (International)', 'Travel - Air Ticket (Domestic)', 'Travel - Others', 'Travel - Hotel (Domestic)'],
   expenseTypes: ['REIMBURSEMENT','CASH_ADVANCE'],
   categoryGlCodes: {},
   defaultCurrency: 'PHP',

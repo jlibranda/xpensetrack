@@ -90,11 +90,11 @@ router.patch('/:id', authenticate, async (req, res) => {
     if(!e) return res.status(404).json({error:'Not found'});
     if(e.submittedById!==req.user.id && req.user.role==='EMPLOYEE') return res.status(403).json({error:'Forbidden'});
     if(!['DRAFT','REJECTED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
-    const { title, description, amount, currency, category, expenseType, receiptId, costCenter, expenseDate } = req.body;
+    const { title, orNumber, merchant, description, amount, currency, category, expenseType, receiptId, costCenter, expenseDate } = req.body;
     const updated = await prisma.expense.update({
       where:{id:req.params.id},
       data:{
-        title, description,
+        title: title||(merchant?merchant:undefined), orNumber: orNumber!==undefined?orNumber||null:undefined, merchant: merchant!==undefined?merchant||null:undefined, description,
         amount: amount ? Number(amount) : undefined,
         currency, category, expenseType,
         receiptId: receiptId !== undefined ? (receiptId||null) : undefined,

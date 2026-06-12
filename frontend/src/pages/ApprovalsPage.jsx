@@ -106,7 +106,8 @@ export default function ApprovalsPage() {
                     className={`bg-white rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-brand-400 ring-1 ring-brand-400' : 'border-gray-100 hover:border-gray-200'} p-4`}>
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 min-w-0 mr-3">
-                        <p className="text-sm font-medium text-gray-900 truncate">{e.title}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{e.merchant || e.title}</p>
+                        {e.orNumber && <p className="text-xs text-gray-400">OR: {e.orNumber}</p>}
                         <p className="text-xs text-gray-400 mt-0.5">
                           {e.submittedBy?.name} · {e.submittedBy?.department || 'No dept'} · {new Date(e.expenseDate).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}
                         </p>
