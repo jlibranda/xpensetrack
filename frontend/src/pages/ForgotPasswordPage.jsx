@@ -5,6 +5,10 @@ import api from '../lib/api';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
 const readDark = () => { try { return localStorage.getItem('personal_dark') === 'true'; } catch { return false; } };
+const DEFAULT_BRANDING = { companyName:'XpenseTrack', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null };
+const readCachedBranding = () => {
+  try { const v = localStorage.getItem('cached_branding'); return v ? JSON.parse(v) : DEFAULT_BRANDING; } catch { return DEFAULT_BRANDING; }
+};
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -13,12 +17,17 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [dark, setDark] = useState(readDark());
-  const [branding, setBranding] = useState({ companyName:'XpenseTrack', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null });
+  const [branding, setBranding] = useState(readCachedBranding());
 
   useEffect(() => {
     fetch(`${API_BASE}/settings/public`)
       .then(r => r.json())
-      .then(s => { if (s?.primaryColor) setBranding(s); })
+      .then(s => {
+        if (s?.primaryColor) {
+          setBranding(s);
+          try { localStorage.setItem('cached_branding', JSON.stringify(s)); } catch {}
+        }
+      })
       .catch(() => {});
   }, []);
 

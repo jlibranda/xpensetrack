@@ -9,6 +9,13 @@ const readDark = () => {
   try { const v = localStorage.getItem('personal_dark'); return v === 'true'; } catch { return false; }
 };
 
+const DEFAULT_BRANDING = { companyName:'XpenseTrack', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null };
+// Read the last-known branding so the page shows the real logo/colors instantly,
+// instead of flashing the default green "X" until the network fetch returns.
+const readCachedBranding = () => {
+  try { const v = localStorage.getItem('cached_branding'); return v ? JSON.parse(v) : DEFAULT_BRANDING; } catch { return DEFAULT_BRANDING; }
+};
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,14 +23,19 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [dark, setDark] = useState(readDark());
-  const [branding, setBranding] = useState({ companyName:'XpenseTrack', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null });
+  const [branding, setBranding] = useState(readCachedBranding());
   const { login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     fetch(`${API_BASE}/settings/public`)
       .then(r => r.json())
-      .then(s => { if (s?.primaryColor) setBranding(s); })
+      .then(s => {
+        if (s?.primaryColor) {
+          setBranding(s);
+          try { localStorage.setItem('cached_branding', JSON.stringify(s)); } catch {}
+        }
+      })
       .catch(() => {});
   }, []);
 

@@ -379,7 +379,8 @@ export default function SettingsPage() {
             <div className="border border-gray-100 rounded-xl p-4">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-sm font-medium text-gray-700">USD → PHP exchange rate</p>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${fx?.auto ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                <span className="text-xs px-2.5 py-1 rounded-full font-bold text-white"
+                  style={{ backgroundColor: fx?.auto ? '#16a34a' : '#f59e0b' }}>
                   {fx?.auto ? 'Auto-updating' : 'Manual'}
                 </span>
               </div>
