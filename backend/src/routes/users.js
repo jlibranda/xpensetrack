@@ -7,6 +7,7 @@ const multer = require('multer');
 const XLSX = require('xlsx');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const prisma = new PrismaClient();
+const { logAudit } = require('../lib/audit');
 
 const userSelect = {
   id:true, employeeNumber:true, firstName:true, lastName:true,
@@ -113,6 +114,9 @@ router.patch('/:id', authenticate, requirePermission('manage_users'), async (req
       data: updateData,
       select: userSelect,
     });
+    if (role && role !== target.role) {
+      await logAudit(req.user, 'USER_ROLE_CHANGED', { targetType: 'USER', targetId: req.params.id, details: `${target.firstName||''} ${target.lastName||''}`.trim() + `: ${target.role} → ${role}` });
+    }
     res.json(user);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -146,6 +150,7 @@ router.post('/:id/reset-password', authenticate, requirePermission('reset_passwo
     }
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
+    await logAudit(req.user, 'USER_PASSWORD_RESET', { targetType: 'USER', targetId: req.params.id, details: `Reset password for ${target.firstName||''} ${target.lastName||''}`.trim() });
     res.json({ message: 'Password reset successfully' });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -358,6 +363,7 @@ router.post('/bulk-delete', authenticate, requireRole('ADMIN'), async (req, res)
       deleted++;
     }
 
+    await logAudit(req.user, 'USER_BULK_DELETED', { targetType: 'USER', details: `Deleted ${deleted} employee(s)${skipped?`, skipped ${skipped}`:''}` });
     res.json({ deleted, skipped });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

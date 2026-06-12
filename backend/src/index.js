@@ -38,6 +38,7 @@ const routes = [
   ['settings', '/api/settings'],
   ['ocr', '/api/ocr'],
   ['notifications', '/api/notifications'],
+  ['audit', '/api/audit'],
 ];
 
 for (const [name, path] of routes) {

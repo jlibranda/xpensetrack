@@ -40,10 +40,12 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
                 { type: 'text', text: `You are a receipt parser. Extract data from this receipt image and return ONLY a valid JSON object with no other text, no markdown, no code blocks.
 
 Return exactly this JSON structure:
-{"title":"merchant or store name","amount":123.45,"currency":"PHP","date":"YYYY-MM-DD","category":"MEALS"}
+{"merchant":"store name","title":"short description","orNumber":"OR/invoice/receipt number","amount":123.45,"currency":"PHP","date":"YYYY-MM-DD","category":"MEALS"}
 
 Rules:
-- title: merchant/store name from receipt
+- merchant: the store/business name printed on the receipt
+- title: a short description of the purchase (can be same as merchant if unclear)
+- orNumber: the Official Receipt (OR) number, invoice number, or receipt/transaction number. Look for labels like "OR No", "Invoice", "Receipt No", "TXN", "Ref". null if none found.
 - amount: total amount as number only (no currency symbols, no commas)
 - currency: "PHP" if peso signs or Philippine store, "USD" if dollar signs
 - date: date from receipt in YYYY-MM-DD format, null if not found
@@ -83,7 +85,7 @@ Return only the JSON object, nothing else.` }
 
     res.json({
       receiptId: receipt.id,
-      parsed: parsed || { title:'', amount:null, currency:'PHP', date:null, category:'OTHER' },
+      parsed: parsed || { merchant:'', title:'', orNumber:'', amount:null, currency:'PHP', date:null, category:'OTHER' },
       aiUsed,
     });
   } catch(err) {

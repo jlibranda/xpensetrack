@@ -20,6 +20,9 @@ export default function AddExpensePage() {
   const [receiptPreview, setReceiptPreview] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [dupes, setDupes] = useState([]);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [dupAcknowledged, setDupAcknowledged] = useState(false);
   const [form, setForm] = useState({
     title:'', orNumber:'', merchant:'', amount:'', currency:'PHP',
     category: categories[0] || 'MEALS',
@@ -63,13 +66,15 @@ export default function AddExpensePage() {
       if (res.parsed) {
         setForm(f => ({
           ...f,
-          title: res.parsed.title || f.title,
+          merchant: res.parsed.merchant || res.parsed.title || f.merchant,
+          title: res.parsed.title || res.parsed.merchant || f.title,
+          orNumber: res.parsed.orNumber || f.orNumber,
           amount: res.parsed.amount?.toString() || f.amount,
           currency: res.parsed.currency || f.currency,
           category: res.parsed.category || f.category,
           expenseDate: res.parsed.date || f.expenseDate,
         }));
-        if (res.aiUsed) setError('✨ AI filled in details from your receipt. Please review and adjust if needed.');
+        if (res.aiUsed) setError('✨ AI filled in details from your receipt (merchant, OR number, amount, date). Please review and adjust if needed.');
         else setError('Receipt saved. AI parsing not available — please fill in details manually.');
       }
     } catch(err) {
@@ -80,6 +85,25 @@ export default function AddExpensePage() {
   const handleSubmit = async (action) => {
     if (!form.merchant || !form.amount || !form.expenseDate) { setError('Merchant, amount, and date are required.'); return; }
     if (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0) { setError('Enter a valid amount.'); return; }
+
+    // Duplicate detection — warn (don't block) if a similar expense already exists.
+    if (!dupAcknowledged) {
+      try {
+        const { duplicates } = await api.post('/expenses/check-duplicate', {
+          amount: parseFloat(form.amount),
+          expenseDate: form.expenseDate,
+          orNumber: form.orNumber,
+          merchant: form.merchant,
+          excludeId: id || undefined,
+        });
+        if (duplicates && duplicates.length > 0) {
+          setDupes(duplicates);
+          setPendingAction(action);
+          return; // pause and show the warning modal
+        }
+      } catch (e) { /* if the check fails, don't block submission */ }
+    }
+
     setSubmitting(true); setError('');
     try {
       const payload = { ...form, title: form.title || form.merchant, receiptId: receiptId || null };
@@ -98,7 +122,7 @@ export default function AddExpensePage() {
       setTimeout(() => navigate('/expenses'), 1800);
     } catch(err) {
       setError(err.error || err.message || 'Failed to save. Please try again.');
-    } finally { setSubmitting(false); }
+    } finally { setSubmitting(false); setDupes([]); setPendingAction(null); }
   };
 
   const brandColor = settings?.primaryColor || '#1D9E75';
@@ -229,6 +253,36 @@ export default function AddExpensePage() {
           💾 Draft
         </button>
       </div>
+
+      {dupes.length > 0 && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => { setDupes([]); setPendingAction(null); }}>
+          <div className="bg-white rounded-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-amber-600 mb-1">⚠️ Possible duplicate</h3>
+            <p className="text-sm text-gray-600 mb-3">You already have {dupes.length === 1 ? 'an expense' : 'expenses'} with the same amount and date{dupes.some(d=>d.orNumber)?' / OR number':''}:</p>
+            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+              {dupes.map(d => (
+                <div key={d.id} className="text-sm border border-gray-100 rounded-lg p-2.5">
+                  <div className="font-medium text-gray-800">{d.merchant || d.title}</div>
+                  <div className="text-xs text-gray-500">
+                    {d.currency} {Number(d.amount).toLocaleString()} · {new Date(d.expenseDate).toLocaleDateString()}
+                    {d.orNumber ? ` · OR: ${d.orNumber}` : ''} · {d.status}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setDupes([]); setPendingAction(null); }}
+                className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">
+                Cancel & review
+              </button>
+              <button onClick={() => { const a = pendingAction; setDupAcknowledged(true); setDupes([]); setPendingAction(null); setTimeout(() => handleSubmit(a), 0); }}
+                className="flex-1 py-2 rounded-lg text-sm font-medium text-white" style={{ backgroundColor: brandColor }}>
+                Submit anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

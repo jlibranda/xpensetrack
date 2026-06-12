@@ -163,3 +163,15 @@ model Notification {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 }
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?  // who performed the action (null if system)
+  actorName  String   // snapshot of name at the time
+  actorRole  String?
+  action     String   // e.g. EXPENSE_APPROVED, USER_DELETED, EXPENSE_BULK_DELETED
+  targetType String?  // EXPENSE | USER | SETTINGS | TRANSACTION
+  targetId   String?
+  details    String?  // human-readable summary
+  createdAt  DateTime @default(now())
+}

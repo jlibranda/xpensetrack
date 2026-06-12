@@ -17,6 +17,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import UsersPage from './pages/UsersPage';
 import TransactionsPage from './pages/TransactionsPage';
+import AuditLogPage from './pages/AuditLogPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 
@@ -64,6 +65,7 @@ function AppRoutes() {
         <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
         <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />
         <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
+        <Route path="audit" element={<PrivateRoute roles={['ADMIN']}><AuditLogPage /></PrivateRoute>} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

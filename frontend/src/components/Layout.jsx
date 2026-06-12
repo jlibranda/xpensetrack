@@ -144,6 +144,13 @@ export default function Layout() {
                   <span>{item.label}</span>
                 </NavLink>
               ))}
+              {user?.role === 'ADMIN' && (
+                <NavLink to="/audit" className={navLinkClass}
+                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  <span className="w-4 text-center text-sm">📋</span>
+                  <span>Audit Log</span>
+                </NavLink>
+              )}
             </>
           )}
         </nav>

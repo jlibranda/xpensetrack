@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { sendStatusUpdateEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
+const { logAudit } = require('../lib/audit');
 const prisma = new PrismaClient();
 
 const expenseInclude = {
@@ -140,6 +141,7 @@ router.post('/:id/approve', authenticate, requireRole('MANAGER', 'FINANCE', 'ADM
       await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'APPROVED').catch(() => {});
       await createNotification(approval.expense.submittedById, 'EXPENSE_APPROVED',
         'Expense fully approved!', `"${approval.expense.title}" has been fully approved`, '/expenses');
+      await logAudit(req.user, 'EXPENSE_APPROVED', { targetType: 'EXPENSE', targetId: approval.expenseId, details: `Fully approved "${approval.expense.title}"` });
       return res.json({ message: 'Approved', finalStatus: 'APPROVED' });
     }
 
@@ -180,6 +182,7 @@ router.post('/:id/reject', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMI
     await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'REJECTED').catch(() => {});
     await createNotification(approval.expense.submittedById, 'EXPENSE_REJECTED',
       'Expense rejected', `"${approval.expense.title}" was rejected${notes ? `: ${notes}` : ''}. You can edit and resubmit it.`, '/expenses');
+    await logAudit(req.user, 'EXPENSE_REJECTED', { targetType: 'EXPENSE', targetId: approval.expenseId, details: `Rejected "${approval.expense.title}"${notes?`: ${notes}`:''}` });
     res.json({ message: 'Rejected' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

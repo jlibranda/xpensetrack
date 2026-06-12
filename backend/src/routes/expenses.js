@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { sendApprovalRequestEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
+const { logAudit } = require('../lib/audit');
 const prisma = new PrismaClient();
 
 const PHP_USD = 56;
@@ -134,6 +135,40 @@ router.post('/', authenticate, async (req, res) => {
     });
     res.status(201).json(expense);
   } catch(err){ res.status(500).json({error:err.message}); }
+});
+
+// Check for potential duplicate expenses for the current user.
+// Matches on same amount + same date, and (same OR number OR same merchant).
+// Returns a list of possible duplicates (non-blocking warning for the UI).
+router.post('/check-duplicate', authenticate, async (req, res) => {
+  try {
+    const { amount, expenseDate, orNumber, merchant, excludeId } = req.body;
+    if (!amount || !expenseDate) return res.json({ duplicates: [] });
+
+    const day = new Date(expenseDate);
+    const start = new Date(day); start.setHours(0,0,0,0);
+    const end = new Date(day); end.setHours(23,59,59,999);
+
+    const orMatch = orNumber ? { orNumber: { equals: String(orNumber).trim(), mode: 'insensitive' } } : null;
+    const merchMatch = merchant ? { merchant: { equals: String(merchant).trim(), mode: 'insensitive' } } : null;
+    const orConds = [orMatch, merchMatch].filter(Boolean);
+
+    const where = {
+      submittedById: req.user.id,
+      amount: Number(amount),
+      expenseDate: { gte: start, lte: end },
+      status: { not: 'CANCELLED' },
+    };
+    if (excludeId) where.id = { not: excludeId };
+    if (orConds.length) where.OR = orConds;
+
+    const duplicates = await prisma.expense.findMany({
+      where,
+      select: { id: true, title: true, merchant: true, orNumber: true, amount: true, currency: true, expenseDate: true, status: true },
+      take: 5,
+    });
+    res.json({ duplicates });
+  } catch(err){ res.status(500).json({ error: err.message }); }
 });
 
 router.patch('/:id', authenticate, async (req, res) => {
@@ -306,6 +341,7 @@ router.post('/bulk-delete', authenticate, requireRole('ADMIN'), async (req, res)
     // Remove dependent approvals first, then the expenses (permanent).
     await prisma.approval.deleteMany({ where: { expenseId: { in: ids } } });
     const result = await prisma.expense.deleteMany({ where: { id: { in: ids } } });
+    await logAudit(req.user, 'TRANSACTION_BULK_DELETED', { targetType: 'TRANSACTION', details: `Deleted ${result.count} transaction(s) in range ${from||'…'} to ${to||'…'}${status?` (status ${status})`:''}` });
     res.json({ deleted: result.count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -324,6 +360,7 @@ router.post('/:id/mark-processed', authenticate, requireRole('FINANCE', 'ADMIN')
       where: { id: req.params.id },
       data: { processedAt: when },
     });
+    await logAudit(req.user, 'EXPENSE_MARKED_PROCESSED', { targetType: 'EXPENSE', targetId: req.params.id, details: `Marked "${e.title}" processed on ${when.toISOString().split('T')[0]}` });
     res.json({ message: 'Marked processed', processedAt: updated.processedAt });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
