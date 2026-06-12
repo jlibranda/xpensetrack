@@ -152,8 +152,11 @@ export default function Layout() {
               <p className="text-xs font-semibold text-white truncate">{user?.firstName} {user?.lastName}</p>
               <p className="text-xs text-gray-400">{user?.role}</p>
             </div>
-            <button onClick={() => { logout(); navigate('/login'); }} className="text-gray-400 hover:text-white" title="Sign out">⏻</button>
           </div>
+          <button onClick={() => { logout(); navigate('/login'); }}
+            className="mt-3 w-full flex items-center justify-center px-4 py-3 rounded-lg text-base font-bold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-md tracking-wide">
+            Sign Out
+          </button>
         </div>
       </aside>
 

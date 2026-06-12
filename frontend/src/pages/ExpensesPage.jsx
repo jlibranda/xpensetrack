@@ -30,6 +30,7 @@ export default function ExpensesPage() {
   const [selected, setSelected] = useState(null);
   const [cancelModal, setCancelModal] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
   const [actionMsg, setActionMsg] = useState('');
   const { format } = useCurrency();
   const navigate = useNavigate();
@@ -157,15 +158,21 @@ export default function ExpensesPage() {
             {/* Approval trail */}
             {selected.approvals?.length > 0 && (
               <div className="mb-3">
-                <p className="text-xs font-medium text-gray-500 mb-1.5">Approval trail</p>
-                {selected.approvals.map((a, i) => (
-                  <div key={i} className="flex items-start gap-2 mb-1.5">
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-xs mt-0.5 shrink-0 ${a.status === 'APPROVED' ? 'bg-green-100 text-green-700' : a.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                <p className="text-xs font-medium text-gray-500 mb-1.5">Approval Trail</p>
+                {[...selected.approvals].sort((a,b)=>(a.stepOrder||a.level||0)-(b.stepOrder||b.level||0)).map((a, i) => (
+                  <div key={i} className="flex items-start gap-2 mb-2">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs mt-0.5 shrink-0 ${a.status === 'APPROVED' ? 'bg-green-100 text-green-700' : a.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                       {a.status === 'APPROVED' ? '✓' : a.status === 'REJECTED' ? '✗' : '…'}
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-700">{a.approver?.name} <span className="text-gray-400">Level {a.level}</span></p>
-                      {a.notes && <p className="text-xs text-gray-500 italic">{a.notes}</p>}
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-800">
+                        <span className="font-semibold">{personName(a.approver)}</span>
+                        {a.approver?.role && <span className="text-gray-400"> ({a.approver.role})</span>}
+                      </p>
+                      <p className={`text-xs font-medium ${a.status === 'APPROVED' ? 'text-green-600' : a.status === 'REJECTED' ? 'text-red-600' : 'text-amber-600'}`}>
+                        {a.status === 'APPROVED' ? 'Approved' : a.status === 'REJECTED' ? 'Rejected / Returned' : 'Pending approval'}
+                      </p>
+                      {a.notes && <p className="text-xs text-gray-500 italic mt-0.5">{a.notes}</p>}
                     </div>
                   </div>
                 ))}

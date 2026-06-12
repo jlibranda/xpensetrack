@@ -22,6 +22,9 @@ export default function ApprovalsPage() {
   const { format } = useCurrency();
   const { load: refreshNotif } = useNotifications();
 
+  // Build a full name from a user object (backend returns firstName/lastName).
+  const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
+
   const load = async () => {
     setLoading(true);
     try {
@@ -66,7 +69,8 @@ export default function ApprovalsPage() {
       <div className="mb-6">
         <h1 className="text-xl font-medium text-gray-900">Approvals</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          {approvals.length} pending · {history.length} actioned
+          <span className="inline-flex items-center justify-center min-w-6 h-6 px-2 rounded-full bg-red-500 text-white text-sm font-bold mr-1">{approvals.length}</span>
+          pending · {history.length} actioned
         </p>
       </div>
 
@@ -75,7 +79,7 @@ export default function ApprovalsPage() {
         <button onClick={() => setTab('pending')}
           className={`px-4 py-1.5 rounded-md text-sm transition-colors ${tab === 'pending' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           Pending {approvals.length > 0 && (
-            <span className="ml-1.5 bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded-full font-medium">{approvals.length}</span>
+            <span className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 bg-red-500 text-white text-xs font-bold rounded-full">{approvals.length}</span>
           )}
         </button>
         <button onClick={() => setTab('history')}
@@ -108,9 +112,16 @@ export default function ApprovalsPage() {
                       <div className="flex-1 min-w-0 mr-3">
                         <p className="text-sm font-medium text-gray-900 truncate">{e.merchant || e.title}</p>
                         {e.orNumber && <p className="text-xs text-gray-400">OR: {e.orNumber}</p>}
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {e.submittedBy?.name} · {e.submittedBy?.department || 'No dept'} · {new Date(e.expenseDate).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          <span className="font-semibold text-gray-700">{personName(e.submittedBy)}</span> · {e.submittedBy?.department || 'No dept'} · {new Date(e.expenseDate).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}
                         </p>
+                        {(() => {
+                          const pendingApprovers = (e.approvals || []).filter(ap => ap.status === 'PENDING').map(ap => personName(ap.approver));
+                          const uniq = [...new Set(pendingApprovers)];
+                          return uniq.length ? (
+                            <p className="text-xs text-amber-600 mt-0.5">Waiting on: <span className="font-medium">{uniq.join(', ')}</span></p>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-medium text-gray-900">{format(e.amountPhp)}</p>
@@ -204,7 +215,7 @@ export default function ApprovalsPage() {
                   )}
                   <div className="flex justify-between py-1 border-b border-gray-50">
                     <span className="text-gray-500">Submitted by</span>
-                    <span className="text-gray-700">{selected.expense.submittedBy?.name}</span>
+                    <span className="text-gray-700">{personName(selected.expense.submittedBy)}</span>
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="text-gray-500">Approval level</span>
@@ -246,7 +257,7 @@ export default function ApprovalsPage() {
                       <p className="text-gray-900 font-medium text-sm">{a.expense.title}</p>
                       {a.notes && <p className="text-xs text-gray-400 italic mt-0.5 max-w-xs truncate">{a.notes}</p>}
                     </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{a.expense.submittedBy?.name}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{personName(a.expense.submittedBy)}</td>
                     <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">{format(a.expense.amountPhp)}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[a.status] || 'bg-gray-100 text-gray-600'}`}>

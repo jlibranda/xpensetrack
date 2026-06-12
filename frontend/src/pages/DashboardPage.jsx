@@ -14,6 +14,7 @@ const STATUS_BADGE = {
 };
 
 export default function DashboardPage() {
+  const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
   const [expenses, setExpenses] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -134,7 +135,7 @@ export default function DashboardPage() {
                   className="border-t border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors">
                   <td className="px-4 py-3 text-gray-900">{e.title}</td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell capitalize">{e.category.toLowerCase()}</td>
-                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{e.submittedBy?.name}</td>
+                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{personName(e.submittedBy)}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">{format(e.amountPhp)}</td>
                   <td className="px-4 py-3 text-right">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[e.status]}`}>{e.status}</span>
