@@ -31,7 +31,7 @@ export default function UsersPage() {
   const navigate = useNavigate();
 
   const emptyForm = { firstName:'', lastName:'', email:'', password:'', role:'EMPLOYEE',
-    department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'', canImpersonate:false, permissions:'[]' };
+    department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'' };
   const [form, setForm] = useState(emptyForm);
 
   // Check if impersonation is enabled in access control settings
@@ -68,7 +68,7 @@ export default function UsersPage() {
     setForm({ firstName:u.firstName||'', lastName:u.lastName||'', email:u.email,
       password:'', role:u.role, department:u.department||'', managerId:u.managerId||'',
       costCenter:u.costCenter||'', position:u.position||'', payrollAccount:u.payrollAccount||'',
-      employeeNumber:u.employeeNumber||'', canImpersonate:u.canImpersonate||false, permissions:u.permissions||'[]' });
+      employeeNumber:u.employeeNumber||'' });
     setMsg({text:'',ok:true}); setTab('add');
   };
 
@@ -247,55 +247,6 @@ export default function UsersPage() {
               </select>
             </div>
 
-
-            {/* ── Per-user Permissions ─────────────────── */}
-            <div className="col-span-2 mt-2">
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-gray-800 flex items-center justify-between">
-                  <p className="text-sm font-bold text-white">User Permissions</p>
-                  <p className="text-xs text-gray-400">Override role defaults for this user</p>
-                </div>
-                <div className="divide-y divide-gray-100">
-                  {[
-                    { key:'submit_expenses',   label:'Submit expenses',                     icon:'📝' },
-                    { key:'view_own_expenses', label:'View own expenses',                   icon:'👁' },
-                    { key:'upload_receipts',   label:'Upload receipts & AI auto-fill',      icon:'📷' },
-                    { key:'cancel_expenses',   label:'Cancel own expenses',                 icon:'✖' },
-                    { key:'approve_expenses',  label:'Approve / Reject / Return expenses',  icon:'✅' },
-                    { key:'view_team',         label:'View team expenses',                  icon:'👥' },
-                    { key:'view_reports',      label:'View reports & analytics',            icon:'📊' },
-                    { key:'export_reports',    label:'Export Excel reports',                icon:'📥' },
-                    { key:'second_approval',   label:'Second-level approval',               icon:'✔✔' },
-                    { key:'mark_reimbursed',   label:'Mark expenses as reimbursed',         icon:'💰' },
-                    { key:'edit_categories',   label:'Edit categories & GL codes',          icon:'🏷' },
-                    { key:'manage_settings',   label:'Manage app settings',                 icon:'⚙' },
-                    { key:'manage_users',      label:'Manage users',                        icon:'👤' },
-                    { key:'toggle_access',     label:'Activate / deactivate user access',   icon:'🔒' },
-                    { key:'reset_passwords',   label:'Reset any user password',             icon:'🔑' },
-                    { key:'upload_branding',   label:'Upload logo & wallpaper',             icon:'🖼' },
-                    { key:'change_branding',   label:'Change colors & branding',            icon:'🎨' },
-                    { key:'impersonate',       label:'Access / Login as another user',      icon:'👤🔑' },
-                  ].map(p => {
-                    const userPerms = (() => { try { return JSON.parse(form.permissions||'[]'); } catch(e){ return []; } })();
-                    const checked = userPerms.includes(p.key);
-                    const toggle = () => {
-                      const current = (() => { try { return JSON.parse(form.permissions||'[]'); } catch(e){ return []; } })();
-                      const next = checked ? current.filter(x => x !== p.key) : [...current, p.key];
-                      setF('permissions', JSON.stringify(next));
-                    };
-                    return (
-                      <label key={p.key} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer">
-                        <input type="checkbox" checked={checked} onChange={toggle}
-                          className="w-4 h-4 rounded cursor-pointer"
-                          style={{accentColor: settings?.primaryColor||'#1D9E75'}} />
-                        <span className="text-base leading-none">{p.icon}</span>
-                        <span className="text-sm text-gray-800 font-medium">{p.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
 
           </div>
           {msg.text && <div className={`mt-3 px-3 py-2 rounded-lg text-sm border ${msg.ok?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg.text}</div>}
