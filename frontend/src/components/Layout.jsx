@@ -9,7 +9,7 @@ import api from '../lib/api';
 
 const NAV = [
   { to:'/', label:'Dashboard', icon:'⊞', exact:true },
-  { to:'/expenses', label:'My Expenses', icon:'🧾' },
+  { to:'/expenses', label:'My Expenses', icon:'🧾', exact:true },
   { to:'/expenses/new', label:'Add Expense', icon:'+' },
 ];
 const MANAGER_NAV = [

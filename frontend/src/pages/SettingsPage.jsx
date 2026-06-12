@@ -375,17 +375,6 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
-            {/* Dark mode */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-700">Dark mode (org default)</p>
-                <p className="text-xs text-gray-400">Default theme for new users. Each person can override this with the toggle in the top bar.</p>
-              </div>
-              <button onClick={()=>{ const nd = !s?.darkMode; set('darkMode', nd); applyTheme({ ...(s||settings), darkMode: nd }); }}
-                className={`relative w-12 h-6 rounded-full transition-colors ${s?.darkMode?'bg-gray-800':'bg-gray-200'}`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${s?.darkMode?'translate-x-7':'translate-x-1'}`} />
-              </button>
-            </div>
             {/* Wallpaper */}
             <div>
               <label className="block text-xs text-gray-500 mb-2">App wallpaper / background</label>
