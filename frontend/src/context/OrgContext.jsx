@@ -1,6 +1,7 @@
 // src/context/OrgContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../lib/api';
+import { useAuth } from './AuthContext';
 
 const OrgContext = createContext(null);
 
@@ -56,6 +57,7 @@ export function applyThemeToDOM(s) {
 
 export function OrgProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULT);
+  const { user } = useAuth();
 
   const load = () => {
     if (!localStorage.getItem('token')) return;
@@ -77,11 +79,20 @@ export function OrgProvider({ children }) {
     }).catch(() => {});
   };
 
+  // Reload settings whenever the authenticated user changes (covers login),
+  // and on initial mount. This is what makes theme + wallpaper apply right
+  // after logging in instead of only after a manual page refresh.
   useEffect(() => {
-    load();
+    if (user) {
+      load();
+    } else {
+      // Logged out (or on the login screen): clear any applied theme/wallpaper
+      applyThemeToDOM({ darkMode: false, primaryColor: '#1D9E75', wallpaperUrl: null });
+      setSettings(DEFAULT);
+    }
     window.addEventListener('storage', load);
     return () => window.removeEventListener('storage', load);
-  }, []);
+  }, [user]);
 
   const applyTheme = (s) => {
     applyThemeToDOM(s);

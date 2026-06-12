@@ -49,7 +49,13 @@ export default function UsersPage() {
 
   const load = async () => {
     setLoading(true);
-    try { const d = await api.get('/users'); setUsers(Array.isArray(d) ? d : []); }
+    try {
+      const d = await api.get('/users');
+      let list = Array.isArray(d) ? d : [];
+      // Non-admins must never see ADMIN accounts (backend also enforces this)
+      if (currentUser?.role !== 'ADMIN') list = list.filter(u => u.role !== 'ADMIN');
+      setUsers(list);
+    }
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
@@ -214,7 +220,7 @@ export default function UsersPage() {
               <label className="block text-xs text-gray-500 mb-1">Role *</label>
               <select value={form.role} onChange={e=>setF('role',e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400">
-                {ROLES.map(r=><option key={r}>{r}</option>)}
+                {ROLES.filter(r => r !== 'ADMIN' || currentUser?.role === 'ADMIN').map(r=><option key={r}>{r}</option>)}
               </select>
             </div>
             {[

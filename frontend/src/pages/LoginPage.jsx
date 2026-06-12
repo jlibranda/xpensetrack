@@ -15,6 +15,8 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Login screen is always light — clear any dark theme left over from a prior session
+    document.documentElement.classList.remove('dark');
     fetch(`${API_BASE}/settings/public`)
       .then(r => r.json())
       .then(s => { if (s?.primaryColor) setBranding(s); })

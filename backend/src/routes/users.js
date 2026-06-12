@@ -14,7 +14,9 @@ const userSelect = {
 // GET all users
 router.get('/', authenticate, requireRole('ADMIN','MANAGER','FINANCE'), async (req, res) => {
   try {
-    const users = await prisma.user.findMany({ select: userSelect, orderBy: { lastName: 'asc' } });
+    // Non-admins must never see ADMIN accounts in the list
+    const where = req.user.role === 'ADMIN' ? {} : { role: { not: 'ADMIN' } };
+    const users = await prisma.user.findMany({ where, select: userSelect, orderBy: { lastName: 'asc' } });
     res.json(users);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -31,6 +33,10 @@ router.get('/:id', authenticate, async (req, res) => {
         _count: { select: { expenses: true } } },
     });
     if (!user) return res.status(404).json({ error: 'Not found' });
+    // Non-admins cannot view an ADMIN's profile (unless it's their own record)
+    if (user.role === 'ADMIN' && req.user.role !== 'ADMIN' && req.user.id !== user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     res.json(user);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -38,12 +44,34 @@ router.get('/:id', authenticate, async (req, res) => {
 // PATCH update user
 router.patch('/:id', authenticate, requirePermission('manage_users'), async (req, res) => {
   try {
-    const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName } = req.body;
+    const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName, newPassword } = req.body;
+
+    // Look up the target so we can apply ADMIN guards
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'Not found' });
+
+    // Only an ADMIN may edit an existing ADMIN account
+    if (target.role === 'ADMIN' && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only an admin can modify an admin account' });
+    }
+    // Only an ADMIN may grant the ADMIN role
+    if (role === 'ADMIN' && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only an admin can assign the admin role' });
+    }
+
+    const updateData = {
+      role, department, managerId: managerId||null, costCenter: costCenter||null,
+      position: position||null, payrollAccount: payrollAccount||null, isActive,
+      employeeNumber: employeeNumber||null, firstName, lastName,
+    };
+    if (newPassword) {
+      if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      updateData.passwordHash = await bcrypt.hash(newPassword, 12);
+    }
+
     const user = await prisma.user.update({
       where: { id: req.params.id },
-      data: { role, department, managerId: managerId||null, costCenter: costCenter||null,
-        position: position||null, payrollAccount: payrollAccount||null, isActive,
-        employeeNumber: employeeNumber||null, firstName, lastName },
+      data: updateData,
       select: userSelect,
     });
     res.json(user);
@@ -55,6 +83,9 @@ router.post('/:id/toggle-active', authenticate, requirePermission('toggle_access
   try {
     const user = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!user) return res.status(404).json({ error: 'Not found' });
+    if (user.role === 'ADMIN' && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only an admin can modify an admin account' });
+    }
     const updated = await prisma.user.update({
       where: { id: req.params.id },
       data: { isActive: !user.isActive },
@@ -69,6 +100,11 @@ router.post('/:id/reset-password', authenticate, requirePermission('reset_passwo
   try {
     const { newPassword } = req.body;
     if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Min 6 characters' });
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'Not found' });
+    if (target.role === 'ADMIN' && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only an admin can reset an admin password' });
+    }
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
     res.json({ message: 'Password reset successfully' });
@@ -122,6 +158,9 @@ router.post('/:id/impersonate', authenticate, requirePermission('impersonate_use
     const jwt = require('jsonwebtoken');
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!target) return res.status(404).json({ error: 'User not found' });
+    if (target.role === 'ADMIN' && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only an admin can impersonate an admin' });
+    }
     if (!target.isActive) return res.status(400).json({ error: 'Cannot impersonate inactive user' });
     // Issue a token for the target user, but embed the admin's id so we can return
     const token = jwt.sign(
