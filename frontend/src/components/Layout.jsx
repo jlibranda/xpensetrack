@@ -26,7 +26,7 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const { currency, toggle } = useCurrency();
   const { notifications, unreadCount, pendingCounts, markAllRead } = useNotifications();
-  const { settings, refresh, applyTheme } = useOrg();
+  const { settings } = useOrg();
   const navigate = useNavigate();
   const [showNotif, setShowNotif] = useState(false);
   const notifRef = useRef();
@@ -35,9 +35,28 @@ export default function Layout() {
   const isManagerOnly = user?.role === 'MANAGER'; // managers don't get Analytics
   const isAdmin = ['ADMIN','FINANCE'].includes(user?.role);
   const brandColor = settings?.primaryColor || '#1D9E75';
-  const darkMode = settings?.darkMode || false;
+  // Dark mode is a PERSONAL, per-device preference. If the user hasn't chosen,
+  // fall back to the org default. Stored in localStorage so each user picks their own.
+  const storedPref = (() => {
+    const v = localStorage.getItem('personal_dark');
+    return v === null ? null : v === 'true';
+  })();
+  const [darkMode, setDarkMode] = useState(storedPref !== null ? storedPref : (settings?.darkMode || false));
   const hasWallpaper = !!settings?.wallpaperUrl;
   const initials = `${user?.firstName?.[0]||''}${user?.lastName?.[0]||''}`.toUpperCase() || 'U';
+
+  // Apply the personal dark preference to the DOM whenever it changes.
+  useEffect(() => {
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [darkMode]);
+
+  // If the org default changes and the user has no personal choice yet, follow it.
+  useEffect(() => {
+    if (localStorage.getItem('personal_dark') === null && typeof settings?.darkMode === 'boolean') {
+      setDarkMode(settings.darkMode);
+    }
+  }, [settings?.darkMode]);
 
   useEffect(() => {
     const handler = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false); };
@@ -45,12 +64,10 @@ export default function Layout() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const toggleDarkMode = async () => {
-    try {
-      const updated = await api.patch('/settings', { darkMode: !darkMode });
-      applyTheme(updated);
-      refresh();
-    } catch(e) {}
+  const toggleDarkMode = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    localStorage.setItem('personal_dark', String(next)); // remember this user's choice on this device
   };
 
   const navLinkClass = ({ isActive }) =>

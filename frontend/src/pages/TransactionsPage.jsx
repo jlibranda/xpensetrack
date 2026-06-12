@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
+import { useOrg } from '../context/OrgContext';
 
 const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
 
@@ -18,6 +19,11 @@ const STATUS_COLORS = {
 export default function TransactionsPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
+  const { settings } = useOrg();
+  const glCodes = settings?.categoryGlCodes || {};
+  // Normalize keys (uppercase, trimmed) so lookup is resilient to casing/spacing.
+  const glNorm = Object.fromEntries(Object.entries(glCodes).map(([k, v]) => [String(k).trim().toUpperCase(), v]));
+  const glOf = (e) => e.glCode || glNorm[String(e.category || '').trim().toUpperCase()] || '—';
   const isAdmin = user?.role === 'ADMIN';
 
   const [rows, setRows] = useState([]);
@@ -186,6 +192,7 @@ export default function TransactionsPage() {
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Employee</th>
                 <th className="px-4 py-3">Description</th>
+                <th className="px-4 py-3">GL Code</th>
                 <th className="px-4 py-3 text-right">Amount</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Processed</th>
@@ -198,6 +205,7 @@ export default function TransactionsPage() {
                   <td className="px-4 py-3 text-gray-600">{fmtDate(e.expenseDate)}</td>
                   <td className="px-4 py-3 font-medium text-gray-800">{personName(e.submittedBy)}</td>
                   <td className="px-4 py-3 text-gray-600">{e.merchant || e.title}</td>
+                  <td className="px-4 py-3 text-gray-500">{glOf(e)}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">{format(e.amountPhp)}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold"

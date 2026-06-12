@@ -8,6 +8,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [branding, setBranding] = useState({ companyName:'XpenseTrack', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null });
@@ -92,9 +93,17 @@ export default function LoginPage() {
                 Forgot password?
               </Link>
             </div>
-            <input type="password" required value={password} onChange={handlePasswordChange}
-              placeholder="••••••••"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all" />
+            <div className="relative">
+              <input type={showPassword ? 'text' : 'password'} required value={password} onChange={handlePasswordChange}
+                placeholder="••••••••"
+                className="w-full px-3 py-2.5 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all" />
+              <button type="button" onClick={() => setShowPassword(s => !s)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
           </div>
           <button type="submit" disabled={loading}
             className="w-full py-2.5 text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-all hover:opacity-90 shadow-sm"

@@ -100,6 +100,17 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
         : { in: scope };
     }
 
+    // GL code mapping by category (from org settings) used as a fallback when
+    // an expense has no explicit glCode.
+    let glCodes = {};
+    try {
+      const org = await prisma.orgSettings.findFirst();
+      if (org?.categoryGlCodes) {
+        const raw = JSON.parse(org.categoryGlCodes);
+        glCodes = Object.fromEntries(Object.entries(raw).map(([k, v]) => [String(k).trim().toUpperCase(), v]));
+      }
+    } catch (e) { glCodes = {}; }
+
     const expenses = await prisma.expense.findMany({
       where,
       include: {
@@ -119,7 +130,7 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
       'Description': e.title || '',
       'Notes': e.description || '',
       'Category': e.category || '',
-      'GL Code': e.glCode || '',
+      'GL Code': e.glCode || glCodes[String(e.category || '').trim().toUpperCase()] || '',
       'Type': e.expenseType || '',
       'Amount': e.amount,
       'Currency': e.currency,

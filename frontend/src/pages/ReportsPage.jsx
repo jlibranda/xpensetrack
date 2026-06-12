@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useCurrency } from '../context/CurrencyContext';
+import { useOrg } from '../context/OrgContext';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -20,6 +21,10 @@ export default function ReportsPage() {
   const [to, setTo] = useState(() => now.toISOString().split('T')[0]);
   const [userId, setUserId] = useState('');
   const { format } = useCurrency();
+  const { settings } = useOrg();
+  const glCodes = settings?.categoryGlCodes || {};
+  const glNorm = Object.fromEntries(Object.entries(glCodes).map(([k, v]) => [String(k).trim().toUpperCase(), v]));
+  const glFor = (cat) => glNorm[String(cat || '').trim().toUpperCase()] || '—';
 
   useEffect(() => {
     api.get('/users').then(d => setUsers(Array.isArray(d) ? d : [])).catch(() => {});
@@ -131,6 +136,7 @@ export default function ReportsPage() {
               <table className="w-full text-sm">
                 <thead><tr className="bg-gray-50">
                   <th className="px-4 py-2.5 text-left text-xs text-gray-500 font-medium">Category</th>
+                  <th className="px-4 py-2.5 text-left text-xs text-gray-500 font-medium">GL Code</th>
                   <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Amount</th>
                   <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Share</th>
                 </tr></thead>
@@ -138,6 +144,7 @@ export default function ReportsPage() {
                   {Object.entries(summary.byCategory).sort((a,b)=>b[1]-a[1]).map(([cat, amt]) => (
                     <tr key={cat} className="border-t border-gray-50">
                       <td className="px-4 py-3 text-gray-900 capitalize">{cat.toLowerCase()}</td>
+                      <td className="px-4 py-3 text-gray-500">{glFor(cat)}</td>
                       <td className="px-4 py-3 text-right font-medium">{format(amt)}</td>
                       <td className="px-4 py-3 text-right text-gray-400 text-xs">
                         {summary.totalPhp > 0 ? ((amt/summary.totalPhp)*100).toFixed(1) : 0}%

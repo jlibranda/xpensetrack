@@ -58,8 +58,12 @@ export function applyThemeToDOM(s) {
   if (s.primaryColor) {
     document.documentElement.style.setProperty('--brand-color', s.primaryColor);
   }
-  // Dark mode
-  if (s.darkMode) {
+  // Dark mode: a personal per-device choice wins over the org default.
+  const personal = (() => {
+    try { const v = localStorage.getItem('personal_dark'); return v === null ? null : v === 'true'; } catch { return null; }
+  })();
+  const useDark = personal !== null ? personal : !!s.darkMode;
+  if (useDark) {
     document.documentElement.classList.add('dark');
   } else {
     document.documentElement.classList.remove('dark');
