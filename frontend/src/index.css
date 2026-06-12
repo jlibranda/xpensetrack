@@ -104,29 +104,28 @@ html.dark .text-purple-700 { color: #d8b4fe !important; }
   position: fixed;
   inset: 0;
   z-index: -2;
-  /* light mode base behind the faint image */
-  background-color: #eef0f5;
+  background-color: #eef0f5; /* light-mode base */
 }
-/* The image itself, rendered faint (watermark effect) */
+/* The wallpaper image, styled by the chosen wallpaper style */
 #wallpaper-bg::before {
   content: "";
   position: absolute;
   inset: 0;
   background-image: var(--wallpaper-url);
-  background-size: cover;
+  background-size: var(--wallpaper-size, cover);
   background-position: center;
-  background-repeat: no-repeat;
+  background-repeat: var(--wallpaper-repeat, no-repeat);
   background-attachment: fixed;
-  opacity: 0.18; /* watermark: faint */
+  opacity: 0.5; /* visible but subtle in light mode */
 }
-/* Dark mode: black base + a dark overlay on top of the image */
-html.dark #wallpaper-bg { background-color: #000000; }
-html.dark #wallpaper-bg::before { opacity: 0.12; }
+/* Dark mode: dark base + keep the image clearly visible with a light overlay */
+html.dark #wallpaper-bg { background-color: #0f172a; }
+html.dark #wallpaper-bg::before { opacity: 0.5; }
 html.dark #wallpaper-bg::after {
   content: "";
   position: absolute;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.6); /* dark overlay */
+  background-color: rgba(15, 23, 42, 0.35); /* lighter overlay so wallpaper shows */
 }
 
 /* When a wallpaper is active, let it show through the opaque body color */

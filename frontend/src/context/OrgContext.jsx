@@ -21,7 +21,19 @@ const DEFAULT = {
 };
 
 // Inject or update the wallpaper background div
-function setWallpaperDiv(url) {
+// Map a wallpaper style to background-size / repeat values.
+function wallpaperStyleProps(style) {
+  switch (style) {
+    case 'tile-small': return { size: '120px', repeat: 'repeat' };
+    case 'tile-big':   return { size: '320px', repeat: 'repeat' };
+    case 'center':     return { size: 'auto',  repeat: 'no-repeat' };
+    case 'stretch':    return { size: '100% 100%', repeat: 'no-repeat' };
+    case 'cover':
+    default:           return { size: 'cover', repeat: 'no-repeat' };
+  }
+}
+
+function setWallpaperDiv(url, style) {
   let el = document.getElementById('wallpaper-bg');
   if (url) {
     if (!el) {
@@ -29,11 +41,10 @@ function setWallpaperDiv(url) {
       el.id = 'wallpaper-bg';
       document.body.prepend(el);
     }
-    // The image is set on a ::before via a CSS var so we can control its opacity
-    // (watermark effect) and layer a dark overlay over it in dark mode.
+    const { size, repeat } = wallpaperStyleProps(style || 'cover');
     el.style.setProperty('--wallpaper-url', `url('${url}')`);
-    // Body has an opaque background-color; make it transparent so the
-    // wallpaper layer (z-index:-1) is visible behind the app.
+    el.style.setProperty('--wallpaper-size', size);
+    el.style.setProperty('--wallpaper-repeat', repeat);
     document.body.classList.add('has-wallpaper');
   } else {
     if (el) el.remove();
@@ -54,7 +65,7 @@ export function applyThemeToDOM(s) {
     document.documentElement.classList.remove('dark');
   }
   // Wallpaper
-  setWallpaperDiv(s.wallpaperUrl || null);
+  setWallpaperDiv(s.wallpaperUrl || null, s.wallpaperStyle || 'cover');
 }
 
 export function OrgProvider({ children }) {

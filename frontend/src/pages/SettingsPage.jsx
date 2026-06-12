@@ -251,6 +251,7 @@ export default function SettingsPage() {
         expenseTypes: types,
         categoryGlCodes: glCodes,
         defaultPassword: s.defaultPassword,
+        wallpaperStyle: s.wallpaperStyle ?? settings?.wallpaperStyle,
       };
       const updated = await api.patch('/settings', payload);
       applyTheme(updated);
@@ -404,6 +405,21 @@ export default function SettingsPage() {
               )}
               <input ref={wallpaperRef} type="file" accept="image/*" className="hidden" onChange={uploadWallpaper} />
               <p className="text-xs text-gray-400 mt-1">JPG or PNG, max 5MB. Appears as the app background.</p>
+
+              {s?.wallpaperUrl && (
+                <div className="mt-3">
+                  <label className="block text-xs text-gray-500 mb-1">Wallpaper style</label>
+                  <select value={s?.wallpaperStyle || 'cover'} onChange={e=>set('wallpaperStyle', e.target.value)}
+                    className="w-full md:w-64 px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                    <option value="cover">Cover (fill screen)</option>
+                    <option value="stretch">Stretch (fit exactly)</option>
+                    <option value="center">Center (actual size)</option>
+                    <option value="tile-small">Tile — small</option>
+                    <option value="tile-big">Tile — big</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">Tiling repeats the image as a pattern. Save to apply.</p>
+                </div>
+              )}
             </div>
           </div>
         )}

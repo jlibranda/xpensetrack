@@ -29,6 +29,8 @@ export default function UsersPage() {
   const [bulkResult, setBulkResult] = useState(null);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [apprResult, setApprResult] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [deletingUsers, setDeletingUsers] = useState(false);
   const [apprLoading, setApprLoading] = useState(false);
   const { settings } = useOrg();
   const dark = !!settings?.darkMode;
@@ -208,6 +210,29 @@ export default function UsersPage() {
     if (filterActive === 'inactive' && u.isActive) return false;
     return true;
   });
+
+  // Selectable users for delete = everyone shown except admins and the current user.
+  const deletableShown = () => filtered.filter(u => u.role !== 'ADMIN' && u.id !== currentUser?.id);
+
+  const toggleSelect = (id) => setSelectedIds(s => s.includes(id) ? s.filter(x=>x!==id) : [...s, id]);
+  const toggleSelectAll = () => {
+    const ids = deletableShown().map(u => u.id);
+    const allSelected = ids.length > 0 && ids.every(id => selectedIds.includes(id));
+    setSelectedIds(allSelected ? [] : ids);
+  };
+
+  const deleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`PERMANENTLY delete ${selectedIds.length} employee(s) AND all their expenses and approvals? This cannot be undone.`)) return;
+    setDeletingUsers(true); setMsg({text:'',ok:true});
+    try {
+      const r = await api.post('/users/bulk-delete', { userIds: selectedIds });
+      setMsg({ text: `Deleted ${r.deleted} employee(s)${r.skipped ? `, skipped ${r.skipped} (protected)` : ''}`, ok: true });
+      setSelectedIds([]);
+      await load();
+    } catch (e) { setMsg({ text: e.error || 'Delete failed', ok: false }); }
+    finally { setDeletingUsers(false); }
+  };
 
   const downloadEmployeeList = () => {
     const esc = (v) => {
@@ -490,12 +515,26 @@ export default function UsersPage() {
               title="Download the currently filtered list as CSV">
               ⬇ Download list
             </button>
+            {currentUser?.role === 'ADMIN' && selectedIds.length > 0 && (
+              <button onClick={deleteSelected} disabled={deletingUsers}
+                className="text-xs px-3 py-1.5 rounded-lg text-white font-semibold disabled:opacity-60"
+                style={{ backgroundColor: '#dc2626' }}>
+                {deletingUsers ? 'Deleting…' : `🗑 Delete selected (${selectedIds.length})`}
+              </button>
+            )}
           </div>
 
           {loading ? <div className="py-12 text-center text-sm text-gray-400">Loading...</div> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="bg-gray-50 border-b border-gray-100">
+                  {currentUser?.role === 'ADMIN' && (
+                    <th className="px-4 py-3 text-left w-10">
+                      <input type="checkbox" onChange={toggleSelectAll}
+                        checked={deletableShown().length > 0 && deletableShown().every(u => selectedIds.includes(u.id))}
+                        title="Select all" />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium">Employee</th>
                   <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium hidden md:table-cell">Dept / Position</th>
                   <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium">Role</th>
@@ -507,6 +546,13 @@ export default function UsersPage() {
                     const manager = users.find(m=>m.id===u.managerId);
                     return (
                       <tr key={u.id} className="border-t border-gray-50 hover:bg-gray-50">
+                        {currentUser?.role === 'ADMIN' && (
+                          <td className="px-4 py-3">
+                            {(u.role !== 'ADMIN' && u.id !== currentUser?.id) ? (
+                              <input type="checkbox" checked={selectedIds.includes(u.id)} onChange={()=>toggleSelect(u.id)} />
+                            ) : null}
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0"

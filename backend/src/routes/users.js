@@ -313,4 +313,53 @@ router.post('/bulk-approvers', authenticate, requireRole('ADMIN'), upload.single
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ADMIN: permanently delete employees (by ids) AND all their expenses/approvals.
+router.post('/bulk-delete', authenticate, requireRole('ADMIN'), async (req, res) => {
+  try {
+    const { userIds } = req.body;
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'No users selected' });
+    }
+    // Never allow deleting yourself or any ADMIN through this bulk tool.
+    const targets = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, role: true } });
+    const deletable = targets.filter(u => u.role !== 'ADMIN' && u.id !== req.user.id).map(u => u.id);
+    const skipped = targets.length - deletable.length;
+    if (deletable.length === 0) {
+      return res.status(400).json({ error: 'Nothing to delete (admins and your own account are protected).' });
+    }
+
+    let deleted = 0;
+    for (const uid of deletable) {
+      // Find this user's expenses
+      const exp = await prisma.expense.findMany({ where: { submittedById: uid }, select: { id: true } });
+      const expIds = exp.map(e => e.id);
+
+      await prisma.$transaction([
+        // approvals where this user is the approver
+        prisma.approval.deleteMany({ where: { approverId: uid } }),
+        // approvals attached to this user's expenses
+        ...(expIds.length ? [prisma.approval.deleteMany({ where: { expenseId: { in: expIds } } })] : []),
+        // this user's expenses
+        prisma.expense.deleteMany({ where: { submittedById: uid } }),
+        // password resets
+        prisma.passwordReset.deleteMany({ where: { userId: uid } }),
+        // detach this user as manager from anyone who reports to them
+        prisma.user.updateMany({ where: { managerId: uid }, data: { managerId: null } }),
+        // finally delete the user
+        prisma.user.delete({ where: { id: uid } }),
+      ]);
+
+      // Also strip this user's id from any other user's additional approverIds list.
+      const others = await prisma.user.findMany({ where: { approverIds: { contains: uid } }, select: { id: true, approverIds: true } });
+      for (const o of others) {
+        const cleaned = (o.approverIds || '').split(',').map(s => s.trim()).filter(Boolean).filter(id => id !== uid);
+        await prisma.user.update({ where: { id: o.id }, data: { approverIds: cleaned.length ? cleaned.join(',') : null } });
+      }
+      deleted++;
+    }
+
+    res.json({ deleted, skipped });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
