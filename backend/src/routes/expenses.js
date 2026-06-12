@@ -10,9 +10,9 @@ const PHP_USD = 56;
 const toPhp = (amt, cur) => cur === 'USD' ? amt * PHP_USD : amt;
 
 const expenseInclude = {
-  submittedBy: { select: { id:true, name:true, email:true, department:true, costCenter:true } },
+  submittedBy: { select: { id:true, firstName:true, lastName:true, email:true, department:true, costCenter:true } },
   approvals: {
-    include: { approver: { select: { id:true, name:true, role:true, email:true } } },
+    include: { approver: { select: { id:true, firstName:true, lastName:true, role:true, email:true } } },
     orderBy: { createdAt: 'asc' },
   },
   receipt: { select: { id:true, mimeType:true, filename:true } },
@@ -131,10 +131,10 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     // Notify approver
     const approver = manager || fallback;
     if(approver) {
-      await sendApprovalRequestEmail(approver.email, approver.name, expense).catch(()=>{});
+      await sendApprovalRequestEmail(approver.email, `${approver.firstName||''} ${approver.lastName||''}`.trim(), expense).catch(()=>{});
       await createNotification(approverId, 'APPROVAL_REQUEST',
         'New expense to approve',
-        `${expense.submittedBy.name} submitted "${expense.title}" for approval`,
+        `${expense.submittedBy.firstName} ${expense.submittedBy.lastName} submitted "${expense.title}" for approval`,
         '/approvals'
       );
     }

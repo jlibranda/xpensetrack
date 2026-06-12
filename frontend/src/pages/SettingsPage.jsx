@@ -178,18 +178,19 @@ export default function SettingsPage() {
   const save = async () => {
     setSaving(true);
     try {
-      const updated = await api.patch('/settings', {
+      // Only send fields relevant to current tab to avoid overwriting others
+      const payload = {
         companyName: s.companyName,
         defaultCurrency: s.defaultCurrency,
-        receiptRequiredAbove: s.receiptRequiredAbove,
         approvalLevels: s.approvalLevels,
         primaryColor: s.primaryColor,
-        darkMode: s.darkMode,
+        darkMode: s.darkMode ?? settings?.darkMode,
         categories: cats,
         expenseTypes: types,
         categoryGlCodes: glCodes,
         defaultPassword: s.defaultPassword,
-      });
+      };
+      const updated = await api.patch('/settings', payload);
       applyTheme(updated);
       refresh();
       setMsg('✅ Settings saved!');
@@ -244,13 +245,11 @@ export default function SettingsPage() {
         {tab === 'General' && (
           <div className="space-y-4">
             <h2 className="text-sm font-medium text-gray-700 mb-3">General settings</h2>
-            {[['companyName','Company name','text'],['receiptRequiredAbove','Receipt required above (PHP)','number'],].map(([k,label,type]) => (
-              <div key={k}>
-                <label className="block text-xs text-gray-500 mb-1">{label}</label>
-                <input type={type} value={s?.[k]||''} onChange={e=>set(k, type==='number'?Number(e.target.value):e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
-              </div>
-            ))}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Company name</label>
+              <input value={s?.companyName||''} onChange={e=>set('companyName',e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+            </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Default currency</label>
               <select value={s?.defaultCurrency||'PHP'} onChange={e=>set('defaultCurrency',e.target.value)}

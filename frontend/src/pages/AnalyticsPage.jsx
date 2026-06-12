@@ -36,7 +36,7 @@ export default function AnalyticsPage() {
 
   if (loading) return <div className="py-16 text-center text-sm text-gray-400">Loading analytics...</div>;
 
-  const { summary, expenses } = data || {};
+  const { summary = {}, expenses = [] } = data || {};
 
   // Category breakdown
   const categoryData = summary?.byCategory
@@ -45,7 +45,7 @@ export default function AnalyticsPage() {
 
   // Employee spending
   const employeeData = summary?.byEmployee
-    ? Object.entries(summary.byEmployee).map(([name, value]) => ({ name: name.split(' ')[0], value: Math.round(value) })).sort((a,b)=>b.value-a.value).slice(0,8)
+    ? Object.entries(summary?.byEmployee || {}).map(([name, value]) => ({ name: name?.split(' ')?.[0] || name, value: Math.round(value || 0) })).sort((a,b)=>b.value-a.value).slice(0,8)
     : [];
 
   // Monthly trend (last 6 months)

@@ -7,8 +7,8 @@ const { createNotification } = require('../lib/notifications');
 const prisma = new PrismaClient();
 
 const expenseInclude = {
-  submittedBy: { select:{id:true,name:true,email:true,department:true} },
-  approvals: { include:{approver:{select:{name:true,role:true}}}, orderBy:{level:'asc'} },
+  submittedBy: { select:{id:true,firstName:true,lastName:true,email:true,department:true} },
+  approvals: { include:{approver:{select:{firstName:true,lastName:true,role:true}}}, orderBy:{level:'asc'} },
   receipt: { select:{id:true,mimeType:true} },
 };
 
@@ -63,7 +63,7 @@ router.post('/:id/approve', authenticate, requireRole('MANAGER','FINANCE','ADMIN
     await prisma.expense.update({where:{id:approval.expenseId}, data:{status:finalStatus}});
 
     const statusKey = finalStatus==='PENDING' ? 'MANAGER_APPROVED' : 'APPROVED';
-    await sendStatusUpdateEmail(approval.expense.submittedBy.email, approval.expense.submittedBy.name, approval.expense, statusKey).catch(()=>{});
+    await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, statusKey).catch(()=>{});
     await createNotification(approval.expense.submittedById, 'EXPENSE_'+statusKey,
       finalStatus==='PENDING' ? 'Manager approved your expense' : 'Expense fully approved!',
       `"${approval.expense.title}" ${finalStatus==='PENDING'?'was approved by your manager and is pending finance review':'has been fully approved'}`,
@@ -87,7 +87,7 @@ router.post('/:id/reject', authenticate, requireRole('MANAGER','FINANCE','ADMIN'
       prisma.approval.update({where:{id:approval.id}, data:{status:'REJECTED',notes}}),
       prisma.expense.update({where:{id:approval.expenseId}, data:{status:'REJECTED'}}),
     ]);
-    await sendStatusUpdateEmail(approval.expense.submittedBy.email, approval.expense.submittedBy.name, approval.expense, 'REJECTED').catch(()=>{});
+    await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'REJECTED').catch(()=>{});
     await createNotification(approval.expense.submittedById, 'EXPENSE_REJECTED',
       'Expense rejected', `"${approval.expense.title}" was rejected${notes?`: ${notes}`:''}`, '/expenses');
     res.json({message:'Rejected'});
@@ -108,7 +108,7 @@ router.post('/:id/return', authenticate, requireRole('MANAGER','FINANCE','ADMIN'
       prisma.approval.update({where:{id:approval.id}, data:{status:'REJECTED', notes:`[RETURNED] ${notes}`}}),
       prisma.expense.update({where:{id:approval.expenseId}, data:{status:'REJECTED'}}),
     ]);
-    await sendStatusUpdateEmail(approval.expense.submittedBy.email, approval.expense.submittedBy.name, approval.expense, 'RETURNED').catch(()=>{});
+    await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'RETURNED').catch(()=>{});
     await createNotification(approval.expense.submittedById, 'EXPENSE_RETURNED',
       'Expense returned for revision', `"${approval.expense.title}" was returned: ${notes}`, '/expenses');
     res.json({message:'Returned'});
@@ -121,7 +121,7 @@ router.post('/:id/reimburse', authenticate, requireRole('FINANCE','ADMIN'), asyn
     if(!expense) return res.status(404).json({error:'Not found'});
     if(expense.status!=='APPROVED') return res.status(400).json({error:'Must be approved first'});
     await prisma.expense.update({where:{id:req.params.id}, data:{status:'REIMBURSED'}});
-    await sendStatusUpdateEmail(expense.submittedBy.email, expense.submittedBy.name, expense, 'REIMBURSED').catch(()=>{});
+    await sendStatusUpdateEmail(expense.submittedBy.email, `${expense.submittedBy.firstName} ${expense.submittedBy.lastName}`, expense, 'REIMBURSED').catch(()=>{});
     await createNotification(expense.submittedById, 'EXPENSE_REIMBURSED',
       '💰 Expense reimbursed!', `"${expense.title}" has been reimbursed`, '/expenses');
     res.json({message:'Reimbursed'});

@@ -18,7 +18,7 @@ router.get('/summary', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
     }
 
     const [approved, pending, rejected, all] = await Promise.all([
-      prisma.expense.findMany({ where: { ...where, status: { in: ['APPROVED', 'REIMBURSED'] } }, include: { submittedBy: { select: { name: true, department: true } } } }),
+      prisma.expense.findMany({ where: { ...where, status: { in: ['APPROVED', 'REIMBURSED'] } }, include: { submittedBy: { select: { firstName: true, lastName: true, department: true } } } }),
       prisma.expense.count({ where: { ...where, status: 'PENDING' } }),
       prisma.expense.count({ where: { ...where, status: 'REJECTED' } }),
       prisma.expense.count({ where }),
@@ -26,7 +26,7 @@ router.get('/summary', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
 
     const totalPhp = approved.reduce((s, e) => s + e.amountPhp, 0);
     const byCategory = approved.reduce((acc, e) => { acc[e.category] = (acc[e.category] || 0) + e.amountPhp; return acc; }, {});
-    const byEmployee = approved.reduce((acc, e) => { const k = e.submittedBy.name; acc[k] = (acc[k] || 0) + e.amountPhp; return acc; }, {});
+    const byEmployee = approved.reduce((acc, e) => { const k = `${e.submittedBy.firstName||''} ${e.submittedBy.lastName||''}`.trim(); acc[k] = (acc[k] || 0) + e.amountPhp; return acc; }, {});
     const byDepartment = approved.reduce((acc, e) => { const k = e.submittedBy.department || 'Unknown'; acc[k] = (acc[k] || 0) + e.amountPhp; return acc; }, {});
 
     res.json({ totalPhp, count: approved.length, pendingCount: pending, rejectedCount: rejected, totalCount: all, byCategory, byEmployee, byDepartment });
@@ -72,15 +72,15 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
     const expenses = await prisma.expense.findMany({
       where,
       include: {
-        submittedBy: { select: { name: true, email: true, department: true } },
-        approvals: { include: { approver: { select: { name: true } } }, orderBy: { level: 'asc' } },
+        submittedBy: { select: { firstName: true, lastName: true, email: true, department: true } },
+        approvals: { include: { approver: { select: { firstName: true, lastName: true } } }, orderBy: { level: 'asc' } },
       },
       orderBy: { expenseDate: 'desc' },
     });
 
     const rows = expenses.map(e => ({
       'Date': e.expenseDate.toISOString().split('T')[0],
-      'Employee': e.submittedBy.name,
+      'Employee': `${e.submittedBy.firstName||''} ${e.submittedBy.lastName||''}`.trim(),
       'Email': e.submittedBy.email,
       'Department': e.submittedBy.department || '',
       'Description': e.title,
@@ -92,7 +92,7 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
       'Amount (PHP)': Number(e.amountPhp.toFixed(2)),
       'Cost Center': e.costCenter || '',
       'Status': e.status,
-      'Approver': e.approvals[0]?.approver?.name || '',
+      'Approver': e.approvals[0]?.approver ? `${e.approvals[0].approver.firstName||''} ${e.approvals[0].approver.lastName||''}`.trim() : '',
       'Approval Notes': e.approvals[0]?.notes || '',
       'Receipt': e.receiptUrl && !e.receiptUrl.startsWith('data:') ? e.receiptUrl : (e.receiptUrl ? 'Attached' : ''),
     }));
