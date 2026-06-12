@@ -35,13 +35,7 @@ export default function UsersPage() {
   const [form, setForm] = useState(emptyForm);
 
   // Check if impersonation is enabled in access control settings
-  const canImpersonate = (() => {
-    try {
-      const perms = JSON.parse(localStorage.getItem('xpense_perms') || 'null');
-      if (!perms) return true; // default: admin can impersonate
-      return (perms.impersonate_user || ['ADMIN']).includes('ADMIN');
-    } catch(e) { return true; }
-  })();
+
 
   const { user: currentUser } = useAuth();
 
@@ -375,11 +369,13 @@ export default function UsersPage() {
                           <div className="flex items-center justify-end gap-2 flex-wrap">
                             <button onClick={() => navigate(`/users/${u.id}`)} className="text-xs px-2 py-1 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">View</button>
                             <button onClick={() => openEdit(u)} className="text-xs px-2 py-1 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 font-medium">Edit</button>
-                            <button onClick={() => impersonateUser(u)}
-                              className="text-xs px-2 py-1 border border-purple-200 text-purple-600 rounded-lg hover:bg-purple-50 font-medium"
-                              title="Login as this user to access their account">
-                              🔑 Login as
-                            </button>
+                            {hasImpersonateAccess && (
+                              <button onClick={() => impersonateUser(u)}
+                                className="text-xs px-2 py-1 border border-purple-200 text-purple-600 rounded-lg hover:bg-purple-50 font-medium"
+                                title="Login as this user to access their account">
+                                🔑 Login as
+                              </button>
+                            )}
                             <button onClick={() => toggleActive(u)}
                               className={`text-xs px-2 py-1 rounded-lg font-medium border ${u.isActive ? 'border-green-200 text-green-700 hover:bg-red-50 hover:text-red-700 hover:border-red-200' : 'border-red-200 text-red-600 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}
                               title={u.isActive ? 'Click to deactivate access' : 'Click to activate access'}>
