@@ -6,9 +6,21 @@ const multer = require('multer');
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
+const NEW_DEFAULT_CATEGORIES = "Cleaning,Education and Training,Entertainment/Meals,Equipment,Facility Maintenance and Repair,Furniture and Fixtures,General Office Expense,Hardware,Miscellaneous,Mobile Device,Non-Capital Small Tools Equipment and Furniture,Office Rent,Parking,Printing,Recruiting,Travel - Air Ticket (International),Travel - Air Ticket (Domestic),Travel - Others,Travel - Hotel (Domestic)";
+const OLD_DEFAULT_CATEGORIES = ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COMMUNICATIONS','OTHER'];
+
 async function getOrCreate() {
   let s = await prisma.orgSettings.findFirst();
-  if (!s) s = await prisma.orgSettings.create({ data: {} });
+  if (!s) {
+    s = await prisma.orgSettings.create({ data: { categories: NEW_DEFAULT_CATEGORIES } });
+  } else {
+    // Auto-migrate old default categories to new ones
+    const currentCats = s.categories.split(',').map(c => c.trim());
+    const isOldDefault = currentCats.every(c => OLD_DEFAULT_CATEGORIES.includes(c)) && currentCats.length <= 6;
+    if (isOldDefault) {
+      s = await prisma.orgSettings.update({ where: { id: s.id }, data: { categories: NEW_DEFAULT_CATEGORIES } });
+    }
+  }
   return s;
 }
 

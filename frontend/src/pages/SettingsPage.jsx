@@ -51,9 +51,11 @@ function AccessControlTab({ settings, navigate }) {
   };
 
   const saved = (() => { try { return JSON.parse(localStorage.getItem('xpense_perms') || 'null'); } catch(e) { return null; } })();
+  const savedRoles = (() => { try { return JSON.parse(localStorage.getItem('xpense_roles') || 'null'); } catch(e) { return null; } })();
   const [perms, setPerms] = useState(saved || DEFAULT_PERMS);
   const [saved2, setSaved2] = useState(false);
-  const ROLES = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'];
+  const [roles, setRoles] = useState(savedRoles || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']);
+  const ROLES = roles;
   const LOCKED = ['ADMIN']; // Admin always has all perms
   const ROLE_COLORS = {
     EMPLOYEE:'bg-blue-50 text-blue-700 border border-blue-200',
@@ -74,6 +76,7 @@ function AccessControlTab({ settings, navigate }) {
 
   const savePerms = () => {
     localStorage.setItem('xpense_perms', JSON.stringify(perms));
+    localStorage.setItem('xpense_roles', JSON.stringify(roles));
     setSaved2(true);
     setTimeout(() => setSaved2(false), 2000);
   };
@@ -88,26 +91,71 @@ function AccessControlTab({ settings, navigate }) {
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-sm font-medium text-gray-700">Role permissions</h2>
         <div className="flex gap-2">
-          <button onClick={resetPerms} className="px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg text-xs hover:bg-gray-50">Reset defaults</button>
+          <button onClick={resetPerms} className="px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg text-xs hover:bg-gray-50">Reset</button>
           <button onClick={savePerms}
             className={`px-3 py-1.5 text-white rounded-lg text-xs font-medium transition-colors ${saved2 ? 'bg-green-500' : 'hover:opacity-90'}`}
             style={saved2 ? {} : {backgroundColor: settings?.primaryColor||'#1D9E75'}}>
-            {saved2 ? '✓ Saved!' : 'Save permissions'}
+            {saved2 ? '✓ Saved!' : 'Save'}
           </button>
         </div>
       </div>
-      <p className="text-xs text-gray-400 mb-4">Check/uncheck to configure which roles can access each feature. ADMIN always has full access.</p>
+      <p className="text-xs text-gray-400 mb-3">Check/uncheck to configure which roles can access each feature. ADMIN always has full access.</p>
+      
+      {/* Add custom role */}
+      <div className="flex gap-2 mb-4">
+        <input
+          id="new-role-input"
+          placeholder="New role name (e.g. SUPERVISOR)"
+          className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400 uppercase"
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              const val = e.target.value.trim().toUpperCase().replace(/\s+/g,'_');
+              if (val && !ROLES.includes(val)) {
+                setRoles(r => [...r, val]);
+                setPerms(p => {
+                  const np = {...p};
+                  Object.keys(np).forEach(k => { /* don't auto-grant */ });
+                  return np;
+                });
+                e.target.value = '';
+              }
+            }
+          }}
+        />
+        <button
+          onClick={() => {
+            const input = document.getElementById('new-role-input');
+            const val = input.value.trim().toUpperCase().replace(/\s+/g,'_');
+            if (val && !ROLES.includes(val)) {
+              setRoles(r => [...r, val]);
+              input.value = '';
+            }
+          }}
+          className="px-3 py-1.5 text-white rounded-lg text-xs font-medium hover:opacity-90"
+          style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>
+          + Add role
+        </button>
+      </div>
 
       <div className="overflow-x-auto rounded-xl border border-gray-100">
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left py-3 px-4 text-gray-500 font-medium">Permission</th>
-              {ROLES.map(r => (
-                <th key={r} className="text-center py-3 px-3 min-w-[90px]">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[r]}`}>{r}</span>
-                </th>
-              ))}
+              {ROLES.map(r => {
+                const isDefault = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'].includes(r);
+                return (
+                  <th key={r} className="text-center py-3 px-3 min-w-[90px]">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[r] || 'bg-gray-100 text-gray-700 border border-gray-200'}`}>{r}</span>
+                      {!isDefault && (
+                        <button onClick={() => setRoles(rs => rs.filter(x => x !== r))}
+                          className="text-red-400 hover:text-red-600 text-xs leading-none">✕</button>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

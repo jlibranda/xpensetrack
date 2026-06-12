@@ -53,6 +53,7 @@ export default function Layout() {
 
   const sidebarBg = darkMode ? '#0f0f1a' : '#1a1a2e';
   const mainBg = darkMode ? 'bg-gray-900' : 'bg-gray-50';
+  const hasWallpaper = !!settings?.wallpaperUrl;
   const headerBg = darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100';
   const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
   const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-500';
@@ -63,9 +64,18 @@ export default function Layout() {
     }`;
 
   return (
-    <div className={`flex h-screen font-sans ${mainBg}`}>
+    <div className={`flex h-screen font-sans ${hasWallpaper ? '' : mainBg}`}
+      style={hasWallpaper ? {
+        backgroundImage: `url(${settings.wallpaperUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+      } : {}}>
       {/* Sidebar */}
-      <aside className="w-52 flex flex-col shrink-0" style={{ backgroundColor: sidebarBg }}>
+      <aside className="w-52 flex flex-col shrink-0" style={{ 
+        backgroundColor: hasWallpaper ? (darkMode ? 'rgba(15,15,26,0.92)' : 'rgba(26,26,46,0.92)') : sidebarBg,
+        backdropFilter: hasWallpaper ? 'blur(8px)' : 'none',
+      }}>
         {/* Logo */}
         <div className="px-4 py-4 border-b border-white/10">
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate('/')}>
@@ -143,8 +153,12 @@ export default function Layout() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
-        <header className={`h-14 border-b flex items-center justify-end px-6 gap-3 shrink-0 ${headerBg}`}
-          style={settings?.wallpaperUrl ? {backgroundColor: darkMode ? 'rgba(31,41,55,0.92)' : 'rgba(255,255,255,0.92)', backdropFilter:'blur(8px)'} : {}}>
+        <header className={`h-14 border-b flex items-center justify-end px-6 gap-3 shrink-0 ${hasWallpaper ? '' : headerBg}`}
+          style={hasWallpaper ? {
+            backgroundColor: darkMode ? 'rgba(31,41,55,0.88)' : 'rgba(255,255,255,0.88)',
+            backdropFilter: 'blur(12px)',
+            borderBottomColor: 'rgba(229,231,235,0.5)',
+          } : {}}>
           {/* Dark mode toggle */}
           <button onClick={toggleDarkMode}
             className={`p-2 rounded-lg transition-colors text-lg ${darkMode ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
@@ -203,9 +217,8 @@ export default function Layout() {
         </header>
 
         <main className={`flex-1 overflow-y-auto p-6 ${darkMode ? 'text-gray-100' : ''}`}
-          style={settings?.wallpaperUrl ? {
-            backdropFilter: 'blur(0px)',
-            backgroundColor: darkMode ? 'rgba(17,24,39,0.85)' : 'rgba(243,244,246,0.88)',
+          style={hasWallpaper ? {
+            backgroundColor: darkMode ? 'rgba(17,24,39,0.75)' : 'rgba(255,255,255,0.15)',
           } : {}}>
           <Outlet />
         </main>

@@ -32,14 +32,10 @@ export function applyThemeToDOM(s) {
     document.documentElement.style.colorScheme = 'light';
   }
   if (s.wallpaperUrl) {
-    document.body.style.backgroundImage = `url(${s.wallpaperUrl})`;
-    document.body.style.backgroundSize = 'cover';
-    document.body.style.backgroundPosition = 'center';
-    document.body.style.backgroundAttachment = 'fixed';
+    document.body.classList.add('has-wallpaper');
   } else {
+    document.body.classList.remove('has-wallpaper');
     document.body.style.backgroundImage = '';
-    document.body.style.backgroundSize = '';
-    document.body.style.backgroundPosition = '';
   }
 }
 

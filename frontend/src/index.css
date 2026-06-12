@@ -6,62 +6,38 @@
   --brand-color: #1D9E75;
 }
 
-/* Dark mode base styles */
-.dark body {
-  background-color: #111827;
-  color: #f9fafb;
-}
-
-.dark .bg-white {
-  background-color: #1f2937 !important;
-}
-
-.dark .bg-gray-50 {
-  background-color: #111827 !important;
-}
-
-.dark .bg-gray-100 {
-  background-color: #374151 !important;
-}
-
-.dark .text-gray-900 {
-  color: #f9fafb !important;
-}
-
-.dark .text-gray-700 {
-  color: #e5e7eb !important;
-}
-
-.dark .text-gray-600 {
-  color: #d1d5db !important;
-}
-
-.dark .text-gray-500 {
-  color: #9ca3af !important;
-}
-
-.dark .border-gray-100 {
-  border-color: #374151 !important;
-}
-
-.dark .border-gray-200 {
-  border-color: #4b5563 !important;
-}
-
+/* ── Dark mode base ──────────────────────────── */
+.dark body { background-color: #111827; color: #f9fafb; }
+.dark .bg-white { background-color: #1f2937 !important; }
+.dark .bg-gray-50 { background-color: #111827 !important; }
+.dark .bg-gray-100 { background-color: #374151 !important; }
+.dark .text-gray-900 { color: #f9fafb !important; }
+.dark .text-gray-700 { color: #e5e7eb !important; }
+.dark .text-gray-600 { color: #d1d5db !important; }
+.dark .text-gray-500 { color: #9ca3af !important; }
+.dark .border-gray-100 { border-color: #374151 !important; }
+.dark .border-gray-200 { border-color: #4b5563 !important; }
 .dark input, .dark select, .dark textarea {
   background-color: #374151 !important;
   border-color: #4b5563 !important;
   color: #f9fafb !important;
 }
+.dark input::placeholder, .dark textarea::placeholder { color: #6b7280 !important; }
+.dark table th { color: #9ca3af !important; }
+.dark .hover\:bg-gray-50:hover { background-color: #374151 !important; }
 
-.dark input::placeholder, .dark textarea::placeholder {
-  color: #6b7280 !important;
+/* ── Wallpaper mode — cards become frosted glass ──── */
+body.has-wallpaper .bg-white {
+  background-color: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(6px) !important;
 }
-
-.dark table th {
-  color: #9ca3af !important;
+body.has-wallpaper.dark .bg-white {
+  background-color: rgba(31, 41, 55, 0.85) !important;
+  backdrop-filter: blur(6px) !important;
 }
-
-.dark .hover\:bg-gray-50:hover {
-  background-color: #374151 !important;
+body.has-wallpaper .bg-gray-50 {
+  background-color: rgba(249, 250, 251, 0.70) !important;
+}
+body.has-wallpaper.dark .bg-gray-50 {
+  background-color: rgba(17, 24, 39, 0.70) !important;
 }
