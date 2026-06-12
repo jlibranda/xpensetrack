@@ -16,6 +16,7 @@ import ReportsPage from './pages/ReportsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import UsersPage from './pages/UsersPage';
+import TransactionsPage from './pages/TransactionsPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 
@@ -58,6 +59,7 @@ function AppRoutes() {
         <Route path="expenses/:id/edit" element={<AddExpensePage />} />
         <Route path="approvals" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
         <Route path="reports" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
+        <Route path="transactions" element={<PrivateRoute roles={['FINANCE','ADMIN']}><TransactionsPage /></PrivateRoute>} />
         <Route path="analytics" element={<PrivateRoute roles={['FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
         <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
         <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />

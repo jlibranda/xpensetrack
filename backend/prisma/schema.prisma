@@ -65,6 +65,7 @@ model Expense {
   submittedBy   User          @relation("SubmittedBy", fields: [submittedById], references: [id])
   approvals     Approval[]
   status        ExpenseStatus @default(DRAFT)
+  processedAt   DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }

@@ -178,7 +178,6 @@ export default function ExpensesPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold">
                             <span className="trail-name">{personName(a.approver)}</span>
-                            {a.approver?.role && <span className="trail-role text-xs font-normal"> ({a.approver.role})</span>}
                           </p>
                           <p className="text-xs font-semibold" style={{ color: accent }}>
                             {isApproved ? 'Approved' : isRejected ? 'Rejected / Returned' : 'Pending approval'}
@@ -189,7 +188,6 @@ export default function ExpensesPage() {
                     );
                   })}
                 </div>
-                ))}
               </div>
             )}
 

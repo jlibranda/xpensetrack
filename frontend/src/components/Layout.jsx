@@ -113,6 +113,13 @@ export default function Layout() {
 
           {canApprove && (
             <>
+              {['FINANCE','ADMIN'].includes(user?.role) && (
+                <NavLink to="/transactions" className={navLinkClass}
+                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  <span className="w-4 text-center text-sm">💳</span>
+                  <span>Transactions</span>
+                </NavLink>
+              )}
               <p className="pt-3 pb-1 px-3 text-xs text-gray-400 uppercase tracking-wider font-medium">Management</p>
               {MANAGER_NAV.filter(item => !(isManagerOnly && item.to === '/analytics')).map(item => (
                 <NavLink key={item.to} to={item.to} className={navLinkClass}

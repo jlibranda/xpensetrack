@@ -1,7 +1,7 @@
 // src/routes/expenses.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
 const { sendApprovalRequestEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
 const prisma = new PrismaClient();
@@ -279,6 +279,64 @@ router.delete('/:id', authenticate, async (req, res) => {
     await prisma.expense.delete({where:{id:e.id}});
     res.json({message:'Deleted'});
   } catch(err){ res.status(500).json({error:err.message}); }
+});
+
+// ADMIN: permanently delete ALL expenses within a date range (by expenseDate).
+// Optional status filter; if omitted, deletes every status in range.
+router.post('/bulk-delete', authenticate, requireRole('ADMIN'), async (req, res) => {
+  try {
+    const { from, to, status } = req.body;
+    const where = {};
+    if (from || to) {
+      where.expenseDate = {};
+      if (from) where.expenseDate.gte = new Date(from);
+      if (to) where.expenseDate.lte = new Date(to + 'T23:59:59');
+    }
+    if (status) where.status = status;
+
+    // Must have at least a date bound to avoid accidental "delete everything".
+    if (!from && !to) {
+      return res.status(400).json({ error: 'Please provide a date range (from / to) before deleting.' });
+    }
+
+    const targets = await prisma.expense.findMany({ where, select: { id: true } });
+    const ids = targets.map(t => t.id);
+    if (ids.length === 0) return res.json({ deleted: 0 });
+
+    // Remove dependent approvals first, then the expenses (permanent).
+    await prisma.approval.deleteMany({ where: { expenseId: { in: ids } } });
+    const result = await prisma.expense.deleteMany({ where: { id: { in: ids } } });
+    res.json({ deleted: result.count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// FINANCE/ADMIN: mark an approved expense as processed with a processed date.
+router.post('/:id/mark-processed', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
+  try {
+    const { processedDate } = req.body;
+    const e = await prisma.expense.findUnique({ where: { id: req.params.id } });
+    if (!e) return res.status(404).json({ error: 'Not found' });
+    if (!['APPROVED', 'REIMBURSED'].includes(e.status)) {
+      return res.status(400).json({ error: 'Only approved expenses can be marked processed' });
+    }
+    const when = processedDate ? new Date(processedDate) : new Date();
+    const updated = await prisma.expense.update({
+      where: { id: req.params.id },
+      data: { processedAt: when },
+    });
+    res.json({ message: 'Marked processed', processedAt: updated.processedAt });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// FINANCE/ADMIN: undo processed tag
+router.post('/:id/unmark-processed', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
+  try {
+    const updated = await prisma.expense.update({
+      where: { id: req.params.id },
+      data: { processedAt: null },
+    });
+    res.json({ message: 'Unmarked', processedAt: updated.processedAt });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;
