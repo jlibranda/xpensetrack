@@ -6,6 +6,12 @@ import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
 
 const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
+// Approver(s) currently pending on an expense (only meaningful when status is PENDING).
+const pendingApprovers = (e) => {
+  if (e.status !== 'PENDING') return '';
+  const names = (e.approvals || []).filter(a => a.status === 'PENDING').map(a => personName(a.approver));
+  return [...new Set(names)].join(', ');
+};
 
 const STATUS_COLORS = {
   DRAFT:      { bg: '#6b7280', text: '#ffffff' },
@@ -195,6 +201,7 @@ export default function TransactionsPage() {
                 <th className="px-4 py-3">GL Code</th>
                 <th className="px-4 py-3 text-right">Amount</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Pending With</th>
                 <th className="px-4 py-3">Processed</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
@@ -210,6 +217,11 @@ export default function TransactionsPage() {
                   <td className="px-4 py-3">
                     <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold"
                       style={{ backgroundColor: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).bg, color: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).text }}>{e.status}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {pendingApprovers(e)
+                      ? <span className="text-amber-600 text-xs font-medium">{pendingApprovers(e)}</span>
+                      : <span className="text-gray-300 text-xs">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     {e.processedAt

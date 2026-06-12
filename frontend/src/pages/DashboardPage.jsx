@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../lib/api';
 import { useCurrency } from '../context/CurrencyContext';
+import { useAuth } from '../context/AuthContext';
 
 const STATUS_BADGE = {
   DRAFT: 'bg-blue-50 text-blue-700',
@@ -26,6 +27,21 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const { format } = useCurrency();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canExport = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
+
+  // Export this month's report — must include the auth token (download opens
+  // in a new tab, so it can't use the normal Authorization header).
+  const exportReport = () => {
+    const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
+    const token = localStorage.getItem('token');
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const to = now.toISOString().split('T')[0];
+    const params = new URLSearchParams({ from, to });
+    if (token) params.set('token', token);
+    window.open(`${base}/reports/export?${params.toString()}`, '_blank');
+  };
 
   useEffect(() => {
     const now = new Date();
@@ -98,7 +114,7 @@ export default function DashboardPage() {
             {[
               { label: 'Add a new expense', sub: 'Scan receipt or enter manually', action: () => navigate('/expenses/new'), icon: '+' },
               { label: 'View all expenses', sub: 'Your expense history', action: () => navigate('/expenses'), icon: '🧾' },
-              { label: 'Download report', sub: 'Export this month to Excel', action: () => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/reports/export`, '_blank'), icon: '⬇' },
+              ...(canExport ? [{ label: 'Download report', sub: 'Export this month to Excel', action: exportReport, icon: '⬇' }] : []),
             ].map((a, i) => (
               <button key={i} onClick={a.action}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left">
