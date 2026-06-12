@@ -112,34 +112,76 @@ router.post('/:id/submit', authenticate, async (req, res) => {
   try {
     const expense = await prisma.expense.findUnique({
       where:{id:req.params.id},
-      include:{ submittedBy:{ include:{ manager:true } } },
+      include:{
+        submittedBy:{ include:{
+          manager:true,
+          approvalChain:{ include:{ steps:{ orderBy:{order:'asc'}, include:{ approvers:true } } } },
+        } } },
     });
     if(!expense) return res.status(404).json({error:'Not found'});
     if(expense.submittedById!==req.user.id) return res.status(403).json({error:'Forbidden'});
     if(!['DRAFT','REJECTED','CANCELLED'].includes(expense.status)) return res.status(400).json({error:'Already submitted'});
 
-    // Level 1 approver = the submitter's assigned manager.
-    // Every user must have an assigned approver; if none, block submission
-    // with a clear message rather than silently routing to an admin.
-    const manager = expense.submittedBy.manager;
-    if (!manager) {
-      return res.status(400).json({ error: 'No approver assigned. Please ask your admin to set your manager before submitting.' });
+    // Build the approval steps from the employee's assigned approval chain.
+    const chain = expense.submittedBy.approvalChain;
+    let approvalRows = [];   // {approverId, stepOrder, groupKey, status}
+    let chainMode = 'SEQUENTIAL';
+
+    if (chain && chain.steps && chain.steps.length > 0) {
+      chainMode = chain.mode;
+      chain.steps.forEach((step) => {
+        const groupKey = `${chain.id}:${step.order}`;
+        // For SEQUENTIAL: only step 1 starts PENDING, the rest start as WAITING (modelled as PENDING but gated).
+        // We store all as PENDING but the approve logic only opens later steps once earlier ones complete.
+        step.approvers.forEach((a) => {
+          approvalRows.push({
+            approverId: a.approverId,
+            stepOrder: step.order,
+            groupKey,
+            // In SEQUENTIAL mode only step 1 is actionable initially; others are created but gated by stepOrder.
+            status: 'PENDING',
+          });
+        });
+      });
+    } else {
+      // Fallback: no chain assigned -> use the manager as a single-step approver.
+      const manager = expense.submittedBy.manager;
+      if (!manager) {
+        return res.status(400).json({ error: 'No approval chain or manager assigned. Please ask your admin to assign an approval chain.' });
+      }
+      approvalRows.push({ approverId: manager.id, stepOrder: 1, groupKey: null, status: 'PENDING' });
     }
-    const approverId = manager.id;
 
     await prisma.$transaction([
       prisma.expense.update({where:{id:expense.id}, data:{status:'PENDING'}}),
       prisma.approval.deleteMany({where:{expenseId:expense.id}}),
-      prisma.approval.create({data:{expenseId:expense.id, approverId, level:1, status:'PENDING'}}),
+      ...approvalRows.map((r) => prisma.approval.create({ data: {
+        expenseId: expense.id,
+        approverId: r.approverId,
+        level: r.stepOrder,
+        stepOrder: r.stepOrder,
+        groupKey: r.groupKey,
+        status: 'PENDING',
+      }})),
     ]);
 
-    // Notify the manager (level 1 approver)
-    await sendApprovalRequestEmail(manager.email, `${manager.firstName||''} ${manager.lastName||''}`.trim(), expense).catch(()=>{});
-    await createNotification(approverId, 'APPROVAL_REQUEST',
-      'New expense to approve',
-      `${expense.submittedBy.firstName} ${expense.submittedBy.lastName} submitted "${expense.title}" for approval`,
-      '/approvals'
-    );
+    // Notify the approvers who are actionable now.
+    // SEQUENTIAL: only step 1. ANY_ORDER: everyone.
+    const actionable = chainMode === 'ANY_ORDER'
+      ? approvalRows
+      : approvalRows.filter(r => r.stepOrder === Math.min(...approvalRows.map(x => x.stepOrder)));
+    const notifiedIds = [...new Set(actionable.map(r => r.approverId))];
+    for (const approverId of notifiedIds) {
+      const approver = await prisma.user.findUnique({ where: { id: approverId } });
+      if (approver) {
+        await sendApprovalRequestEmail(approver.email, `${approver.firstName||''} ${approver.lastName||''}`.trim(), expense).catch(()=>{});
+        await createNotification(approverId, 'APPROVAL_REQUEST',
+          'New expense to approve',
+          `${expense.submittedBy.firstName} ${expense.submittedBy.lastName} submitted "${expense.title}" for approval`,
+          '/approvals'
+        );
+      }
+    }
     // Notify submitter their expense is pending
     await createNotification(req.user.id, 'EXPENSE_SUBMITTED',
       'Expense submitted',
