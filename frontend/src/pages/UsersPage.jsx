@@ -1,6 +1,7 @@
 // src/pages/UsersPage.jsx
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { useOrg } from '../context/OrgContext';
 
@@ -30,8 +31,28 @@ export default function UsersPage() {
   const navigate = useNavigate();
 
   const emptyForm = { firstName:'', lastName:'', email:'', password:'', role:'EMPLOYEE',
-    department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'' };
+    department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'', canImpersonate:false, permissions:'[]' };
   const [form, setForm] = useState(emptyForm);
+
+  // Check if impersonation is enabled in access control settings
+  const canImpersonate = (() => {
+    try {
+      const perms = JSON.parse(localStorage.getItem('xpense_perms') || 'null');
+      if (!perms) return true; // default: admin can impersonate
+      return (perms.impersonate_user || ['ADMIN']).includes('ADMIN');
+    } catch(e) { return true; }
+  })();
+
+  // Check if current user's role has impersonate permission
+  const { user: currentUser } = useAuth();
+  const hasImpersonateAccess = (() => {
+    try {
+      const perms = JSON.parse(localStorage.getItem('xpense_perms') || 'null');
+      const userRole = currentUser?.role || 'EMPLOYEE';
+      if (!perms) return userRole === 'ADMIN'; // default: only admin
+      return (perms.impersonate_user || ['ADMIN']).includes(userRole);
+    } catch(e) { return false; }
+  })();
 
   const load = async () => {
     setLoading(true);
@@ -47,7 +68,7 @@ export default function UsersPage() {
     setForm({ firstName:u.firstName||'', lastName:u.lastName||'', email:u.email,
       password:'', role:u.role, department:u.department||'', managerId:u.managerId||'',
       costCenter:u.costCenter||'', position:u.position||'', payrollAccount:u.payrollAccount||'',
-      employeeNumber:u.employeeNumber||'' });
+      employeeNumber:u.employeeNumber||'', canImpersonate:u.canImpersonate||false, permissions:u.permissions||'[]' });
     setMsg({text:'',ok:true}); setTab('add');
   };
 
@@ -225,15 +246,73 @@ export default function UsersPage() {
                 ))}
               </select>
             </div>
+
+
+            {/* ── Per-user Permissions ─────────────────── */}
+            <div className="col-span-2 mt-2">
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-gray-800 flex items-center justify-between">
+                  <p className="text-sm font-bold text-white">User Permissions</p>
+                  <p className="text-xs text-gray-400">Override role defaults for this user</p>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {[
+                    { key:'submit_expenses',   label:'Submit expenses',                     icon:'📝' },
+                    { key:'view_own_expenses', label:'View own expenses',                   icon:'👁' },
+                    { key:'upload_receipts',   label:'Upload receipts & AI auto-fill',      icon:'📷' },
+                    { key:'cancel_expenses',   label:'Cancel own expenses',                 icon:'✖' },
+                    { key:'approve_expenses',  label:'Approve / Reject / Return expenses',  icon:'✅' },
+                    { key:'view_team',         label:'View team expenses',                  icon:'👥' },
+                    { key:'view_reports',      label:'View reports & analytics',            icon:'📊' },
+                    { key:'export_reports',    label:'Export Excel reports',                icon:'📥' },
+                    { key:'second_approval',   label:'Second-level approval',               icon:'✔✔' },
+                    { key:'mark_reimbursed',   label:'Mark expenses as reimbursed',         icon:'💰' },
+                    { key:'edit_categories',   label:'Edit categories & GL codes',          icon:'🏷' },
+                    { key:'manage_settings',   label:'Manage app settings',                 icon:'⚙' },
+                    { key:'manage_users',      label:'Manage users',                        icon:'👤' },
+                    { key:'toggle_access',     label:'Activate / deactivate user access',   icon:'🔒' },
+                    { key:'reset_passwords',   label:'Reset any user password',             icon:'🔑' },
+                    { key:'upload_branding',   label:'Upload logo & wallpaper',             icon:'🖼' },
+                    { key:'change_branding',   label:'Change colors & branding',            icon:'🎨' },
+                    { key:'impersonate',       label:'Access / Login as another user',      icon:'👤🔑' },
+                  ].map(p => {
+                    const userPerms = (() => { try { return JSON.parse(form.permissions||'[]'); } catch(e){ return []; } })();
+                    const checked = userPerms.includes(p.key);
+                    const toggle = () => {
+                      const current = (() => { try { return JSON.parse(form.permissions||'[]'); } catch(e){ return []; } })();
+                      const next = checked ? current.filter(x => x !== p.key) : [...current, p.key];
+                      setF('permissions', JSON.stringify(next));
+                    };
+                    return (
+                      <label key={p.key} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={checked} onChange={toggle}
+                          className="w-4 h-4 rounded cursor-pointer"
+                          style={{accentColor: settings?.primaryColor||'#1D9E75'}} />
+                        <span className="text-base leading-none">{p.icon}</span>
+                        <span className="text-sm text-gray-800 font-medium">{p.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
           </div>
           {msg.text && <div className={`mt-3 px-3 py-2 rounded-lg text-sm border ${msg.ok?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg.text}</div>}
-          <div className="flex gap-3 mt-4">
+          <div className="flex gap-3 mt-4 flex-wrap">
             <button onClick={save} disabled={saving}
               className="px-4 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
               style={{background:settings?.primaryColor||'#1D9E75'}}>
               {saving ? 'Saving...' : editUser ? 'Save changes' : 'Create user'}
             </button>
             <button onClick={() => setTab('list')} className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+            {editUser && hasImpersonateAccess && (
+              <button onClick={() => { setTab('list'); impersonateUser(editUser); }}
+                className="px-4 py-2 border border-purple-200 text-purple-600 rounded-lg text-sm font-medium hover:bg-purple-50 ml-auto"
+                title="Login and access this user's account">
+                🔑 Login as {editUser.firstName}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -303,7 +382,6 @@ export default function UsersPage() {
                   <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium hidden md:table-cell">Dept / Position</th>
                   <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium">Role</th>
                   <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium hidden lg:table-cell">Approver</th>
-                  <th className="px-4 py-3 text-center text-xs text-gray-500 font-medium">Status</th>
                   <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium">Actions</th>
                 </tr></thead>
                 <tbody>
@@ -318,7 +396,10 @@ export default function UsersPage() {
                               {initials(u)}
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-gray-900">{fullName(u)}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-sm font-medium text-gray-900">{fullName(u)}</p>
+                                {u.canImpersonate && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">🔑 Access</span>}
+                              </div>
                               <p className="text-xs text-gray-400">{u.email}</p>
                               {u.employeeNumber && <p className="text-xs text-gray-300">#{u.employeeNumber}</p>}
                             </div>
@@ -334,20 +415,22 @@ export default function UsersPage() {
                         <td className="px-4 py-3 hidden lg:table-cell">
                           {manager ? <span className="text-xs text-gray-600">{fullName(manager)}</span> : <span className="text-xs text-gray-300">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          <button onClick={() => toggleActive(u)}
-                            title={u.isActive ? 'Click to deactivate (blocks login)' : 'Click to activate (restores login)'}
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold cursor-pointer hover:opacity-80 transition-colors ${u.isActive ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
-                            <span>{u.isActive ? '✓' : '✗'}</span>
-                            {u.isActive ? 'Active' : 'Inactive'}
-                          </button>
-                        </td>
+
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-2 flex-wrap">
                             <button onClick={() => navigate(`/users/${u.id}`)} className="text-xs px-2 py-1 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">View</button>
-                            <button onClick={() => openEdit(u)} className="text-xs text-brand-400 hover:text-brand-600 font-medium">Edit</button>
-                            <button onClick={() => impersonateUser(u)} className="text-xs text-purple-600 hover:text-purple-800 font-medium" title="Login as this user">Access</button>
-                            <button onClick={() => resetPassword(u)} className="text-xs text-amber-500 hover:text-amber-700">Reset pwd</button>
+                            <button onClick={() => openEdit(u)} className="text-xs px-2 py-1 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 font-medium">Edit</button>
+                            <button onClick={() => impersonateUser(u)}
+                              className="text-xs px-2 py-1 border border-purple-200 text-purple-600 rounded-lg hover:bg-purple-50 font-medium"
+                              title="Login as this user to access their account">
+                              🔑 Login as
+                            </button>
+                            <button onClick={() => toggleActive(u)}
+                              className={`text-xs px-2 py-1 rounded-lg font-medium border ${u.isActive ? 'border-green-200 text-green-700 hover:bg-red-50 hover:text-red-700 hover:border-red-200' : 'border-red-200 text-red-600 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}
+                              title={u.isActive ? 'Click to deactivate access' : 'Click to activate access'}>
+                              {u.isActive ? '✓ Active' : '✗ Inactive'}
+                            </button>
+                            <button onClick={() => resetPassword(u)} className="text-xs px-2 py-1 border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-50 font-medium">Reset pwd</button>
                           </div>
                         </td>
                       </tr>
