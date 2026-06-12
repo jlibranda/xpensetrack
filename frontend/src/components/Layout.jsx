@@ -135,13 +135,6 @@ export default function Layout() {
                   <span>{item.label}</span>
                 </NavLink>
               ))}
-              {user?.role === 'ADMIN' && (
-                <NavLink to="/approval-chains" className={navLinkClass}
-                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
-                  <span className="w-4 text-center text-sm">🔗</span>
-                  <span>Approval Chains</span>
-                </NavLink>
-              )}
             </>
           )}
         </nav>

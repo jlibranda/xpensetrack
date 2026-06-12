@@ -9,6 +9,7 @@ const userSelect = {
   id:true, employeeNumber:true, firstName:true, lastName:true,
   email:true, role:true, department:true, costCenter:true,
   position:true, payrollAccount:true, isActive:true, managerId:true,
+  approverIds:true, approvalMode:true, approvalRule:true,
 };
 
 // GET all users
@@ -44,7 +45,8 @@ router.get('/:id', authenticate, async (req, res) => {
 // PATCH update user
 router.patch('/:id', authenticate, requirePermission('manage_users'), async (req, res) => {
   try {
-    const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName, newPassword } = req.body;
+    const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName, newPassword,
+            approverIds, approvalMode, approvalRule } = req.body;
 
     // Look up the target so we can apply ADMIN guards
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
@@ -64,6 +66,16 @@ router.patch('/:id', authenticate, requirePermission('manage_users'), async (req
       position: position||null, payrollAccount: payrollAccount||null, isActive,
       employeeNumber: employeeNumber||null, firstName, lastName,
     };
+    if (approverIds !== undefined) {
+      const ids = Array.isArray(approverIds)
+        ? approverIds
+        : String(approverIds||'').split(',').map(s => s.trim()).filter(Boolean);
+      // de-dupe, drop self, cap at 5
+      const cleaned = [...new Set(ids)].filter(id => id && id !== req.params.id).slice(0, 5);
+      updateData.approverIds = cleaned.length ? cleaned.join(',') : null;
+    }
+    if (approvalMode !== undefined) updateData.approvalMode = approvalMode === 'ANY_ORDER' ? 'ANY_ORDER' : 'SEQUENTIAL';
+    if (approvalRule !== undefined) updateData.approvalRule = approvalRule === 'ANY' ? 'ANY' : 'ALL';
     if (newPassword) {
       if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
       updateData.passwordHash = await bcrypt.hash(newPassword, 12);

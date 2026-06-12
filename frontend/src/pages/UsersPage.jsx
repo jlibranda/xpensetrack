@@ -31,7 +31,8 @@ export default function UsersPage() {
   const navigate = useNavigate();
 
   const emptyForm = { firstName:'', lastName:'', email:'', password:'', role:'EMPLOYEE',
-    department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'' };
+    department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'',
+    approverIds:[], approvalMode:'SEQUENTIAL', approvalRule:'ALL' };
   const [form, setForm] = useState(emptyForm);
 
   const { user: currentUser } = useAuth();
@@ -67,7 +68,11 @@ export default function UsersPage() {
     setForm({ firstName:u.firstName||'', lastName:u.lastName||'', email:u.email,
       password:'', role:u.role, department:u.department||'', managerId:u.managerId||'',
       costCenter:u.costCenter||'', position:u.position||'', payrollAccount:u.payrollAccount||'',
-      employeeNumber:u.employeeNumber||'' });
+      employeeNumber:u.employeeNumber||'',
+      approverIds: (u.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean),
+      approvalMode: u.approvalMode||'SEQUENTIAL',
+      approvalRule: u.approvalRule||'ALL',
+      newPassword: '' });
     setMsg({text:'',ok:true}); setTab('add');
   };
 
@@ -244,6 +249,51 @@ export default function UsersPage() {
                   <option key={m.id} value={m.id}>{fullName(m)} ({m.role})</option>
                 ))}
               </select>
+            </div>
+
+            <div className="col-span-2 border border-gray-200 rounded-lg p-3 bg-gray-50/50">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-medium text-gray-700">Approval flow — pick 1 to 5 approvers (in order)</label>
+                <span className="text-xs text-gray-400">{(form.approverIds||[]).length}/5 selected</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {managers.filter(m=>m.id!==editUser?.id).map(m=>{
+                  const list = form.approverIds||[];
+                  const idx = list.indexOf(m.id);
+                  const sel = idx !== -1;
+                  return (
+                    <button key={m.id} type="button"
+                      onClick={()=>{
+                        const cur = [...(form.approverIds||[])];
+                        if (sel) { setF('approverIds', cur.filter(id=>id!==m.id)); }
+                        else { if (cur.length>=5) { setMsg({text:'Maximum of 5 approvers',ok:false}); return; } setF('approverIds',[...cur,m.id]); }
+                      }}
+                      className={`text-xs px-2 py-1 rounded-lg border ${sel?'text-white border-transparent':'text-gray-600 border-gray-200 hover:bg-white'}`}
+                      style={sel?{backgroundColor:settings?.primaryColor||'#1D9E75'}:{}}>
+                      {sel && <span className="font-bold mr-1">{idx+1}.</span>}{fullName(m)} <span className="opacity-60">({m.role})</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Order</label>
+                  <select value={form.approvalMode} onChange={e=>setF('approvalMode',e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                    <option value="SEQUENTIAL">Sequential (one after another)</option>
+                    <option value="ANY_ORDER">Any order (all at once)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Completion</label>
+                  <select value={form.approvalRule} onChange={e=>setF('approvalRule',e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                    <option value="ALL">All must approve</option>
+                    <option value="ANY">Any one is enough</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">If no approvers are picked, the single "Approver / Manager" above is used as a fallback.</p>
             </div>
 
 

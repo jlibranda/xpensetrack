@@ -24,11 +24,15 @@ model User {
   managerId      String?
   manager        User?           @relation("Reports", fields: [managerId], references: [id])
   reports        User[]          @relation("Reports")
-  approvalChainId String?
-  approvalChain   ApprovalChain? @relation("AssignedChain", fields: [approvalChainId], references: [id])
+  // Per-employee approval flow:
+  //  - approverIds: ordered list of approver user IDs (1..5), stored as comma-separated string
+  //  - approvalMode: SEQUENTIAL or ANY_ORDER
+  //  - approvalRule: ALL (all must approve) or ANY (any one is enough)
+  approverIds    String?
+  approvalMode   ApprovalMode    @default(SEQUENTIAL)
+  approvalRule   ApprovalRule    @default(ALL)
   expenses       Expense[]       @relation("SubmittedBy")
   approvals      Approval[]
-  stepApprovers  ApprovalStepApprover[]
   passwordResets PasswordReset[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -103,40 +107,14 @@ model Approval {
   updatedAt  DateTime       @updatedAt
 }
 
-// ===== Flexible approval chains (templates) =====
-model ApprovalChain {
-  id        String          @id @default(cuid())
-  name      String          @unique
-  mode      ApprovalMode    @default(SEQUENTIAL)
-  isActive  Boolean         @default(true)
-  steps     ApprovalStep[]
-  assignees User[]          @relation("AssignedChain")
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-}
-
 enum ApprovalMode {
   SEQUENTIAL
   ANY_ORDER
 }
 
-model ApprovalStep {
-  id        String                 @id @default(cuid())
-  chainId   String
-  chain     ApprovalChain          @relation(fields: [chainId], references: [id], onDelete: Cascade)
-  order     Int                    // 1..5
-  approvers ApprovalStepApprover[]
-  createdAt DateTime               @default(now())
-}
-
-// Each row is one approver option within a step. Multiple rows on the same
-// step form an OR group: any one of them approving satisfies the step.
-model ApprovalStepApprover {
-  id         String       @id @default(cuid())
-  stepId     String
-  step       ApprovalStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  approverId String
-  approver   User         @relation(fields: [approverId], references: [id])
+enum ApprovalRule {
+  ALL
+  ANY
 }
 
 enum ApprovalStatus {

@@ -52,11 +52,8 @@ function isActionable(approval, allApprovals, mode) {
 }
 
 async function chainModeForExpense(expense) {
-  const submitter = await prisma.user.findUnique({
-    where: { id: expense.submittedById },
-    include: { approvalChain: true },
-  });
-  return submitter?.approvalChain?.mode || 'SEQUENTIAL';
+  const submitter = await prisma.user.findUnique({ where: { id: expense.submittedById } });
+  return submitter?.approvalMode || 'SEQUENTIAL';
 }
 
 // ---- routes --------------------------------------------------------------

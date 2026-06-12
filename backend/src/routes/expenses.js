@@ -112,44 +112,38 @@ router.post('/:id/submit', authenticate, async (req, res) => {
   try {
     const expense = await prisma.expense.findUnique({
       where:{id:req.params.id},
-      include:{
-        submittedBy:{ include:{
-          manager:true,
-          approvalChain:{ include:{ steps:{ orderBy:{order:'asc'}, include:{ approvers:true } } } },
-        } } },
+      include:{ submittedBy:{ include:{ manager:true } } },
     });
     if(!expense) return res.status(404).json({error:'Not found'});
     if(expense.submittedById!==req.user.id) return res.status(403).json({error:'Forbidden'});
     if(!['DRAFT','REJECTED','CANCELLED'].includes(expense.status)) return res.status(400).json({error:'Already submitted'});
 
-    // Build the approval steps from the employee's assigned approval chain.
-    const chain = expense.submittedBy.approvalChain;
-    let approvalRows = [];   // {approverId, stepOrder, groupKey, status}
-    let chainMode = 'SEQUENTIAL';
+    const submitter = expense.submittedBy;
 
-    if (chain && chain.steps && chain.steps.length > 0) {
-      chainMode = chain.mode;
-      chain.steps.forEach((step) => {
-        const groupKey = `${chain.id}:${step.order}`;
-        // For SEQUENTIAL: only step 1 starts PENDING, the rest start as WAITING (modelled as PENDING but gated).
-        // We store all as PENDING but the approve logic only opens later steps once earlier ones complete.
-        step.approvers.forEach((a) => {
-          approvalRows.push({
-            approverId: a.approverId,
-            stepOrder: step.order,
-            groupKey,
-            // In SEQUENTIAL mode only step 1 is actionable initially; others are created but gated by stepOrder.
-            status: 'PENDING',
-          });
-        });
-      });
+    // Build the approver list from the employee's per-user settings.
+    let approverIds = (submitter.approverIds || '')
+      .split(',').map(s => s.trim()).filter(Boolean);
+
+    // Fallback: if no approvers are configured, use the assigned manager.
+    if (approverIds.length === 0) {
+      if (submitter.manager) approverIds = [submitter.manager.id];
+      else return res.status(400).json({ error: 'No approver assigned. Please ask your admin to set your approver(s) before submitting.' });
+    }
+    // De-dupe while preserving order; cap at 5
+    approverIds = [...new Set(approverIds)].slice(0, 5);
+
+    const mode = submitter.approvalMode || 'SEQUENTIAL'; // ordering: SEQUENTIAL | ANY_ORDER
+    const rule = submitter.approvalRule || 'ALL';        // completion: ALL | ANY
+
+    // Map to approval rows.
+    //  - ALL rule: each approver is its own step (must all approve). stepOrder = position.
+    //  - ANY rule: all approvers share one step/group (any one satisfies it).
+    let approvalRows;
+    if (rule === 'ANY') {
+      const groupKey = `${expense.id}:any`;
+      approvalRows = approverIds.map((id) => ({ approverId: id, stepOrder: 1, groupKey }));
     } else {
-      // Fallback: no chain assigned -> use the manager as a single-step approver.
-      const manager = expense.submittedBy.manager;
-      if (!manager) {
-        return res.status(400).json({ error: 'No approval chain or manager assigned. Please ask your admin to assign an approval chain.' });
-      }
-      approvalRows.push({ approverId: manager.id, stepOrder: 1, groupKey: null, status: 'PENDING' });
+      approvalRows = approverIds.map((id, idx) => ({ approverId: id, stepOrder: idx + 1, groupKey: null }));
     }
 
     await prisma.$transaction([
@@ -165,24 +159,26 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       }})),
     ]);
 
-    // Notify the approvers who are actionable now.
-    // SEQUENTIAL: only step 1. ANY_ORDER: everyone.
-    const actionable = chainMode === 'ANY_ORDER'
-      ? approvalRows
-      : approvalRows.filter(r => r.stepOrder === Math.min(...approvalRows.map(x => x.stepOrder)));
-    const notifiedIds = [...new Set(actionable.map(r => r.approverId))];
+    // Who is actionable right now?
+    //  - ANY rule: everyone (one approval finishes it).
+    //  - ALL + ANY_ORDER: everyone at once.
+    //  - ALL + SEQUENTIAL: only the first step.
+    let notifyRows;
+    if (rule === 'ANY' || mode === 'ANY_ORDER') notifyRows = approvalRows;
+    else notifyRows = approvalRows.filter(r => r.stepOrder === 1);
+
+    const notifiedIds = [...new Set(notifyRows.map(r => r.approverId))];
     for (const approverId of notifiedIds) {
       const approver = await prisma.user.findUnique({ where: { id: approverId } });
       if (approver) {
         await sendApprovalRequestEmail(approver.email, `${approver.firstName||''} ${approver.lastName||''}`.trim(), expense).catch(()=>{});
         await createNotification(approverId, 'APPROVAL_REQUEST',
           'New expense to approve',
-          `${expense.submittedBy.firstName} ${expense.submittedBy.lastName} submitted "${expense.title}" for approval`,
+          `${submitter.firstName} ${submitter.lastName} submitted "${expense.title}" for approval`,
           '/approvals'
         );
       }
     }
-    // Notify submitter their expense is pending
     await createNotification(req.user.id, 'EXPENSE_SUBMITTED',
       'Expense submitted',
       `Your expense "${expense.title}" has been submitted for approval`,
