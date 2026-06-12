@@ -71,14 +71,16 @@ router.get('/pending', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
     });
 
     const visible = [];
+    const seenExpenses = new Set(); // ensure each expense appears only once
     for (const ap of approvals) {
+      if (seenExpenses.has(ap.expenseId)) continue; // already added this expense
       const all = await loadApprovals(ap.expenseId);
       const steps = summarizeSteps(all);
       const thisStep = steps.find(s => s.stepOrder === ap.stepOrder);
       if (thisStep && (thisStep.satisfied || thisStep.blocked)) continue; // step already resolved
-      if (req.user.role === 'ADMIN') { visible.push(ap); continue; }
+      if (req.user.role === 'ADMIN') { visible.push(ap); seenExpenses.add(ap.expenseId); continue; }
       const mode = await chainModeForExpense(ap.expense);
-      if (isActionable(ap, all, mode)) visible.push(ap);
+      if (isActionable(ap, all, mode)) { visible.push(ap); seenExpenses.add(ap.expenseId); }
     }
     res.json(visible);
   } catch (err) { res.status(500).json({ error: err.message }); }

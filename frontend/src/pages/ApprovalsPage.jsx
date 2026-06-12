@@ -136,9 +136,11 @@ export default function ApprovalsPage() {
                     )}
 
                     {hasReceipt(e) && (
-                      <p className="text-xs text-brand-500 mb-2 cursor-pointer" onClick={ev => {ev.stopPropagation(); setSelected(a);}}>
+                      <button onClick={ev => {ev.stopPropagation(); setSelected(a);}}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold mb-2 px-3 py-1.5 rounded-lg transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: '#2563eb', color: '#ffffff' }}>
                         🧾 Receipt attached — click to view
-                      </p>
+                      </button>
                     )}
 
                     <div onClick={ev => ev.stopPropagation()}>

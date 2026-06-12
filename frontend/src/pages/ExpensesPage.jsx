@@ -159,23 +159,36 @@ export default function ExpensesPage() {
             {/* Approval trail */}
             {selected.approvals?.length > 0 && (
               <div className="mb-3">
-                <p className="text-xs font-medium text-gray-500 mb-1.5">Approval Trail</p>
-                {[...selected.approvals].sort((a,b)=>(a.stepOrder||a.level||0)-(b.stepOrder||b.level||0)).map((a, i) => (
-                  <div key={i} className="flex items-start gap-2 mb-2">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs mt-0.5 shrink-0 ${a.status === 'APPROVED' ? 'bg-green-100 text-green-700' : a.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-red-100 text-red-700'}`}>
-                      {a.status === 'APPROVED' ? '✓' : a.status === 'REJECTED' ? '✗' : '…'}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-800">
-                        <span className="font-semibold">{personName(a.approver)}</span>
-                        {a.approver?.role && <span className="text-gray-400"> ({a.approver.role})</span>}
-                      </p>
-                      <p className={`text-xs font-medium ${a.status === 'APPROVED' ? 'text-green-600' : a.status === 'REJECTED' ? 'text-red-600' : 'text-red-600'}`}>
-                        {a.status === 'APPROVED' ? 'Approved' : a.status === 'REJECTED' ? 'Rejected / Returned' : 'Pending approval'}
-                      </p>
-                      {a.notes && <p className="text-xs text-gray-500 italic mt-0.5">{a.notes}</p>}
-                    </div>
-                  </div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Approval Trail</p>
+                <div className="space-y-2">
+                  {[...selected.approvals].sort((a,b)=>(a.stepOrder||a.level||0)-(b.stepOrder||b.level||0)).map((a, i) => {
+                    const isApproved = a.status === 'APPROVED';
+                    const isRejected = a.status === 'REJECTED';
+                    const accent = isApproved ? '#16a34a' : isRejected ? '#dc2626' : '#dc2626';
+                    return (
+                      <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg border"
+                        style={{
+                          backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)',
+                          borderColor: isApproved ? 'rgba(22,163,74,0.35)' : 'rgba(220,38,38,0.35)',
+                        }}>
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold mt-0.5 shrink-0 text-white"
+                          style={{ backgroundColor: accent }}>
+                          {isApproved ? '✓' : isRejected ? '✗' : '⌛'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold">
+                            <span className="trail-name">{personName(a.approver)}</span>
+                            {a.approver?.role && <span className="trail-role text-xs font-normal"> ({a.approver.role})</span>}
+                          </p>
+                          <p className="text-xs font-semibold" style={{ color: accent }}>
+                            {isApproved ? 'Approved' : isRejected ? 'Rejected / Returned' : 'Pending approval'}
+                          </p>
+                          {a.notes && <p className="text-xs text-gray-400 italic mt-0.5">{a.notes}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
                 ))}
               </div>
             )}

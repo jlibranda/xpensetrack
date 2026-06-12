@@ -132,3 +132,9 @@ html.dark #wallpaper-bg::after {
 /* When a wallpaper is active, let it show through the opaque body color */
 body.has-wallpaper { background-color: transparent !important; }
 html.dark body.has-wallpaper { background-color: transparent !important; }
+
+/* Approval Trail name: high contrast in both themes */
+.trail-name { color: #1f2937; }
+html.dark .trail-name { color: #ffffff; }
+.trail-role { color: #6b7280; }
+html.dark .trail-role { color: #cbd5e1; }
