@@ -130,6 +130,7 @@ export default function DashboardPage() {
           <table className="w-full text-sm">
             <thead><tr className="bg-gray-50">
               <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium">Description</th>
+              <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium hidden md:table-cell">Date Submitted</th>
               <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium hidden md:table-cell">Category</th>
               <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium hidden md:table-cell">Employee</th>
               <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium font-medium hidden lg:table-cell">Pending With</th>
@@ -141,6 +142,7 @@ export default function DashboardPage() {
                 <tr key={e.id} onClick={() => navigate('/expenses')}
                   className="border-t border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors">
                   <td className="px-4 py-3 text-gray-900">{e.title}</td>
+                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{new Date(e.createdAt).toLocaleDateString('en-PH',{year:'numeric',month:'short',day:'numeric'})}</td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell capitalize">{e.category.toLowerCase()}</td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{personName(e.submittedBy)}</td>
                   <td className="px-4 py-3 hidden lg:table-cell">
