@@ -326,7 +326,9 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <button onClick={() => toggleActive(u)}
-                            className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 ${u.isActive ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                            title={u.isActive ? 'Click to deactivate (blocks login)' : 'Click to activate (restores login)'}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-colors ${u.isActive ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>
+                            <span>{u.isActive ? '✓' : '✗'}</span>
                             {u.isActive ? 'Active' : 'Inactive'}
                           </button>
                         </td>

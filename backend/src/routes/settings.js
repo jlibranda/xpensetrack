@@ -78,4 +78,18 @@ router.delete('/wallpaper', authenticate, requireRole('ADMIN'), async (req, res)
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+
+// GET /api/settings/public — no auth required, returns branding only
+router.get('/public', async (req, res) => {
+  try {
+    const s = await getOrCreate();
+    res.json({
+      companyName: s.companyName,
+      primaryColor: s.primaryColor,
+      logoUrl: s.logoUrl,
+      wallpaperUrl: s.wallpaperUrl,
+    });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

@@ -1,5 +1,6 @@
 // src/pages/SettingsPage.jsx
 import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useOrg } from '../context/OrgContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
@@ -9,6 +10,7 @@ const TABS = ['General','Branding','Categories','Expense Types','Password','Acce
 export default function SettingsPage() {
   const { settings, refresh, applyTheme } = useOrg();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState('General');
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -251,21 +253,37 @@ export default function SettingsPage() {
 
         {tab === 'Access Control' && isAdmin && (
           <div>
-            <h2 className="text-sm font-medium text-gray-700 mb-4">Role permissions</h2>
+            <h2 className="text-sm font-medium text-gray-700 mb-1">Access control</h2>
+            <p className="text-xs text-gray-400 mb-4">Manage users directly from the Users page. Click Active/Inactive to toggle access.</p>
             <div className="space-y-3">
               {[
                 { role:'EMPLOYEE', color:'bg-blue-50 text-blue-700', perms:['Submit expenses','View own expenses','Upload receipts (AI auto-fill)','Cancel own expenses','Change own password','View own profile'] },
                 { role:'MANAGER', color:'bg-purple-50 text-purple-700', perms:['All Employee permissions','Approve / Reject / Return expenses','View team expenses','View reports & analytics','Export Excel reports'] },
-                { role:'FINANCE', color:'bg-amber-50 text-amber-700', perms:['All Manager permissions','Second-level approval','Mark expenses as reimbursed','Edit expense categories & GL codes','Manage settings','Manage users'] },
-                { role:'ADMIN', color:'bg-green-50 text-green-700', perms:['All Finance permissions','Activate / deactivate users','Reset any user password','Upload logo & wallpaper','Change branding & colors','Full access to everything'] },
+                { role:'FINANCE', color:'bg-amber-50 text-amber-700', perms:['All Manager permissions','Second-level approval','Mark as reimbursed','Edit categories & GL codes','Manage settings','Manage users'] },
+                { role:'ADMIN', color:'bg-green-50 text-green-700', perms:['All Finance permissions','Activate / deactivate users','Reset any user password','Upload logo & wallpaper','Change branding & colors','Full access'] },
               ].map(r => (
                 <div key={r.role} className="border border-gray-100 rounded-xl p-4">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium mb-2 ${r.color}`}>{r.role}</span>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${r.color}`}>{r.role}</span>
+                    <button onClick={() => navigate('/users')}
+                      className="text-xs text-brand-400 hover:text-brand-600">
+                      Manage {r.role.toLowerCase()}s →
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
                     {r.perms.map(p => <span key={p} className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded-lg">✓ {p}</span>)}
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="mt-5 p-4 bg-amber-50 border border-amber-100 rounded-xl">
+              <p className="text-xs font-medium text-amber-800 mb-1">⚡ Quick access management</p>
+              <p className="text-xs text-amber-700 mb-3">To activate/deactivate a user or reset their password, go to the Users page and click on their status badge or use the Reset pwd button.</p>
+              <button onClick={() => navigate('/users')}
+                className="px-4 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90"
+                style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>
+                → Go to Users page
+              </button>
             </div>
           </div>
         )}
