@@ -29,8 +29,12 @@ function setWallpaperDiv(url) {
       document.body.prepend(el);
     }
     el.style.backgroundImage = `url('${url}')`;
+    // Body has an opaque background-color; make it transparent so the
+    // wallpaper layer (z-index:-1) is visible behind the app.
+    document.body.classList.add('has-wallpaper');
   } else {
     if (el) el.remove();
+    document.body.classList.remove('has-wallpaper');
   }
 }
 

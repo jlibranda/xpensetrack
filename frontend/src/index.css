@@ -108,3 +108,7 @@ html.dark .text-purple-700 { color: #d8b4fe !important; }
   background-repeat: no-repeat;
   background-attachment: fixed;
 }
+
+/* When a wallpaper is active, let it show through the opaque body color */
+body.has-wallpaper { background-color: transparent !important; }
+html.dark body.has-wallpaper { background-color: transparent !important; }
