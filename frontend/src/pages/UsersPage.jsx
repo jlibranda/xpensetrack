@@ -1,6 +1,6 @@
 // src/pages/UsersPage.jsx
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { useOrg } from '../context/OrgContext';
@@ -32,6 +32,7 @@ export default function UsersPage() {
   const [apprLoading, setApprLoading] = useState(false);
   const { settings } = useOrg();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const emptyForm = { firstName:'', lastName:'', email:'', password:'', role:'EMPLOYEE',
     department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'',
@@ -63,6 +64,20 @@ export default function UsersPage() {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+
+  // If we arrived here from the employee detail page's "Edit employee" button,
+  // open that user in edit mode once the list has loaded.
+  useEffect(() => {
+    const editId = location.state?.editUserId;
+    if (editId && users.length) {
+      const u = users.find(x => x.id === editId);
+      if (u) {
+        openEdit(u);
+        // clear the state so a manual refresh doesn't re-trigger
+        navigate('/users', { replace: true, state: {} });
+      }
+    }
+  }, [users, location.state]);
 
   const setF = (k,v) => setForm(f=>({...f,[k]:v}));
 
@@ -286,10 +301,10 @@ export default function UsersPage() {
               {/* Approver #1 = the Manager dropdown above (locked) */}
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-bold w-5 text-center" style={{color:settings?.primaryColor||'#1D9E75'}}>1.</span>
-                <div className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700">
+                <div className="flex-1 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-800 font-medium">
                   {form.managerId
-                    ? <>{fullName(managers.find(m=>m.id===form.managerId)||{})} <span className="text-gray-400">(from Approver / Manager above)</span></>
-                    : <span className="text-amber-600">Set the "Approver / Manager" above — that person is approver #1</span>}
+                    ? <>{fullName(managers.find(m=>m.id===form.managerId)||{})} <span className="text-gray-500 font-normal">(from Approver / Manager above)</span></>
+                    : <span className="text-amber-600 font-normal">Set the "Approver / Manager" above — that person is approver #1</span>}
                 </div>
               </div>
 

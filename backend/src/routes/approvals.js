@@ -129,7 +129,9 @@ router.post('/:id/approve', authenticate, requireRole('MANAGER', 'FINANCE', 'ADM
 
     const updated = await loadApprovals(approval.expenseId);
     const steps = summarizeSteps(updated);
-    const allSatisfied = steps.every(s => s.satisfied);
+    // Guard: an expense with zero approval steps must NOT be treated as approved
+    // ([].every(...) is true in JS). Require at least one step.
+    const allSatisfied = steps.length > 0 && steps.every(s => s.satisfied);
 
     if (allSatisfied) {
       await prisma.expense.update({ where: { id: approval.expenseId }, data: { status: 'APPROVED' } });
