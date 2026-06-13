@@ -43,7 +43,7 @@ router.get('/summary', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
     }
 
     const [approved, pending, rejected, all] = await Promise.all([
-      prisma.expense.findMany({ where: { ...where, status: { in: ['APPROVED', 'REIMBURSED'] } }, include: { submittedBy: { select: { firstName: true, lastName: true, department: true } } } }),
+      prisma.expense.findMany({ where: { ...where, status: { in: ['APPROVED', 'PROCESSED'] } }, include: { submittedBy: { select: { firstName: true, lastName: true, department: true } } } }),
       prisma.expense.count({ where: { ...where, status: 'PENDING' } }),
       prisma.expense.count({ where: { ...where, status: 'REJECTED' } }),
       prisma.expense.count({ where }),
@@ -70,7 +70,7 @@ router.get('/dashboard', authenticate, async (req, res) => {
       prisma.expense.aggregate({ _sum: { amountPhp: true }, _count: true, where: { ...where, expenseDate: { gte: monthStart } } }),
       prisma.expense.aggregate({ _sum: { amountPhp: true }, _count: true, where: { ...where, status: 'PENDING' } }),
       prisma.expense.aggregate({ _sum: { amountPhp: true }, _count: true, where: { ...where, status: 'APPROVED' } }),
-      prisma.expense.aggregate({ _sum: { amountPhp: true }, _count: true, where: { ...where, status: 'REIMBURSED' } }),
+      prisma.expense.aggregate({ _sum: { amountPhp: true }, _count: true, where: { ...where, status: 'PROCESSED' } }),
     ]);
 
     res.json({
@@ -85,7 +85,7 @@ router.get('/dashboard', authenticate, async (req, res) => {
 // GET /api/reports/export — Excel download
 router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
   try {
-    const { from, to, userId } = req.query;
+    const { from, to, userId, status, processed } = req.query;
     const where = {};
     if (userId) where.submittedById = userId;
     if (from || to) {
@@ -93,6 +93,10 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
       if (from) where.expenseDate.gte = new Date(from);
       if (to) where.expenseDate.lte = new Date(to + 'T23:59:59');
     }
+    if (status) where.status = status;
+    if (processed === 'yes') where.processedAt = { not: null };
+    else if (processed === 'no') where.processedAt = null;
+
     const scope = await teamScopeFilter(req.user);
     if (scope) {
       where.submittedById = where.submittedById && scope.includes(where.submittedById)
@@ -156,13 +160,13 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
     XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
 
     // Summary sheet
-    const totalPhp = expenses.filter(e => ['APPROVED','REIMBURSED'].includes(e.status)).reduce((s,e) => s+e.amountPhp, 0);
+    const totalPhp = expenses.filter(e => ['APPROVED','PROCESSED'].includes(e.status)).reduce((s,e) => s+e.amountPhp, 0);
     const summaryData = [
       { 'Metric': 'Total Expenses', 'Value': expenses.length },
       { 'Metric': 'Total Approved (PHP)', 'Value': Number(totalPhp.toFixed(2)) },
       { 'Metric': 'Pending', 'Value': expenses.filter(e=>e.status==='PENDING').length },
       { 'Metric': 'Approved', 'Value': expenses.filter(e=>e.status==='APPROVED').length },
-      { 'Metric': 'Reimbursed', 'Value': expenses.filter(e=>e.status==='REIMBURSED').length },
+      { 'Metric': 'Processed', 'Value': expenses.filter(e=>e.status==='PROCESSED').length },
       { 'Metric': 'Rejected', 'Value': expenses.filter(e=>e.status==='REJECTED').length },
       { 'Metric': 'Report Generated', 'Value': new Date().toLocaleString() },
     ];

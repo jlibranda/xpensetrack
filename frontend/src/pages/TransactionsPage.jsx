@@ -19,7 +19,8 @@ const STATUS_COLORS = {
   PENDING:    { bg: '#f59e0b', text: '#ffffff' },
   APPROVED:   { bg: '#16a34a', text: '#ffffff' },
   REJECTED:   { bg: '#dc2626', text: '#ffffff' },
-  REIMBURSED: { bg: '#2563eb', text: '#ffffff' },
+  RETURNED: { bg: '#d97706', text: '#ffffff' },
+  PROCESSED: { bg: '#2563eb', text: '#ffffff' },
   CANCELLED:  { bg: '#9ca3af', text: '#ffffff' },
 };
 
@@ -41,6 +42,7 @@ export default function TransactionsPage() {
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [processed, setProcessed] = useState(''); // '' all, 'yes', 'no'
 
   // mark-processed date per row
   const [procDate, setProcDate] = useState({});
@@ -67,6 +69,13 @@ export default function TransactionsPage() {
     } finally { setLoading(false); }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, from, to]);
+
+  // Apply the processed filter on the client (the date/status filters hit the API).
+  const visibleRows = rows.filter(e => {
+    if (processed === 'yes') return !!e.processedAt;
+    if (processed === 'no') return !e.processedAt;
+    return true;
+  });
 
   const markProcessed = async (id) => {
     const date = procDate[id] || new Date().toISOString().slice(0, 10);
@@ -106,6 +115,8 @@ export default function TransactionsPage() {
     const params = new URLSearchParams({ token });
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    if (status) params.set('status', status);
+    if (processed) params.set('processed', processed);
     window.open(`${base}/reports/export?${params.toString()}`, '_blank');
   };
 
@@ -114,7 +125,7 @@ export default function TransactionsPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-medium text-gray-900">All Transactions</h1>
-          <p className="text-sm text-gray-500">{rows.length} shown</p>
+          <p className="text-sm text-gray-500">{visibleRows.length} shown</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={exportExcel}
@@ -153,7 +164,7 @@ export default function TransactionsPage() {
               <label className="block text-xs text-gray-500 mb-1">Status (optional)</label>
               <select value={delStatus} onChange={e => setDelStatus(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
                 <option value="">All statuses</option>
-                {['DRAFT','PENDING','APPROVED','REJECTED','REIMBURSED','CANCELLED'].map(s => <option key={s} value={s}>{s}</option>)}
+                {['DRAFT','PENDING','APPROVED','RETURNED','REJECTED','PROCESSED','CANCELLED'].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <button onClick={runDelete} disabled={deleting}
@@ -171,7 +182,7 @@ export default function TransactionsPage() {
           <label className="block text-xs text-gray-500 mb-1">Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
             <option value="">All</option>
-            {['DRAFT','PENDING','APPROVED','REJECTED','REIMBURSED','CANCELLED'].map(s => <option key={s} value={s}>{s}</option>)}
+            {['DRAFT','PENDING','APPROVED','RETURNED','REJECTED','PROCESSED','CANCELLED'].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div>
@@ -182,14 +193,22 @@ export default function TransactionsPage() {
           <label className="block text-xs text-gray-500 mb-1">To</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
         </div>
-        {(status || from || to) && (
-          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Processed</label>
+          <select value={processed} onChange={e => setProcessed(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
+            <option value="">All</option>
+            <option value="yes">Processed</option>
+            <option value="no">Not processed</option>
+          </select>
+        </div>
+        {(status || from || to || processed) && (
+          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setProcessed(''); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
         )}
       </div>
 
       {loading ? (
         <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-400">No transactions found.</div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden overflow-x-auto">
@@ -208,7 +227,7 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(e => (
+              {visibleRows.map(e => (
                 <tr key={e.id} className="border-b border-gray-50">
                   <td className="px-4 py-3 text-gray-600">{fmtDate(e.expenseDate)}</td>
                   <td className="px-4 py-3 font-medium text-gray-800">{personName(e.submittedBy)}</td>
@@ -230,7 +249,7 @@ export default function TransactionsPage() {
                       : <span className="text-xs text-gray-400">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    {['APPROVED','REIMBURSED'].includes(e.status) ? (
+                    {['APPROVED','PROCESSED'].includes(e.status) ? (
                       e.processedAt ? (
                         <button onClick={() => unmarkProcessed(e.id)} className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50">Undo</button>
                       ) : (

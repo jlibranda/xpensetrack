@@ -12,7 +12,8 @@ const STATUS_BADGE = {
   PENDING:'bg-amber-500 text-white',
   APPROVED:'bg-green-600 text-white', 
   REJECTED:'bg-red-600 text-white',
-  REIMBURSED:'bg-gray-600 text-white', 
+  RETURNED:'bg-amber-500 text-white',
+  PROCESSED:'bg-blue-600 text-white',
   CANCELLED:'bg-gray-400 text-white',
 };
 const ROLE_BADGE = {
@@ -60,7 +61,7 @@ export default function EmployeePage() {
   if (!user) return null;
 
   const initials = `${user.firstName?.[0]||''}${user.lastName?.[0]||''}`.toUpperCase();
-  const totalSpent = expenses.filter(e=>['APPROVED','REIMBURSED'].includes(e.status)).reduce((s,e)=>s+e.amountPhp,0);
+  const totalSpent = expenses.filter(e=>['APPROVED','PROCESSED'].includes(e.status)).reduce((s,e)=>s+e.amountPhp,0);
   const pendingCount = expenses.filter(e=>e.status==='PENDING').length;
 
   return (

@@ -49,6 +49,8 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/pending-count', authenticate, async (req, res) => {
   try {
     const myPending = await prisma.expense.count({ where: { submittedById: req.user.id, status: 'PENDING' } });
+    // Returned expenses need the employee's attention (edit & resubmit).
+    const myReturned = await prisma.expense.count({ where: { submittedById: req.user.id, status: 'RETURNED' } });
 
     let toApprove = 0;
     if (['MANAGER','FINANCE','ADMIN'].includes(req.user.role)) {
@@ -108,7 +110,7 @@ router.get('/pending-count', authenticate, async (req, res) => {
       }
     }
 
-    res.json({ myPending, toApprove });
+    res.json({ myPending, myReturned, toApprove });
   } catch(err){ res.status(500).json({error:err.message}); }
 });
 
@@ -198,7 +200,7 @@ router.patch('/:id', authenticate, async (req, res) => {
     const e = await prisma.expense.findUnique({where:{id:req.params.id}});
     if(!e) return res.status(404).json({error:'Not found'});
     if(e.submittedById!==req.user.id && req.user.role==='EMPLOYEE') return res.status(403).json({error:'Forbidden'});
-    if(!['DRAFT','REJECTED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
+    if(!['DRAFT','REJECTED','RETURNED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
     const { title, orNumber, merchant, description, amount, currency, category, expenseType, receiptId, costCenter, expenseDate } = req.body;
     const amountPhp = amount ? await toPhp(Number(amount), currency||e.currency) : undefined;
     const updated = await prisma.expense.update({
@@ -226,7 +228,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     });
     if(!expense) return res.status(404).json({error:'Not found'});
     if(expense.submittedById!==req.user.id) return res.status(403).json({error:'Forbidden'});
-    if(!['DRAFT','REJECTED','CANCELLED'].includes(expense.status)) return res.status(400).json({error:'Already submitted'});
+    if(!['DRAFT','REJECTED','RETURNED','CANCELLED'].includes(expense.status)) return res.status(400).json({error:'Already submitted'});
 
     const submitter = expense.submittedBy;
 
@@ -314,7 +316,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     const e = await prisma.expense.findUnique({where:{id:req.params.id}});
     if(!e) return res.status(404).json({error:'Not found'});
     if(e.submittedById!==req.user.id && req.user.role!=='ADMIN') return res.status(403).json({error:'Forbidden'});
-    if(!['DRAFT','CANCELLED','REJECTED'].includes(e.status)) return res.status(400).json({error:'Cannot delete'});
+    if(!['DRAFT','CANCELLED','REJECTED','RETURNED'].includes(e.status)) return res.status(400).json({error:'Cannot delete'});
     await prisma.approval.deleteMany({where:{expenseId:e.id}});
     await prisma.expense.delete({where:{id:e.id}});
     res.json({message:'Deleted'});
@@ -357,25 +359,25 @@ router.post('/:id/mark-processed', authenticate, requireRole('FINANCE', 'ADMIN')
     const { processedDate } = req.body;
     const e = await prisma.expense.findUnique({ where: { id: req.params.id } });
     if (!e) return res.status(404).json({ error: 'Not found' });
-    if (!['APPROVED', 'REIMBURSED'].includes(e.status)) {
+    if (!['APPROVED', 'PROCESSED'].includes(e.status)) {
       return res.status(400).json({ error: 'Only approved expenses can be marked processed' });
     }
     const when = processedDate ? new Date(processedDate) : new Date();
     const updated = await prisma.expense.update({
       where: { id: req.params.id },
-      data: { processedAt: when },
+      data: { processedAt: when, status: 'PROCESSED' },
     });
     await logAudit(req.user, 'EXPENSE_MARKED_PROCESSED', { targetType: 'EXPENSE', targetId: req.params.id, details: `Marked "${e.title}" processed on ${when.toISOString().split('T')[0]}` });
     res.json({ message: 'Marked processed', processedAt: updated.processedAt });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// FINANCE/ADMIN: undo processed tag
+// FINANCE/ADMIN: undo processed tag (revert to APPROVED)
 router.post('/:id/unmark-processed', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
     const updated = await prisma.expense.update({
       where: { id: req.params.id },
-      data: { processedAt: null },
+      data: { processedAt: null, status: 'APPROVED' },
     });
     res.json({ message: 'Unmarked', processedAt: updated.processedAt });
   } catch (err) { res.status(500).json({ error: err.message }); }

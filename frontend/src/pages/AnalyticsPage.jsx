@@ -51,7 +51,7 @@ export default function AnalyticsPage() {
   // Monthly trend (last 6 months)
   const monthlyMap = {};
   expenses.forEach(e => {
-    if (!['APPROVED','REIMBURSED'].includes(e.status)) return;
+    if (!['APPROVED','PROCESSED'].includes(e.status)) return;
     const m = new Date(e.expenseDate).toLocaleDateString('en-PH', {month:'short', year:'2-digit'});
     monthlyMap[m] = (monthlyMap[m] || 0) + e.amountPhp;
   });
@@ -64,7 +64,7 @@ export default function AnalyticsPage() {
 
   // Department breakdown
   const deptMap = {};
-  expenses.filter(e => ['APPROVED','REIMBURSED'].includes(e.status)).forEach(e => {
+  expenses.filter(e => ['APPROVED','PROCESSED'].includes(e.status)).forEach(e => {
     const d = e.submittedBy?.department || 'Unknown';
     deptMap[d] = (deptMap[d]||0) + e.amountPhp;
   });

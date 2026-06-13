@@ -11,7 +11,8 @@ const STATUS_BADGE = {
   PENDING: 'bg-amber-50 text-amber-700',
   APPROVED: 'bg-green-50 text-green-700',
   REJECTED: 'bg-red-50 text-red-700',
-  REIMBURSED: 'bg-gray-100 text-gray-600',
+  RETURNED: 'bg-amber-100 text-amber-700',
+  PROCESSED: 'bg-blue-100 text-blue-700',
 };
 
 export default function DashboardPage() {
@@ -79,7 +80,7 @@ export default function DashboardPage() {
           { label: 'Total this month', value: format(summary?.totalPhp || 0), sub: `${summary?.count || 0} expenses` },
           { label: 'Pending approval', value: format(pending), sub: `${expenses.filter(e=>e.status==='PENDING').length} claims`, accent: 'text-amber-600' },
           { label: 'Approved', value: format(approved), sub: `${expenses.filter(e=>e.status==='APPROVED').length} claims`, accent: 'text-green-600' },
-          { label: 'Reimbursed', value: format(expenses.filter(e=>e.status==='REIMBURSED').reduce((s,e)=>s+e.amountPhp,0)), sub: `${expenses.filter(e=>e.status==='REIMBURSED').length} claims` },
+          { label: 'Processed', value: format(expenses.filter(e=>e.status==='PROCESSED').reduce((s,e)=>s+e.amountPhp,0)), sub: `${expenses.filter(e=>e.status==='PROCESSED').length} claims` },
         ].map((m, i) => (
           <div key={i} className="bg-gray-50 rounded-xl p-4">
             <p className="text-xs text-gray-600 font-medium uppercase tracking-wide mb-1">{m.label}</p>

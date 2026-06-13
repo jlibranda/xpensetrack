@@ -10,7 +10,8 @@ const STATUS_BADGE = {
   PENDING: 'bg-amber-50 text-amber-700',
   APPROVED: 'bg-green-50 text-green-700',
   REJECTED: 'bg-red-50 text-red-700',
-  REIMBURSED: 'bg-gray-100 text-gray-600',
+  RETURNED: 'bg-amber-50 text-amber-700',
+  PROCESSED: 'bg-blue-50 text-blue-700',
   CANCELLED: 'bg-gray-100 text-gray-400',
 };
 
@@ -19,7 +20,8 @@ const STATUS_LABEL = {
   PENDING: '⏳ Pending',
   APPROVED: '✅ Approved',
   REJECTED: '❌ Rejected',
-  REIMBURSED: '💰 Reimbursed',
+  RETURNED: '↩ Returned',
+  PROCESSED: '💰 Processed',
   CANCELLED: '🚫 Cancelled',
 };
 
@@ -67,8 +69,12 @@ export default function ExpensesPage() {
   };
 
   const getApprovalNote = (expense) => {
-    const last = expense.approvals?.[expense.approvals.length - 1];
-    return last?.notes || '';
+    const apps = expense.approvals || [];
+    // Prefer an explicit returned/rejected note with content; ignore [auto] notes.
+    const returned = apps.find(a => a.notes && a.notes.startsWith('[RETURNED]'));
+    if (returned) return returned.notes.replace(/^\[RETURNED\]\s*/, '');
+    const real = [...apps].reverse().find(a => a.notes && !a.notes.startsWith('[auto]'));
+    return real?.notes || '';
   };
 
   return (
@@ -87,7 +93,7 @@ export default function ExpensesPage() {
 
       {/* Filter tabs */}
       <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">
-        {[['','All'],['DRAFT','Drafts'],['PENDING','Pending'],['APPROVED','Approved'],['REJECTED','Rejected'],['REIMBURSED','Reimbursed'],['CANCELLED','Cancelled']].map(([val, label]) => (
+        {[['','All'],['DRAFT','Drafts'],['PENDING','Pending'],['APPROVED','Approved'],['RETURNED','Returned'],['REJECTED','Rejected'],['PROCESSED','Processed'],['CANCELLED','Cancelled']].map(([val, label]) => (
           <button key={val} onClick={() => setFilter(val)}
             className={`px-3 py-1.5 rounded-md text-xs transition-colors ${filter === val ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
             {label}
@@ -117,7 +123,7 @@ export default function ExpensesPage() {
                     <p className="text-xs text-gray-400 mt-0.5">
                       {new Date(e.expenseDate).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})} · {e.category.toLowerCase()}
                     </p>
-                    {['REJECTED','CANCELLED'].includes(e.status) && getApprovalNote(e) && (
+                    {['REJECTED','RETURNED','CANCELLED'].includes(e.status) && getApprovalNote(e) && (
                       <p className="text-xs text-red-500 mt-0.5 truncate">↩ {getApprovalNote(e)}</p>
                     )}
                   </div>
@@ -202,7 +208,7 @@ export default function ExpensesPage() {
 
             {/* Actions */}
             <div className="flex flex-col gap-2 border-t border-gray-50 pt-3">
-              {['DRAFT', 'REJECTED', 'CANCELLED'].includes(selected.status) && (
+              {['DRAFT', 'REJECTED', 'RETURNED', 'CANCELLED'].includes(selected.status) && (
                 <button onClick={() => navigate(`/expenses/${selected.id}/edit`)}
                   className="w-full py-2 bg-brand-400 text-white rounded-lg text-xs font-medium hover:bg-brand-600">
                   ✏️ Edit & resubmit
@@ -214,7 +220,7 @@ export default function ExpensesPage() {
                   🚫 Cancel expense
                 </button>
               )}
-              {['DRAFT', 'REJECTED', 'CANCELLED'].includes(selected.status) && (
+              {['DRAFT', 'REJECTED', 'RETURNED', 'CANCELLED'].includes(selected.status) && (
                 <button onClick={() => handleDelete(selected.id)}
                   className="w-full py-2 border border-red-100 text-red-600 rounded-lg text-xs hover:bg-red-50">
                   🗑️ Delete permanently

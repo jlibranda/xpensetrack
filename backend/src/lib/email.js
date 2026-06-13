@@ -96,7 +96,7 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status) {
     REJECTED:         { subject:`❌ Expense rejected — ${expense.title}`,  title:'Expense rejected',              msg:'Your expense was not approved. Please check the notes and resubmit if needed.',  color:'#dc2626' },
     RETURNED:         { subject:`↩ Expense returned — ${expense.title}`,   title:'Expense returned for revision', msg:'Your approver returned this expense. Please review their comments and resubmit.', color:'#d97706' },
     MANAGER_APPROVED: { subject:`✓ Manager approved — ${expense.title}`,   title:'Approved by manager',           msg:'Your expense was approved by your manager and is now pending finance review.',    color:'#2563eb' },
-    REIMBURSED:       { subject:`💰 Expense reimbursed — ${expense.title}`, title:'Expense reimbursed',           msg:'Your expense has been reimbursed!',                                              color: brandColor },
+    PROCESSED:        { subject:`💰 Expense processed — ${expense.title}`,  title:'Expense processed',            msg:'Your expense has been processed for payout.',                                   color: brandColor },
   };
   const cfg = configs[status] || { subject:`Expense update — ${expense.title}`, title:'Expense update', msg:'', color:'#374151' };
   return sendMail(toEmail, cfg.subject, html(

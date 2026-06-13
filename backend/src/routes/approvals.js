@@ -209,12 +209,16 @@ router.post('/:id/return', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMI
     if (!approval) return res.status(404).json({ error: 'Not found' });
     if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
     await prisma.$transaction([
+      // Mark this approver's decision as returned, and clear all OTHER pending
+      // approvals on the expense so it leaves everyone's approval queue.
       prisma.approval.update({ where: { id: approval.id }, data: { status: 'REJECTED', notes: `[RETURNED] ${notes}` } }),
-      prisma.expense.update({ where: { id: approval.expenseId }, data: { status: 'REJECTED' } }),
+      prisma.approval.updateMany({ where: { expenseId: approval.expenseId, status: 'PENDING', id: { not: approval.id } }, data: { status: 'REJECTED', notes: '[auto] expense returned to submitter' } }),
+      prisma.expense.update({ where: { id: approval.expenseId }, data: { status: 'RETURNED' } }),
     ]);
     await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'RETURNED').catch(() => {});
     await createNotification(approval.expense.submittedById, 'EXPENSE_RETURNED',
       'Expense returned for revision', `"${approval.expense.title}" was returned: ${notes}`, '/expenses');
+    await logAudit(req.user, 'EXPENSE_RETURNED', { targetType: 'EXPENSE', targetId: approval.expenseId, details: `Returned "${approval.expense.title}": ${notes}` });
     res.json({ message: 'Returned' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
