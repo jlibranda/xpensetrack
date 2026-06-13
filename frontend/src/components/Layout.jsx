@@ -200,16 +200,24 @@ export default function Layout() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between md:justify-end px-4 md:px-6 gap-3 shrink-0 z-10"
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 gap-3 shrink-0 z-10"
           style={darkMode ? { backgroundColor: '#1e293b', borderColor: '#334155' } : {}}>
 
-          {/* Hamburger — mobile only */}
-          <button onClick={() => setMobileNavOpen(true)}
-            className="p-2 rounded-lg text-xl md:hidden"
-            style={darkMode ? { backgroundColor:'#334155', color:'#e2e8f0' } : { backgroundColor:'#f1f5f9', color:'#475569' }}
-            aria-label="Open menu">
-            ☰
-          </button>
+          {/* Left: hamburger (mobile) + employer TIN */}
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => setMobileNavOpen(true)}
+              className="p-2 rounded-lg text-xl md:hidden"
+              style={darkMode ? { backgroundColor:'#334155', color:'#e2e8f0' } : { backgroundColor:'#f1f5f9', color:'#475569' }}
+              aria-label="Open menu">
+              ☰
+            </button>
+            {settings?.tin && (
+              <span className="text-xs md:text-sm font-medium truncate"
+                style={{ color: darkMode ? '#cbd5e1' : '#475569' }}>
+                <span className="hidden sm:inline" style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>TIN: </span>{settings.tin}
+              </span>
+            )}
+          </div>
 
           <div className="flex items-center gap-3">
           {/* Dark/Light toggle */}

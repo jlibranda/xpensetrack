@@ -52,7 +52,7 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
   try {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
-            wallpaperStyle, autoReapplyApprovalFlow, accessControl } = req.body;
+            wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl } = req.body;
     const s = await getOrCreate();
     const updated = await prisma.orgSettings.update({
       where: { id: s.id },
@@ -63,6 +63,7 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
         primaryColor, darkMode,
         wallpaperStyle: wallpaperStyle || undefined,
         autoReapplyApprovalFlow: typeof autoReapplyApprovalFlow === 'boolean' ? autoReapplyApprovalFlow : undefined,
+        tin: tin !== undefined ? (tin || null) : undefined,
         categories: Array.isArray(categories) ? categories.join(',') : categories,
         expenseTypes: Array.isArray(expenseTypes) ? expenseTypes.join(',') : expenseTypes,
         categoryGlCodes: categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined,
@@ -112,6 +113,7 @@ router.get('/public', async (req, res) => {
       primaryColor: s.primaryColor,
       logoUrl: s.logoUrl,
       wallpaperUrl: s.wallpaperUrl,
+      tin: s.tin,
     });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });

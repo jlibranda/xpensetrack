@@ -160,8 +160,8 @@ export default function UsersPage() {
     const lines = text.trim().split('\n').filter(l=>l.trim());
     const start = lines[0]?.toLowerCase().includes('email') ? 1 : 0;
     return lines.slice(start).map(line => {
-      const [employeeNumber, lastName, firstName, email, password, role, department, costCenter, position] = line.split(',').map(s=>s?.trim());
-      return { lastName, firstName, email, password: password||settings?.defaultPassword||'Welcome123', role: role||'EMPLOYEE', department, costCenter, employeeNumber, position };
+      const [employeeNumber, lastName, firstName, email, password, role, department, costCenter, position, payrollAccount] = line.split(',').map(s=>s?.trim());
+      return { lastName, firstName, email, password: password||settings?.defaultPassword||'Welcome123', role: role||'EMPLOYEE', department, costCenter, employeeNumber, position, payrollAccount };
     }).filter(u => u.firstName && u.email);
   };
 
@@ -175,14 +175,28 @@ export default function UsersPage() {
   };
 
   const downloadTemplate = () => {
-    const csv = 'employeeNumber,lastName,firstName,email,password,role,department,costCenter,position\nEMP-001,Dela Cruz,Juan,juan@co.com,Welcome123,EMPLOYEE,Sales,CC-001,Sales Rep\nEMP-002,Santos,Maria,maria@co.com,Welcome123,MANAGER,Finance,CC-002,Finance Manager';
+    const csv = 'employeeNumber,lastName,firstName,email,password,role,department,costCenter,position,payrollAccount\nEMP-001,Dela Cruz,Juan,juan@co.com,Welcome123,EMPLOYEE,Sales,CC-001,Sales Rep,1234567890\nEMP-002,Santos,Maria,maria@co.com,Welcome123,MANAGER,Finance,CC-002,Finance Manager,0987654321';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
     a.download = 'users-template.csv'; a.click();
   };
 
   const downloadApprTemplate = () => {
-    const csv = 'employee_number,last_name,first_name,approver1_number,approver2_number,approver3_number,approver4_number,approver5_number,mode,rule\nEMP-001,Dela Cruz,Juan,EMP-002,EMP-003,,,,SEQUENTIAL,ALL\nEMP-004,Reyes,Ana,EMP-002,,,,,ANY_ORDER,ANY';
+    const guide = [
+      '# APPROVER FLOW UPLOAD GUIDE — delete these # lines before uploading if your tool keeps them; the system ignores rows whose employee_number is blank',
+      '# Each row sets the approval flow for ONE employee (matched by employee_number).',
+      '# Columns step1..step8 are the approval STEPS, in order. Fill only the steps you need; leave the rest blank.',
+      '# Within a step cell, list approver EMPLOYEE NUMBERS:',
+      '#   - Use "/" between names for ANY-ONE-approves (OR).  Example: EMP-003/EMP-004  = either EMP-003 or EMP-004 can approve',
+      '#   - Use "+" between names for ALL-must-approve (AND). Example: EMP-003+EMP-004 = both EMP-003 and EMP-004 must approve',
+      '#   - A single number = just that one person.            Example: EMP-002',
+      '# mode column: SEQUENTIAL = steps run in order (step1, then step2...). ANY_ORDER = all steps open at once.',
+      '# Example below: Juan must be approved by EMP-002 (step1), then EMP-003 OR EMP-004 (step2), then EMP-005 (step3), in order.',
+    ].join('\n');
+    const csv = guide + '\n'
+      + 'employee_number,mode,step1,step2,step3,step4\n'
+      + 'EMP-001,SEQUENTIAL,EMP-002,EMP-003/EMP-004,EMP-005,\n'
+      + 'EMP-006,ANY_ORDER,EMP-002+EMP-003,EMP-005,,';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
     a.download = 'approver-assignments-template.csv'; a.click();
@@ -264,12 +278,18 @@ export default function UsersPage() {
       const s = String(v ?? '');
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = ['employeeNumber','lastName','firstName','email','role','department','position','costCenter','status'];
+    const byId = {};
+    users.forEach(u => { byId[u.id] = u; });
+    const header = ['employeeNumber','lastName','firstName','email','role','department','position','costCenter','payrollAccount','managerEmployeeNumber','managerFullName','status'];
     const lines = [header.join(',')];
     filtered.forEach(u => {
+      const mgr = u.managerId ? byId[u.managerId] : null;
       lines.push([
         u.employeeNumber||'', u.lastName||'', u.firstName||'', u.email||'',
         u.role||'', u.department||'', u.position||'', u.costCenter||'',
+        u.payrollAccount||'',
+        mgr?.employeeNumber || '',
+        mgr ? `${mgr.lastName||''}, ${mgr.firstName||''}`.replace(/^,\s*|,\s*$/g,'').trim() : '',
         u.isActive ? 'Active' : 'Inactive',
       ].map(esc).join(','));
     });

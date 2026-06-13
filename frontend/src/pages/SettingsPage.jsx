@@ -280,6 +280,7 @@ export default function SettingsPage() {
       // Only send fields relevant to current tab to avoid overwriting others
       const payload = {
         companyName: s.companyName,
+        tin: s.tin ?? settings?.tin,
         defaultCurrency: s.defaultCurrency,
         approvalLevels: s.approvalLevels,
         primaryColor: s.primaryColor,
@@ -367,6 +368,17 @@ export default function SettingsPage() {
               <label className="block text-xs text-gray-500 mb-1">Company name</label>
               <input value={s?.companyName||''} onChange={e=>set('companyName',e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Employer TIN</label>
+              <input value={s?.tin||''} placeholder="123-456-789-012"
+                onChange={e=>{
+                  const digits = e.target.value.replace(/\D/g,'').slice(0,12);
+                  const groups = digits.match(/.{1,3}/g) || [];
+                  set('tin', groups.join('-'));
+                }}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+              <p className="text-xs text-gray-400 mt-1">Format: XXX-XXX-XXX-XXX (auto-formatted as you type). Shown at the top of the app.</p>
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Default currency</label>

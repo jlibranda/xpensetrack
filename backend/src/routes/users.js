@@ -299,54 +299,64 @@ router.post('/bulk-approvers', authenticate, requireRole('ADMIN'), upload.single
     for (let i = 0; i < rows.length; i++) {
       const row = lc(rows[i]);
       const empNum = String(row['employee_number'] || row['employee_no'] || row['employee'] || row['emp_no'] || '').trim();
+      // Skip guide/comment lines (start with #) and blank rows silently.
+      if (empNum.startsWith('#') || (!empNum && Object.values(row).every(v => String(v).trim()==='' || String(v).trim().startsWith('#')))) continue;
       if (!empNum) { results.errors.push({ row: i + 2, reason: 'Missing employee_number' }); continue; }
 
       const empId = resolveNum(empNum);
       if (!empId) { results.errors.push({ row: i + 2, employee: empNum, reason: 'Employee number not found' }); continue; }
 
-      // Collect approver employee numbers — either approver1..5 columns, or a single "approvers" column.
-      let approverNums = [];
-      if (row['approvers']) {
-        approverNums = String(row['approvers']).split(/[;,]/).map(s => s.trim()).filter(Boolean);
-      } else {
-        for (let n = 1; n <= 5; n++) {
-          const v = row[`approver${n}_number`] || row[`approver${n}_no`] || row[`approver${n}`];
-          if (v !== undefined && String(v).trim() !== '') approverNums.push(String(v).trim());
-        }
-      }
-
-      // Resolve employee numbers -> ids
-      const resolved = [];
+      // Each step is a column step1..step8. Within a cell:
+      //   "/" separates approvers in an ANY (OR) step  e.g. EMP-3/EMP-4
+      //   "+" separates approvers in an ALL (AND) step e.g. EMP-3+EMP-4
+      //   a single number is just that one approver.
+      const steps = [];
       let bad = null;
-      for (const num of approverNums) {
-        const id = resolveNum(num);
-        if (!id) { bad = num; break; }
-        resolved.push(id);
+      for (let n = 1; n <= 8; n++) {
+        const raw = row[`step${n}`];
+        if (raw === undefined || String(raw).trim() === '') continue;
+        const cell = String(raw).trim();
+        const isAnd = cell.includes('+');
+        const parts = cell.split(/[+/]/).map(s => s.trim()).filter(Boolean);
+        const ids = [];
+        for (const p of parts) {
+          const id = resolveNum(p);
+          if (!id) { bad = p; break; }
+          if (id !== empId) ids.push(id);
+        }
+        if (bad) break;
+        if (ids.length) steps.push({ approvers: [...new Set(ids)], rule: isAnd ? 'ALL' : 'ANY' });
       }
       if (bad) { results.errors.push({ row: i + 2, employee: empNum, reason: `Approver number not found: ${bad}` }); continue; }
 
-      if (resolved.length === 0) { results.errors.push({ row: i + 2, employee: empNum, reason: 'No approvers given' }); continue; }
+      // Backward compat: if no step columns given, fall back to approver1..5 (each its own step).
+      if (steps.length === 0) {
+        for (let n = 1; n <= 5; n++) {
+          const v = row[`approver${n}_number`] || row[`approver${n}_no`] || row[`approver${n}`];
+          if (v !== undefined && String(v).trim() !== '') {
+            const id = resolveNum(String(v).trim());
+            if (!id) { bad = String(v).trim(); break; }
+            if (id !== empId) steps.push({ approvers: [id], rule: 'ANY' });
+          }
+        }
+        if (bad) { results.errors.push({ row: i + 2, employee: empNum, reason: `Approver number not found: ${bad}` }); continue; }
+      }
 
-      // First approver = manager (#1); the rest are additional (#2..#5), excluding self & manager, cap 4.
-      const managerId = resolved[0];
-      const additional = [...new Set(resolved.slice(1))]
-        .filter(id => id && id !== empId && id !== managerId)
-        .slice(0, 4);
+      if (steps.length === 0) { results.errors.push({ row: i + 2, employee: empNum, reason: 'No approval steps given' }); continue; }
 
       const mode = String(row['mode'] || '').toUpperCase() === 'ANY_ORDER' ? 'ANY_ORDER' : 'SEQUENTIAL';
-      const rule = String(row['rule'] || '').toUpperCase() === 'ANY' ? 'ANY' : 'ALL';
+      const flatApprovers = [...new Set(steps.flatMap(s => s.approvers))];
 
       try {
         await prisma.user.update({
           where: { id: empId },
           data: {
-            managerId,
-            approverIds: additional.length ? additional.join(',') : null,
+            approvalFlowJson: JSON.stringify(steps),
+            approverIds: flatApprovers.length ? flatApprovers.join(',') : null,
             approvalMode: mode,
-            approvalRule: rule,
           },
         });
-        results.updated.push({ employee: empNum, approvers: resolved.length, mode, rule });
+        results.updated.push({ employee: empNum, steps: steps.length, mode });
       } catch (e) {
         results.errors.push({ row: i + 2, employee: empNum, reason: e.message });
       }
