@@ -42,7 +42,6 @@ export default function TransactionsPage() {
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [processed, setProcessed] = useState(''); // '' all, 'yes', 'no'
 
   // mark-processed date per row
   const [procDate, setProcDate] = useState({});
@@ -58,9 +57,10 @@ export default function TransactionsPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      // "FOR_PROCESS" = approved expenses with no processed date yet.
-      if (status === 'FOR_PROCESS') { params.set('status', 'APPROVED'); }
-      else if (status) params.set('status', status);
+      // PROCESSED / FOR_PROCESS are defined by the processed DATE, not the enum,
+      // so we fetch broadly and filter client-side (handles older processed items
+      // that may still carry the APPROVED status).
+      if (status && status !== 'PROCESSED' && status !== 'FOR_PROCESS') params.set('status', status);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       params.set('limit', '500');
@@ -72,12 +72,10 @@ export default function TransactionsPage() {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, from, to]);
 
-  // Apply the processed filter on the client (the date/status filters hit the API).
+  // Processed = has a processed date; For Process = approved/processed status with no date yet.
   const visibleRows = rows.filter(e => {
-    // FOR_PROCESS = approved AND not yet processed (no processed date)
-    if (status === 'FOR_PROCESS' && (e.status !== 'APPROVED' || e.processedAt)) return false;
-    if (processed === 'yes') return !!e.processedAt;
-    if (processed === 'no') return !e.processedAt;
+    if (status === 'PROCESSED') return !!e.processedAt;
+    if (status === 'FOR_PROCESS') return ['APPROVED','PROCESSED'].includes(e.status) && !e.processedAt;
     return true;
   });
 
@@ -119,9 +117,9 @@ export default function TransactionsPage() {
     const params = new URLSearchParams({ token });
     if (from) params.set('from', from);
     if (to) params.set('to', to);
-    if (status === 'FOR_PROCESS') { params.set('status', 'APPROVED'); params.set('processed', 'no'); }
+    if (status === 'PROCESSED') params.set('processed', 'yes');
+    else if (status === 'FOR_PROCESS') { params.set('status', 'APPROVED'); params.set('processed', 'no'); }
     else if (status) params.set('status', status);
-    if (processed) params.set('processed', processed);
     window.open(`${base}/reports/export?${params.toString()}`, '_blank');
   };
 
@@ -190,8 +188,8 @@ export default function TransactionsPage() {
             <option value="DRAFT">DRAFT</option>
             <option value="PENDING">PENDING</option>
             <option value="APPROVED">APPROVED</option>
-            <option value="FOR_PROCESS">FOR PROCESS (approved, no date)</option>
-            <option value="PROCESSED">PROCESSED (has date)</option>
+            <option value="FOR_PROCESS">FOR PROCESS</option>
+            <option value="PROCESSED">PROCESSED</option>
             <option value="RETURNED">RETURNED</option>
             <option value="REJECTED">REJECTED</option>
             <option value="CANCELLED">CANCELLED</option>
@@ -205,16 +203,8 @@ export default function TransactionsPage() {
           <label className="block text-xs text-gray-500 mb-1">To</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
         </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Processed</label>
-          <select value={processed} onChange={e => setProcessed(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
-            <option value="">All</option>
-            <option value="yes">Processed</option>
-            <option value="no">Not processed</option>
-          </select>
-        </div>
-        {(status || from || to || processed) && (
-          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setProcessed(''); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
+        {(status || from || to) && (
+          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
         )}
       </div>
 

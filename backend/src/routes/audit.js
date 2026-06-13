@@ -1,11 +1,11 @@
 // src/routes/audit.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requirePermission } = require('../middleware/auth');
 const prisma = new PrismaClient();
 
 // GET /api/audit — list audit entries (admin only), newest first, with optional filters.
-router.get('/', authenticate, requireRole('ADMIN'), async (req, res) => {
+router.get('/', authenticate, requirePermission('view_audit_log', ['ADMIN']), async (req, res) => {
   try {
     const { action, from, to, limit = 200 } = req.query;
     const where = {};

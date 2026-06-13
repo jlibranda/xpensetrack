@@ -167,7 +167,7 @@ export default function Layout() {
                   <span>{item.label}</span>
                 </NavLink>
               ))}
-              {user?.role === 'ADMIN' && (
+              {(user?.role === 'ADMIN' || (settings?.accessControl?.view_audit_log || ['ADMIN']).includes(user?.role)) && (
                 <NavLink to="/audit" className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
                   <span className="w-4 text-center text-sm">📋</span>
