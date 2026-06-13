@@ -29,6 +29,7 @@ export default function Layout() {
   const { settings } = useOrg();
   const navigate = useNavigate();
   const [showNotif, setShowNotif] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const notifRef = useRef();
 
   const canApprove = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
@@ -101,8 +102,13 @@ export default function Layout() {
         </div>
       )}
       <div className="flex flex-1 overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-52 flex flex-col shrink-0 z-10" style={{ backgroundColor: sidebarBg }}>
+      {/* Mobile backdrop when nav is open */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setMobileNavOpen(false)} />
+      )}
+      {/* Sidebar: off-canvas drawer on mobile, fixed column on desktop */}
+      <aside className={`w-52 flex flex-col shrink-0 z-30 fixed inset-y-0 left-0 transform transition-transform md:static md:translate-x-0 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ backgroundColor: sidebarBg }}>
         <div className="px-4 py-4 border-b border-white/10">
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate('/')}>
             {settings?.logoUrl
@@ -116,7 +122,7 @@ export default function Layout() {
           </div>
         </div>
 
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto" onClick={() => setMobileNavOpen(false)}>
           {NAV.map(item => (
             <NavLink key={item.to} to={item.to} end={item.exact} className={navLinkClass}
               style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
@@ -194,9 +200,18 @@ export default function Layout() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-end px-6 gap-3 shrink-0 z-10"
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between md:justify-end px-4 md:px-6 gap-3 shrink-0 z-10"
           style={darkMode ? { backgroundColor: '#1e293b', borderColor: '#334155' } : {}}>
 
+          {/* Hamburger — mobile only */}
+          <button onClick={() => setMobileNavOpen(true)}
+            className="p-2 rounded-lg text-xl md:hidden"
+            style={darkMode ? { backgroundColor:'#334155', color:'#e2e8f0' } : { backgroundColor:'#f1f5f9', color:'#475569' }}
+            aria-label="Open menu">
+            ☰
+          </button>
+
+          <div className="flex items-center gap-3">
           {/* Dark/Light toggle */}
           <button onClick={toggleDarkMode}
             className="p-2 rounded-lg text-lg transition-colors"
@@ -258,9 +273,10 @@ export default function Layout() {
             style={{ backgroundColor: brandColor }}>
             + New Expense
           </button>
+          </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6"
+        <main className="flex-1 overflow-y-auto p-4 md:p-6"
           style={hasWallpaper
             ? { backgroundColor: 'transparent' }
             : (darkMode ? { backgroundColor: '#0f172a' } : { backgroundColor: '#f8fafc' })}>

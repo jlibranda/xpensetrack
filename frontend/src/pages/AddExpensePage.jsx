@@ -172,7 +172,7 @@ export default function AddExpensePage() {
       {/* Form */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">OR Number</label>
               <input value={form.orNumber} onChange={e=>set('orNumber',e.target.value)} placeholder="e.g. OR-2024-001"
@@ -185,7 +185,7 @@ export default function AddExpensePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Amount *</label>
               <input type="number" value={form.amount} onChange={e=>set('amount',e.target.value)} placeholder="0.00" min="0.01" step="0.01"
@@ -201,7 +201,7 @@ export default function AddExpensePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Date *</label>
               <input type="date" value={form.expenseDate} onChange={e=>set('expenseDate',e.target.value)}

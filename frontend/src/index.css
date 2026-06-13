@@ -104,7 +104,7 @@ html.dark .text-purple-700 { color: #d8b4fe !important; }
   position: fixed;
   inset: 0;
   z-index: -2;
-  background-color: #eef0f5; /* light-mode base */
+  background-color: #d8dbe2; /* soft gray base — easier on the eyes than white */
 }
 /* The wallpaper image, styled by the chosen wallpaper style */
 #wallpaper-bg::before {
@@ -116,7 +116,14 @@ html.dark .text-purple-700 { color: #d8b4fe !important; }
   background-position: center;
   background-repeat: var(--wallpaper-repeat, no-repeat);
   background-attachment: fixed;
-  opacity: 0.5; /* visible but subtle in light mode */
+  opacity: 0.45; /* visible but subtle in light mode */
+}
+/* Light mode: soft gray overlay so bright/white wallpapers don't glare */
+#wallpaper-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: rgba(150, 156, 168, 0.35); /* gray wash */
 }
 /* Dark mode: dark base + keep the image clearly visible with a light overlay */
 html.dark #wallpaper-bg { background-color: #0f172a; }
