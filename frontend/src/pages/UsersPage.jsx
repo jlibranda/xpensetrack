@@ -156,11 +156,41 @@ export default function UsersPage() {
     } catch(err) { alert(err.error || 'Failed to access user account'); }
   };
 
+  // Parse a single CSV line into fields, respecting double-quoted values that
+  // may themselves contain commas (e.g. a position like "Manager, HR").
+  // Also strips Excel's text wrapper ="value".
+  const parseCsvLine = (line) => {
+    const out = [];
+    let cur = '';
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQ) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; } // escaped quote
+          else inQ = false;
+        } else cur += ch;
+      } else {
+        if (ch === '"') inQ = true;
+        else if (ch === ',') { out.push(cur); cur = ''; }
+        else cur += ch;
+      }
+    }
+    out.push(cur);
+    // strip Excel ="..." wrapper and trim
+    return out.map(v => {
+      let s = (v ?? '').trim();
+      const m = s.match(/^="(.*)"$/);
+      if (m) s = m[1];
+      return s;
+    });
+  };
+
   const parseBulk = (text) => {
-    const lines = text.trim().split('\n').filter(l=>l.trim());
+    const lines = text.trim().split(/\r?\n/).filter(l=>l.trim());
     const start = lines[0]?.toLowerCase().includes('email') ? 1 : 0;
     return lines.slice(start).map(line => {
-      const [employeeNumber, lastName, firstName, email, password, role, department, costCenter, position, payrollAccount] = line.split(',').map(s=>s?.trim());
+      const [employeeNumber, lastName, firstName, email, password, role, department, costCenter, position, payrollAccount] = parseCsvLine(line);
       return { lastName, firstName, email, password: password||settings?.defaultPassword||'Welcome123', role: role||'EMPLOYEE', department, costCenter, employeeNumber, position, payrollAccount };
     }).filter(u => u.firstName && u.email);
   };
@@ -175,7 +205,7 @@ export default function UsersPage() {
   };
 
   const downloadTemplate = () => {
-    const csv = 'employeeNumber,lastName,firstName,email,password,role,department,costCenter,position,payrollAccount\nEMP-001,Dela Cruz,Juan,juan@co.com,Welcome123,EMPLOYEE,Sales,CC-001,Sales Rep,1234567890\nEMP-002,Santos,Maria,maria@co.com,Welcome123,MANAGER,Finance,CC-002,Finance Manager,0987654321';
+    const csv = 'employeeNumber,lastName,firstName,email,password,role,department,costCenter,position,payrollAccount\nEMP-001,Dela Cruz,Juan,juan@co.com,Welcome123,EMPLOYEE,Sales,CC-001,Sales Rep,="1234567890"\nEMP-002,Santos,Maria,maria@co.com,Welcome123,MANAGER,Finance,CC-002,"Manager, Finance",="0987654321"';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
     a.download = 'users-template.csv'; a.click();
@@ -284,14 +314,16 @@ export default function UsersPage() {
     const lines = [header.join(',')];
     filtered.forEach(u => {
       const mgr = u.managerId ? byId[u.managerId] : null;
+      // Wrap payroll account so Excel keeps it as text (no scientific notation / lost leading zeros).
+      const payrollText = u.payrollAccount ? `="${String(u.payrollAccount).replace(/"/g,'')}"` : '';
       lines.push([
         u.employeeNumber||'', u.lastName||'', u.firstName||'', u.email||'',
         u.role||'', u.department||'', u.position||'', u.costCenter||'',
-        u.payrollAccount||'',
+        payrollText,
         mgr?.employeeNumber || '',
         mgr ? `${mgr.lastName||''}, ${mgr.firstName||''}`.replace(/^,\s*|,\s*$/g,'').trim() : '',
         u.isActive ? 'Active' : 'Inactive',
-      ].map(esc).join(','));
+      ].map((v, idx) => idx === 8 ? v : esc(v)).join(','));
     });
     const statusLabel = filterActive === 'all' ? 'all' : filterActive;
     const a = document.createElement('a');
