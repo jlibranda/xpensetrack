@@ -30,7 +30,9 @@ export default function Layout() {
   const navigate = useNavigate();
   const [showNotif, setShowNotif] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [showTin, setShowTin] = useState(false);
   const notifRef = useRef();
+  const tinRef = useRef();
 
   const canApprove = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
   const isManagerOnly = user?.role === 'MANAGER'; // managers don't get Analytics
@@ -60,7 +62,10 @@ export default function Layout() {
   }, [settings?.darkMode]);
 
   useEffect(() => {
-    const handler = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false); };
+    const handler = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false);
+      if (tinRef.current && !tinRef.current.contains(e.target)) setShowTin(false);
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
@@ -212,14 +217,27 @@ export default function Layout() {
               ☰
             </button>
             {settings?.tin && (
-              <span className="text-xs md:text-sm font-medium truncate"
-                style={{ color: darkMode ? '#cbd5e1' : '#475569' }}>
-                <span className="hidden sm:inline" style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>TIN: </span>{settings.tin}
-              </span>
+              <div className="relative" ref={tinRef}>
+                <button onClick={() => setShowTin(v => !v)}
+                  className="text-xs md:text-sm font-medium whitespace-nowrap flex items-center gap-1"
+                  style={{ color: darkMode ? '#cbd5e1' : '#475569' }}>
+                  <span style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>TIN:</span>
+                  {/* Full number on larger screens; tap to reveal on small screens */}
+                  <span className="hidden sm:inline">{settings.tin}</span>
+                  <span className="sm:hidden underline decoration-dotted">view</span>
+                </button>
+                {showTin && (
+                  <div className="absolute left-0 top-9 rounded-lg border shadow-xl z-50 px-4 py-3 whitespace-nowrap"
+                    style={darkMode ? { backgroundColor:'#1e293b', borderColor:'#334155' } : { backgroundColor:'#ffffff', borderColor:'#e5e7eb' }}>
+                    <p className="text-xs mb-0.5" style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>Employer TIN</p>
+                    <p className="text-base font-bold tracking-wide" style={{ color: darkMode ? '#f1f5f9' : '#111827' }}>{settings.tin}</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
           {/* Dark/Light toggle */}
           <button onClick={toggleDarkMode}
             className="p-2 rounded-lg text-lg transition-colors"
@@ -242,7 +260,7 @@ export default function Layout() {
               )}
             </button>
             {showNotif && (
-              <div className="absolute right-0 top-12 w-80 rounded-xl border shadow-xl z-50 overflow-hidden bg-white"
+              <div className="absolute right-0 top-12 w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border shadow-xl z-50 overflow-hidden bg-white"
                 style={darkMode ? { backgroundColor:'#1e293b', borderColor:'#334155' } : { borderColor:'#e5e7eb' }}>
                 <div className="flex items-center justify-between px-4 py-3 border-b"
                   style={{ borderColor: darkMode ? '#334155' : '#f3f4f6' }}>
@@ -277,7 +295,7 @@ export default function Layout() {
           </button>
 
           <button onClick={() => navigate('/expenses/new')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
             style={{ backgroundColor: brandColor }}>
             + New Expense
           </button>

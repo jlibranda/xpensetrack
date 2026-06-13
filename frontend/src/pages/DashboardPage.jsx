@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canExport = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
+  const canViewSpending = ['FINANCE','ADMIN'].includes(user?.role);
 
   // Export this month's report — must include the auth token (download opens
   // in a new tab, so it can't use the normal Authorization header).
@@ -91,7 +92,8 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Chart */}
+        {/* Chart — spending summary is for Finance/Admin only */}
+        {canViewSpending && (
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <h2 className="text-sm font-medium text-gray-700 mb-3">Spending by category</h2>
           {chartData.length > 0 ? (
@@ -107,6 +109,7 @@ export default function DashboardPage() {
             <div className="h-44 flex items-center justify-center text-sm text-gray-400">No data yet</div>
           )}
         </div>
+        )}
 
         {/* Quick actions */}
         <div className="bg-white rounded-xl border border-gray-100 p-4">
