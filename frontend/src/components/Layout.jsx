@@ -180,13 +180,13 @@ export default function Layout() {
           )}
         </nav>
 
+        {settings?.tin && (
+          <div className="md:hidden px-3 py-3 border-t border-white/10">
+            <p className="text-xs text-gray-400">Employer TIN</p>
+            <p className="text-sm font-semibold text-white tracking-wide">{settings.tin}</p>
+          </div>
+        )}
         <div className="p-3 border-t border-white/10">
-          {settings?.tin && (
-            <div className="md:hidden mb-3 px-1">
-              <p className="text-xs text-gray-400">Employer TIN</p>
-              <p className="text-sm font-semibold text-white tracking-wide">{settings.tin}</p>
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/profile')}
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"

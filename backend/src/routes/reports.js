@@ -31,8 +31,8 @@ router.get('/summary', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
     if (userId) where.submittedById = userId;
     if (from || to) {
       where.expenseDate = {};
-      if (from) where.expenseDate.gte = new Date(from);
-      if (to) where.expenseDate.lte = new Date(to + 'T23:59:59');
+      if (from) where.expenseDate.gte = new Date(String(from).split('T')[0]);
+      if (to) where.expenseDate.lte = new Date(String(to).split('T')[0] + 'T23:59:59');
     }
     // Managers: restrict to their team. Combine with any userId filter.
     const scope = await teamScopeFilter(req.user);
@@ -90,8 +90,8 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
     if (userId) where.submittedById = userId;
     if (from || to) {
       where.expenseDate = {};
-      if (from) where.expenseDate.gte = new Date(from);
-      if (to) where.expenseDate.lte = new Date(to + 'T23:59:59');
+      if (from) where.expenseDate.gte = new Date(String(from).split('T')[0]);
+      if (to) where.expenseDate.lte = new Date(String(to).split('T')[0] + 'T23:59:59');
     }
     if (status) where.status = status;
     if (processed === 'yes') where.processedAt = { not: null };
