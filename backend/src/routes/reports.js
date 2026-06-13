@@ -82,11 +82,20 @@ router.get('/summary', authenticate, async (req, res) => {
     ]);
 
     const totalPhp = approved.reduce((s, e) => s + e.amountPhp, 0);
+    // Split the approved+processed set into the two distinct statuses.
+    const approvedOnly = approved.filter(e => e.status === 'APPROVED');
+    const processedOnly = approved.filter(e => e.status === 'PROCESSED');
+    const approvedPhp = approvedOnly.reduce((s, e) => s + e.amountPhp, 0);
+    const processedPhp = processedOnly.reduce((s, e) => s + e.amountPhp, 0);
     const byCategory = approved.reduce((acc, e) => { acc[e.category] = (acc[e.category] || 0) + e.amountPhp; return acc; }, {});
     const byEmployee = approved.reduce((acc, e) => { const k = `${e.submittedBy.firstName||''} ${e.submittedBy.lastName||''}`.trim(); acc[k] = (acc[k] || 0) + e.amountPhp; return acc; }, {});
     const byDepartment = approved.reduce((acc, e) => { const k = e.submittedBy.department || 'Unknown'; acc[k] = (acc[k] || 0) + e.amountPhp; return acc; }, {});
 
-    res.json({ scope: requested, totalPhp, count: approved.length, pendingCount: pending, rejectedCount: rejected, totalCount: all, byCategory, byEmployee, byDepartment });
+    res.json({ scope: requested, totalPhp, count: approved.length,
+      approvedPhp, approvedCount: approvedOnly.length,
+      processedPhp, processedCount: processedOnly.length,
+      pendingCount: pending, rejectedCount: rejected, totalCount: all,
+      byCategory, byEmployee, byDepartment });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

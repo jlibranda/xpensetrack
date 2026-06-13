@@ -100,11 +100,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {[
           { label: 'Total this month', value: format(summary?.totalPhp || 0), sub: `${summary?.count || 0} expenses` },
           { label: 'Pending approval', value: `${summary?.pendingCount || 0}`, sub: 'claims', accent: 'text-amber-600' },
-          { label: 'Approved / Processed', value: format(summary?.totalPhp || 0), sub: `${summary?.count || 0} claims`, accent: 'text-green-600' },
+          { label: 'Approved', value: format(summary?.approvedPhp || 0), sub: `${summary?.approvedCount || 0} claims`, accent: 'text-green-600' },
+          { label: 'Processed', value: format(summary?.processedPhp || 0), sub: `${summary?.processedCount || 0} claims`, accent: 'text-blue-600' },
           { label: 'Rejected', value: `${summary?.rejectedCount || 0}`, sub: 'claims', accent: 'text-red-500' },
         ].map((m, i) => (
           <div key={i} className="bg-gray-50 rounded-xl p-4">
