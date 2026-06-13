@@ -10,6 +10,9 @@ const STATUS_BADGE = {
   PENDING: 'bg-amber-500 text-white',
   APPROVED: 'bg-green-600 text-white',
   REJECTED: 'bg-red-600 text-white',
+  RETURNED: 'bg-amber-600 text-white',
+  PROCESSED: 'bg-blue-600 text-white',
+  CANCELLED: 'bg-gray-400 text-white',
 };
 
 export default function ApprovalsPage() {
@@ -43,6 +46,9 @@ export default function ApprovalsPage() {
   const action = async (id, type) => {
     if (type === 'return' && !notes[id]?.trim()) {
       alert('Please add a comment before returning to submitter.'); return;
+    }
+    if (type === 'reject' && !notes[id]?.trim()) {
+      alert('Please add a reason before rejecting.'); return;
     }
     setActioning(id + type);
     try {
@@ -149,7 +155,7 @@ export default function ApprovalsPage() {
                       <input
                         value={notes[a.id] || ''}
                         onChange={ev => setNotes(n => ({...n, [a.id]: ev.target.value}))}
-                        placeholder="Add note (required for Return)"
+                        placeholder="Add note (required for Return and Reject)"
                         className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400 mb-2"
                       />
                       <div className="flex gap-2">
@@ -255,21 +261,28 @@ export default function ApprovalsPage() {
                 <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium">Decision</th>
               </tr></thead>
               <tbody>
-                {history.map(a => (
+                {history.map(a => {
+                  // Align the badge with the EXPENSE's actual decision, not the raw
+                  // approval-row status (a Return is stored as a REJECTED row + [RETURNED] note).
+                  const isReturnedRow = a.status === 'REJECTED' && (a.notes||'').startsWith('[RETURNED]');
+                  const decision = isReturnedRow ? 'RETURNED' : (a.expense?.status || a.status);
+                  const cleanNote = (a.notes||'').startsWith('[auto]') ? '' : (a.notes||'').replace(/^\[RETURNED\]\s*/, '');
+                  return (
                   <tr key={a.id} className="border-t border-gray-50 hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <p className="text-gray-900 font-medium text-sm">{a.expense.title}</p>
-                      {a.notes && <p className="text-xs text-gray-400 italic mt-0.5 max-w-xs truncate">{a.notes}</p>}
+                      {cleanNote && <p className="text-xs text-gray-600 mt-0.5 max-w-xs">"{cleanNote}"</p>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{personName(a.expense.submittedBy)}</td>
                     <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">{format(a.expense.amountPhp)}</td>
                     <td className="px-4 py-3 text-right">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[a.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {a.status}
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[decision] || 'bg-gray-100 text-gray-600'}`}>
+                        {decision}
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

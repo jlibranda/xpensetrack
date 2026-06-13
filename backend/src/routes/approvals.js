@@ -184,6 +184,7 @@ router.post('/:id/reject', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMI
     if (!approval) return res.status(404).json({ error: 'Not found' });
     if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
     if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
+    if (!notes || !notes.trim()) return res.status(400).json({ error: 'A reason is required when rejecting' });
 
     // Rejection is FINAL. Mark this approval rejected, clear all OTHER pending
     // approvals so the expense leaves every approver's queue, and reject the expense.

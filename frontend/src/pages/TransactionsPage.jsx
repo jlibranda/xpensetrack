@@ -58,7 +58,9 @@ export default function TransactionsPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (status) params.set('status', status);
+      // "FOR_PROCESS" = approved expenses with no processed date yet.
+      if (status === 'FOR_PROCESS') { params.set('status', 'APPROVED'); }
+      else if (status) params.set('status', status);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       params.set('limit', '500');
@@ -72,6 +74,8 @@ export default function TransactionsPage() {
 
   // Apply the processed filter on the client (the date/status filters hit the API).
   const visibleRows = rows.filter(e => {
+    // FOR_PROCESS = approved AND not yet processed (no processed date)
+    if (status === 'FOR_PROCESS' && (e.status !== 'APPROVED' || e.processedAt)) return false;
     if (processed === 'yes') return !!e.processedAt;
     if (processed === 'no') return !e.processedAt;
     return true;
@@ -115,7 +119,8 @@ export default function TransactionsPage() {
     const params = new URLSearchParams({ token });
     if (from) params.set('from', from);
     if (to) params.set('to', to);
-    if (status) params.set('status', status);
+    if (status === 'FOR_PROCESS') { params.set('status', 'APPROVED'); params.set('processed', 'no'); }
+    else if (status) params.set('status', status);
     if (processed) params.set('processed', processed);
     window.open(`${base}/reports/export?${params.toString()}`, '_blank');
   };
@@ -182,7 +187,14 @@ export default function TransactionsPage() {
           <label className="block text-xs text-gray-500 mb-1">Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
             <option value="">All</option>
-            {['DRAFT','PENDING','APPROVED','RETURNED','REJECTED','PROCESSED','CANCELLED'].map(s => <option key={s} value={s}>{s}</option>)}
+            <option value="DRAFT">DRAFT</option>
+            <option value="PENDING">PENDING</option>
+            <option value="APPROVED">APPROVED</option>
+            <option value="FOR_PROCESS">FOR PROCESS (approved, no date)</option>
+            <option value="PROCESSED">PROCESSED (has date)</option>
+            <option value="RETURNED">RETURNED</option>
+            <option value="REJECTED">REJECTED</option>
+            <option value="CANCELLED">CANCELLED</option>
           </select>
         </div>
         <div>
