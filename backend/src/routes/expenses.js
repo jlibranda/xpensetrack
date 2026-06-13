@@ -6,6 +6,7 @@ const { sendApprovalRequestEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
 const { getUsdPhpRate } = require('../lib/fxrate');
+const { getFlowSteps, buildRowsFromSteps } = require('../lib/approvalChain');
 const prisma = new PrismaClient();
 
 // Convert an amount to PHP using the org's current USD->PHP rate.
@@ -229,17 +230,12 @@ router.post('/:id/submit', authenticate, async (req, res) => {
 
     const submitter = expense.submittedBy;
 
-    // Approver #1 is ALWAYS the assigned manager. Additional approvers (#2..#5)
-    // come from approverIds. Manager + up to 4 more = 5 total.
-    const additional = (submitter.approverIds || '')
-      .split(',').map(s => s.trim()).filter(Boolean);
+    // Resolve the employee's approval flow as STEPS (each step has its own
+    // approvers + ANY/ALL rule). Falls back to legacy fields if no step flow set.
+    const steps = getFlowSteps(submitter);
 
-    let approverIds = [];
-    if (submitter.managerId) approverIds.push(submitter.managerId);
-    approverIds.push(...additional);
-
-    // No approver/manager assigned -> auto-approve on submission.
-    if (approverIds.length === 0) {
+    // No approvers in the flow -> auto-approve on submission.
+    if (steps.length === 0) {
       await prisma.$transaction([
         prisma.expense.update({ where: { id: expense.id }, data: { status: 'APPROVED' } }),
         prisma.approval.deleteMany({ where: { expenseId: expense.id } }),
@@ -251,22 +247,9 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       );
       return res.json({ message: 'Submitted', expense: await prisma.expense.findUnique({ where: { id: expense.id } }) });
     }
-    // De-dupe while preserving order (manager stays #1); cap at 5
-    approverIds = [...new Set(approverIds)].slice(0, 5);
 
-    const mode = submitter.approvalMode || 'SEQUENTIAL'; // ordering: SEQUENTIAL | ANY_ORDER
-    const rule = submitter.approvalRule || 'ALL';        // completion: ALL | ANY
-
-    // Map to approval rows.
-    //  - ALL rule: each approver is its own step (must all approve). stepOrder = position.
-    //  - ANY rule: all approvers share one step/group (any one satisfies it).
-    let approvalRows;
-    if (rule === 'ANY') {
-      const groupKey = `${expense.id}:any`;
-      approvalRows = approverIds.map((id) => ({ approverId: id, stepOrder: 1, groupKey }));
-    } else {
-      approvalRows = approverIds.map((id, idx) => ({ approverId: id, stepOrder: idx + 1, groupKey: null }));
-    }
+    const mode = submitter.approvalMode || 'SEQUENTIAL'; // ordering across steps
+    const approvalRows = buildRowsFromSteps(expense.id, steps);
 
     await prisma.$transaction([
       prisma.expense.update({where:{id:expense.id}, data:{status:'PENDING'}}),
@@ -277,16 +260,16 @@ router.post('/:id/submit', authenticate, async (req, res) => {
         level: r.stepOrder,
         stepOrder: r.stepOrder,
         groupKey: r.groupKey,
+        stepRule: r.stepRule,
         status: 'PENDING',
       }})),
     ]);
 
     // Who is actionable right now?
-    //  - ANY rule: everyone (one approval finishes it).
-    //  - ALL + ANY_ORDER: everyone at once.
-    //  - ALL + SEQUENTIAL: only the first step.
+    //  - ANY_ORDER: everyone in every step at once.
+    //  - SEQUENTIAL: only step 1.
     let notifyRows;
-    if (rule === 'ANY' || mode === 'ANY_ORDER') notifyRows = approvalRows;
+    if (mode === 'ANY_ORDER') notifyRows = approvalRows;
     else notifyRows = approvalRows.filter(r => r.stepOrder === 1);
 
     const notifiedIds = [...new Set(notifyRows.map(r => r.approverId))];

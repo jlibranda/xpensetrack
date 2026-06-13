@@ -29,15 +29,21 @@ function summarizeSteps(approvals) {
   const groups = {};
   for (const a of approvals) {
     const g = groupId(a);
-    if (!groups[g]) groups[g] = { stepOrder: a.stepOrder, rows: [] };
+    if (!groups[g]) groups[g] = { stepOrder: a.stepOrder, rule: a.stepRule || 'ANY', rows: [] };
     groups[g].rows.push(a);
   }
-  const steps = Object.values(groups).map((grp) => ({
-    stepOrder: grp.stepOrder,
-    satisfied: grp.rows.some(r => r.status === 'APPROVED'),
-    blocked: grp.rows.every(r => r.status === 'REJECTED'),
-    rows: grp.rows,
-  }));
+  const steps = Object.values(groups).map((grp) => {
+    const rule = grp.rule || 'ANY';
+    // ANY (OR): one approval satisfies; blocked only if everyone rejected.
+    // ALL (AND): every approver must approve; blocked if anyone rejected.
+    const satisfied = rule === 'ALL'
+      ? grp.rows.every(r => r.status === 'APPROVED')
+      : grp.rows.some(r => r.status === 'APPROVED');
+    const blocked = rule === 'ALL'
+      ? grp.rows.some(r => r.status === 'REJECTED')
+      : grp.rows.every(r => r.status === 'REJECTED');
+    return { stepOrder: grp.stepOrder, rule, satisfied, blocked, rows: grp.rows };
+  });
   steps.sort((a, b) => a.stepOrder - b.stepOrder);
   return steps;
 }
@@ -120,9 +126,14 @@ router.post('/:id/approve', authenticate, requireRole('MANAGER', 'FINANCE', 'ADM
       return res.status(400).json({ error: 'An earlier approval step is still pending.' });
     }
 
-    // Approve this row; auto-resolve OR-group siblings (one approver satisfies the step).
+    // Approve this row. For an ANY (OR) step, one approval satisfies the whole
+    // step, so auto-resolve the pending siblings. For an ALL (AND) step, the
+    // other approvers must still approve, so do NOT touch siblings.
     const g = groupId(approval);
-    const siblingIds = all.filter(a => groupId(a) === g && a.id !== approval.id && a.status === 'PENDING').map(a => a.id);
+    const isAnyStep = (approval.stepRule || 'ANY') !== 'ALL';
+    const siblingIds = isAnyStep
+      ? all.filter(a => groupId(a) === g && a.id !== approval.id && a.status === 'PENDING').map(a => a.id)
+      : [];
     await prisma.$transaction([
       prisma.approval.update({ where: { id: approval.id }, data: { status: 'APPROVED', notes } }),
       ...(siblingIds.length

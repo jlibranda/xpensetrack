@@ -31,6 +31,7 @@ model User {
   approverIds    String?
   approvalMode   ApprovalMode    @default(SEQUENTIAL)
   approvalRule   ApprovalRule    @default(ALL)
+  approvalFlowJson String?       // structured step builder: [{approvers:[id],rule:'ANY'|'ALL'}]
   expenses       Expense[]       @relation("SubmittedBy")
   approvals      Approval[]
   passwordResets PasswordReset[]
@@ -103,6 +104,7 @@ model Approval {
   level      Int            @default(1)
   stepOrder  Int            @default(1)
   groupKey   String?
+  stepRule   String?        @default("ANY") // per-step rule: ANY (one approves) | ALL (all must)
   notes      String?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt

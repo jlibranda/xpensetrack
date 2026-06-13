@@ -137,26 +137,37 @@ export default function EmployeePage() {
 
           <div className="mt-5 pt-4 border-t border-gray-50">
             <p className="text-xs text-gray-400 mb-2">Approval flow</p>
-            {(user.approvers && user.approvers.length > 0) ? (
+            {(user.approvalSteps && user.approvalSteps.length > 0) ? (
               <>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {user.approvers.map((a, i) => (
-                    <span key={a.id} className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg"
-                      style={{ backgroundColor: 'rgba(29,158,117,0.15)', border: '1px solid rgba(29,158,117,0.45)' }}>
-                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-white shrink-0" style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>{i + 1}</span>
-                      <span className="approver-name font-bold">{a.firstName} {a.lastName}</span>
-                      <span className="approver-meta text-xs">({a.role}{a.employeeNumber ? ` · ${a.employeeNumber}` : ''})</span>
-                    </span>
+                <div className="space-y-2 mb-2">
+                  {user.approvalSteps.map((step) => (
+                    <div key={step.stepOrder} className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(29,158,117,0.10)', border: '1px solid rgba(29,158,117,0.35)' }}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-white shrink-0" style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>{step.stepOrder}</span>
+                        <span className="text-xs font-semibold" style={{ color: 'var(--trail-name-color,#374151)' }}>
+                          Step {step.stepOrder}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold text-white" style={{ backgroundColor: step.rule === 'ALL' ? '#d97706' : '#16a34a' }}>
+                          {step.rule === 'ALL' ? 'All must approve' : 'Any one approves'}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 pl-7">
+                        {step.approvers.map(a => (
+                          <span key={a.id} className="inline-flex items-center gap-1 text-sm px-2 py-1 rounded-lg" style={{ backgroundColor: 'rgba(29,158,117,0.12)' }}>
+                            <span className="approver-name font-bold">{a.firstName} {a.lastName}</span>
+                            <span className="approver-meta text-xs">({a.role})</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
                 <p className="text-xs text-gray-500">
-                  Order: <span className="font-medium text-gray-700">{user.approvalMode === 'ANY_ORDER' ? 'Any order' : 'Sequential'}</span>
-                  {'  ·  '}
-                  Completion: <span className="font-medium text-gray-700">{user.approvalRule === 'ANY' ? 'Any one is enough' : 'All must approve'}</span>
+                  Steps run: <span className="font-medium text-gray-700">{user.approvalMode === 'ANY_ORDER' ? 'All at once' : 'Sequentially (in order)'}</span>
                 </p>
               </>
             ) : (
-              <p className="text-sm text-amber-600">No approver assigned — this employee cannot submit expenses until an approver is set.</p>
+              <p className="text-sm text-amber-600">No approval steps set — this employee's expenses are auto-approved on submission.</p>
             )}
           </div>
 

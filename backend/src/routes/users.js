@@ -9,12 +9,13 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 const prisma = new PrismaClient();
 const { logAudit } = require('../lib/audit');
 const { reapplyApprovalFlowForUser } = require('../lib/approvalFlow');
+const { getFlowSteps } = require('../lib/approvalChain');
 
 const userSelect = {
   id:true, employeeNumber:true, firstName:true, lastName:true,
   email:true, role:true, department:true, costCenter:true,
   position:true, payrollAccount:true, isActive:true, managerId:true,
-  approverIds:true, approvalMode:true, approvalRule:true,
+  approverIds:true, approvalMode:true, approvalRule:true, approvalFlowJson:true,
 };
 
 // GET all users
@@ -44,25 +45,25 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    // Resolve the full approver chain for display:
-    //  #1 = manager, then the additional approverIds in order.
-    const additionalIds = (user.approverIds || '').split(',').map(s => s.trim()).filter(Boolean);
-    const orderedIds = [];
-    if (user.managerId) orderedIds.push(user.managerId);
-    orderedIds.push(...additionalIds);
-    const uniqueIds = [...new Set(orderedIds)];
-
-    let approverList = [];
-    if (uniqueIds.length) {
+    // Resolve the approval flow as STEPS for display (each with people + rule).
+    const steps = getFlowSteps(user);
+    const allIds = [...new Set(steps.flatMap(s => s.approvers))];
+    let byId = {};
+    if (allIds.length) {
       const people = await prisma.user.findMany({
-        where: { id: { in: uniqueIds } },
+        where: { id: { in: allIds } },
         select: { id: true, firstName: true, lastName: true, role: true, employeeNumber: true },
       });
-      const byId = {};
       for (const p of people) byId[p.id] = p;
-      approverList = uniqueIds.map(id => byId[id]).filter(Boolean);
     }
-    user.approvers = approverList;
+    // Step flow with resolved person objects.
+    user.approvalSteps = steps.map((s, i) => ({
+      stepOrder: i + 1,
+      rule: s.rule,
+      approvers: s.approvers.map(id => byId[id]).filter(Boolean),
+    }));
+    // Flat list too (kept for any older UI references).
+    user.approvers = allIds.map(id => byId[id]).filter(Boolean);
     res.json(user);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -71,7 +72,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.patch('/:id', authenticate, requirePermission('manage_users'), async (req, res) => {
   try {
     const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName, newPassword,
-            approverIds, approvalMode, approvalRule } = req.body;
+            approverIds, approvalMode, approvalRule, approvalFlow } = req.body;
 
     // Look up the target so we can apply ADMIN guards
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
@@ -105,6 +106,23 @@ router.patch('/:id', authenticate, requirePermission('manage_users'), async (req
     }
     if (approvalMode !== undefined) updateData.approvalMode = approvalMode === 'ANY_ORDER' ? 'ANY_ORDER' : 'SEQUENTIAL';
     if (approvalRule !== undefined) updateData.approvalRule = approvalRule === 'ANY' ? 'ANY' : 'ALL';
+
+    // New step-based approval flow: [{ approvers:[id...], rule:'ANY'|'ALL' }]
+    if (approvalFlow !== undefined) {
+      let steps = [];
+      if (Array.isArray(approvalFlow)) {
+        steps = approvalFlow
+          .map(s => ({
+            approvers: [...new Set((s.approvers || []).filter(x => x && x !== req.params.id))],
+            rule: s.rule === 'ALL' ? 'ALL' : 'ANY',
+          }))
+          .filter(s => s.approvers.length > 0);
+      }
+      updateData.approvalFlowJson = steps.length ? JSON.stringify(steps) : null;
+      // Flatten all approver ids for team-scope compatibility.
+      const flat = [...new Set(steps.flatMap(s => s.approvers))];
+      updateData.approverIds = flat.length ? flat.join(',') : null;
+    }
     if (newPassword) {
       if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
       updateData.passwordHash = await bcrypt.hash(newPassword, 12);
@@ -125,7 +143,8 @@ router.patch('/:id', authenticate, requirePermission('manage_users'), async (req
       (managerId !== undefined && (managerId||null) !== (target.managerId||null)) ||
       (approverIds !== undefined) ||
       (approvalMode !== undefined) ||
-      (approvalRule !== undefined);
+      (approvalRule !== undefined) ||
+      (approvalFlow !== undefined);
     if (flowChanged) {
       try {
         const org = await prisma.orgSettings.findFirst();

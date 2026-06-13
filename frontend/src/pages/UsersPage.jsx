@@ -40,7 +40,7 @@ export default function UsersPage() {
 
   const emptyForm = { firstName:'', lastName:'', email:'', password:'', role:'EMPLOYEE',
     department:'', managerId:'', costCenter:'', position:'', payrollAccount:'', employeeNumber:'',
-    approverIds:[], approvalMode:'SEQUENTIAL', approvalRule:'ALL' };
+    approverIds:[], approvalMode:'SEQUENTIAL', approvalRule:'ALL', approvalFlow:[] };
   const [form, setForm] = useState(emptyForm);
 
   const { user: currentUser } = useAuth();
@@ -94,6 +94,7 @@ export default function UsersPage() {
       approverIds: (u.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean),
       approvalMode: u.approvalMode||'SEQUENTIAL',
       approvalRule: u.approvalRule||'ALL',
+      approvalFlow: deriveFlow(u),
       newPassword: '' });
     setMsg({text:'',ok:true}); setTab('add');
   };
@@ -110,9 +111,11 @@ export default function UsersPage() {
     setSaving(true); setMsg({text:'',ok:true});
     try {
       if (editUser) {
-        // approverIds = additional approvers only (#2..#5); strip empty slots
-        const additional = (form.approverIds||[]).filter(Boolean);
-        await api.patch(`/users/${editUser.id}`, { ...form, approverIds: additional, managerId: form.managerId||null, hireDate: form.hireDate||null });
+        // Clean the step flow: drop empty approver slots and empty steps.
+        const cleanFlow = (form.approvalFlow||[])
+          .map(s => ({ approvers: (s.approvers||[]).filter(Boolean), rule: s.rule==='ALL'?'ALL':'ANY' }))
+          .filter(s => s.approvers.length > 0);
+        await api.patch(`/users/${editUser.id}`, { ...form, approvalFlow: cleanFlow, managerId: form.managerId||null, hireDate: form.hireDate||null });
         setMsg({text:'Updated!',ok:true});
       } else {
         await api.post('/auth/register', { ...form });
@@ -202,6 +205,27 @@ export default function UsersPage() {
   const managers = users.filter(u=>['MANAGER','FINANCE','ADMIN'].includes(u.role));
   const initials = u => `${u.firstName?.[0]||''}${u.lastName?.[0]||''}`.toUpperCase();
   const fullName = u => `${u.lastName}, ${u.firstName}`.trim();
+
+  // Build the step array for the builder from a user's stored flow, or derive
+  // it from legacy manager + approverIds + rule so existing employees show up.
+  const deriveFlow = (u) => {
+    if (u.approvalFlowJson) {
+      try {
+        const parsed = JSON.parse(u.approvalFlowJson);
+        if (Array.isArray(parsed) && parsed.length) {
+          return parsed.map(s => ({ approvers: (s.approvers||[]).filter(Boolean), rule: s.rule==='ALL'?'ALL':'ANY' }));
+        }
+      } catch (e) { /* fall through */ }
+    }
+    const additional = (u.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const ordered = [];
+    if (u.managerId) ordered.push(u.managerId);
+    ordered.push(...additional);
+    const uniq = [...new Set(ordered)];
+    if (!uniq.length) return [];
+    if ((u.approvalRule||'ALL') === 'ANY') return [{ approvers: uniq, rule: 'ANY' }];
+    return uniq.map(id => ({ approvers: [id], rule: 'ALL' }));
+  };
 
   const filtered = users.filter(u => {
     const q = search.toLowerCase();
@@ -342,70 +366,75 @@ export default function UsersPage() {
 
             <div className="col-span-2 border rounded-lg p-3" style={{borderColor: dark?'#475569':'#e5e7eb', backgroundColor: dark?'#0f172a':'#f9fafb'}}>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-semibold" style={{color: dark?'#e2e8f0':'#374151'}}>Approval flow</label>
-                <span className="text-xs" style={{color: dark?'#94a3b8':'#9ca3af'}}>{1 + (form.approverIds||[]).length}/5 approvers</span>
+                <label className="block text-xs font-semibold" style={{color: dark?'#e2e8f0':'#374151'}}>Approval flow (steps)</label>
+                <span className="text-xs" style={{color: dark?'#94a3b8':'#9ca3af'}}>{(form.approvalFlow||[]).length} step(s)</span>
               </div>
+              <p className="text-xs mb-3" style={{color: dark?'#94a3b8':'#6b7280'}}>
+                Each step is one stage of approval. Within a step, choose whether <b>any one</b> person can approve (OR) or <b>all</b> of them must (AND). Add more people to a step, and add more steps for multi-level approval.
+              </p>
 
-              {/* Approver #1 = the Manager dropdown above (locked) */}
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-bold w-5 text-center" style={{color:settings?.primaryColor||'#1D9E75'}}>1.</span>
-                <div className="flex-1 px-3 py-2 border rounded-lg text-sm font-medium"
-                  style={{backgroundColor: dark?'#1e293b':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
-                  {form.managerId
-                    ? <>{fullName(managers.find(m=>m.id===form.managerId)||{})} <span className="font-normal" style={{color: dark?'#94a3b8':'#6b7280'}}>(from Approver / Manager above)</span></>
-                    : <span className="font-normal" style={{color:'#d97706'}}>Set the "Approver / Manager" above — that person is approver #1</span>}
-                </div>
-              </div>
+              {(form.approvalFlow||[]).map((step, si) => (
+                <div key={si} className="mb-3 rounded-lg border p-2.5" style={{borderColor: dark?'#475569':'#e5e7eb', backgroundColor: dark?'#1e293b':'#ffffff'}}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold" style={{color:settings?.primaryColor||'#1D9E75'}}>Step {si+1}</span>
+                    <div className="flex items-center gap-2">
+                      <select value={step.rule}
+                        onChange={e=>{ const f=[...form.approvalFlow]; f[si]={...f[si],rule:e.target.value}; setF('approvalFlow',f); }}
+                        className="px-2 py-1 border rounded-lg text-xs"
+                        style={{backgroundColor: dark?'#0f172a':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
+                        <option value="ANY">Any one approves (OR)</option>
+                        <option value="ALL">All must approve (AND)</option>
+                      </select>
+                      <button type="button"
+                        onClick={()=>setF('approvalFlow',form.approvalFlow.filter((_,idx)=>idx!==si))}
+                        className="text-xs px-2 py-1 border border-red-200 text-red-600 rounded-lg hover:bg-red-50">Remove step</button>
+                    </div>
+                  </div>
 
-              {/* Additional approvers #2..#5 */}
-              {(form.approverIds||[]).map((id, i) => (
-                <div key={i} className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-bold w-5 text-center" style={{color: dark?'#94a3b8':'#6b7280'}}>{i+2}.</span>
-                  <select value={id} onChange={e=>{
-                      const cur=[...(form.approverIds||[])]; cur[i]=e.target.value; setF('approverIds',cur);
-                    }}
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                    style={{backgroundColor: dark?'#1e293b':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
-                    <option value="">— Select approver —</option>
-                    {managers.filter(m=>m.id!==editUser?.id && m.id!==form.managerId && (!(form.approverIds||[]).includes(m.id) || m.id===id))
-                      .map(m=><option key={m.id} value={m.id}>{fullName(m)} ({m.role})</option>)}
-                  </select>
-                  <button type="button" onClick={()=>setF('approverIds',(form.approverIds||[]).filter((_,idx)=>idx!==i))}
-                    className="text-xs px-2 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50">Remove</button>
+                  {(step.approvers||[]).map((id, ai) => (
+                    <div key={ai} className="flex items-center gap-2 mb-1.5">
+                      <select value={id}
+                        onChange={e=>{ const f=[...form.approvalFlow]; const ap=[...f[si].approvers]; ap[ai]=e.target.value; f[si]={...f[si],approvers:ap}; setF('approvalFlow',f); }}
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                        style={{backgroundColor: dark?'#0f172a':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
+                        <option value="">— Select approver —</option>
+                        {managers.filter(m=>m.id!==editUser?.id && (!(step.approvers||[]).includes(m.id) || m.id===id))
+                          .map(m=><option key={m.id} value={m.id}>{fullName(m)} ({m.role})</option>)}
+                      </select>
+                      <button type="button"
+                        onClick={()=>{ const f=[...form.approvalFlow]; f[si]={...f[si],approvers:f[si].approvers.filter((_,idx)=>idx!==ai)}; setF('approvalFlow',f); }}
+                        className="text-xs px-2 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50">✕</button>
+                    </div>
+                  ))}
+
+                  <button type="button"
+                    onClick={()=>{ const f=[...form.approvalFlow]; f[si]={...f[si],approvers:[...(f[si].approvers||[]),'']}; setF('approvalFlow',f); }}
+                    className="text-xs px-2.5 py-1 border rounded-lg mt-1"
+                    style={{borderColor: dark?'#475569':'#d1d5db', color: dark?'#cbd5e1':'#4b5563'}}>
+                    + Add person to this step
+                  </button>
                 </div>
               ))}
 
-              {(1 + (form.approverIds||[]).length) < 5 && (
-                <button type="button"
-                  onClick={()=>{
-                    if (!form.managerId) { setMsg({text:'Set the Approver / Manager (approver #1) first.',ok:false}); return; }
-                    setF('approverIds',[...(form.approverIds||[]), '']);
-                  }}
-                  className="text-xs px-3 py-1.5 border rounded-lg mb-3"
-                  style={{borderColor: dark?'#475569':'#d1d5db', color: dark?'#cbd5e1':'#4b5563'}}>
-                  + Add approver
-                </button>
+              <button type="button"
+                onClick={()=>setF('approvalFlow',[...(form.approvalFlow||[]), { approvers:[''], rule:'ANY' }])}
+                className="text-xs px-3 py-1.5 rounded-lg mb-3 text-white font-medium"
+                style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>
+                + Add step
+              </button>
+
+              {(form.approvalFlow||[]).length === 0 && (
+                <p className="text-xs mb-3" style={{color:'#d97706'}}>No approval steps — this employee's expenses will be auto-approved on submission.</p>
               )}
 
-              <div className="grid grid-cols-2 gap-3 mt-1">
-                <div>
-                  <label className="block text-xs mb-1" style={{color: dark?'#94a3b8':'#6b7280'}}>Order</label>
-                  <select value={form.approvalMode} onChange={e=>setF('approvalMode',e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={{backgroundColor: dark?'#1e293b':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
-                    <option value="SEQUENTIAL">Sequential (one after another)</option>
-                    <option value="ANY_ORDER">Any order (all at once)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{color: dark?'#94a3b8':'#6b7280'}}>Completion</label>
-                  <select value={form.approvalRule} onChange={e=>setF('approvalRule',e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={{backgroundColor: dark?'#1e293b':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
-                    <option value="ALL">All must approve</option>
-                    <option value="ANY">Any one is enough</option>
-                  </select>
-                </div>
+              <div className="mt-1">
+                <label className="block text-xs mb-1" style={{color: dark?'#94a3b8':'#6b7280'}}>How steps run</label>
+                <select value={form.approvalMode} onChange={e=>setF('approvalMode',e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  style={{backgroundColor: dark?'#1e293b':'#ffffff', borderColor: dark?'#475569':'#e5e7eb', color: dark?'#f1f5f9':'#1f2937'}}>
+                  <option value="SEQUENTIAL">Sequential — step 1, then 2, then 3…</option>
+                  <option value="ANY_ORDER">All at once — every step open simultaneously</option>
+                </select>
               </div>
             </div>
 
