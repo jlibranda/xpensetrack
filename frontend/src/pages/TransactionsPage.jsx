@@ -134,11 +134,11 @@ export default function TransactionsPage() {
           <p className="text-sm text-gray-500">{visibleRows.length} shown</p>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && selected.length > 0 && (
-            <button onClick={deleteSelected} disabled={deleting}
-              className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60"
+          {isAdmin && (
+            <button onClick={deleteSelected} disabled={deleting || selected.length === 0}
+              className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: '#dc2626' }}>
-              {deleting ? 'Deleting…' : `🗑 Delete selected (${selected.length})`}
+              {deleting ? 'Deleting…' : `🗑 Delete selected${selected.length ? ` (${selected.length})` : ''}`}
             </button>
           )}
           <button onClick={exportExcel}
