@@ -8,6 +8,7 @@ const XLSX = require('xlsx');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const prisma = new PrismaClient();
 const { logAudit } = require('../lib/audit');
+const { reapplyApprovalFlowForUser } = require('../lib/approvalFlow');
 
 const userSelect = {
   id:true, employeeNumber:true, firstName:true, lastName:true,
@@ -117,6 +118,24 @@ router.patch('/:id', authenticate, requirePermission('manage_users'), async (req
     if (role && role !== target.role) {
       await logAudit(req.user, 'USER_ROLE_CHANGED', { targetType: 'USER', targetId: req.params.id, details: `${target.firstName||''} ${target.lastName||''}`.trim() + `: ${target.role} → ${role}` });
     }
+
+    // If the approval flow changed AND the org has auto-reapply enabled,
+    // re-route this employee's already-pending expenses to the new flow.
+    const flowChanged =
+      (managerId !== undefined && (managerId||null) !== (target.managerId||null)) ||
+      (approverIds !== undefined) ||
+      (approvalMode !== undefined) ||
+      (approvalRule !== undefined);
+    if (flowChanged) {
+      try {
+        const org = await prisma.orgSettings.findFirst();
+        if (org?.autoReapplyApprovalFlow) {
+          const r = await reapplyApprovalFlowForUser(req.params.id);
+          await logAudit(req.user, 'APPROVAL_FLOW_REAPPLIED', { targetType: 'USER', targetId: req.params.id, details: `Auto re-applied flow: ${r.updated||0} re-routed, ${r.autoApproved||0} auto-approved` });
+        }
+      } catch (e) { console.error('auto-reapply failed:', e.message); }
+    }
+
     res.json(user);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -365,6 +384,18 @@ router.post('/bulk-delete', authenticate, requireRole('ADMIN'), async (req, res)
 
     await logAudit(req.user, 'USER_BULK_DELETED', { targetType: 'USER', details: `Deleted ${deleted} employee(s)${skipped?`, skipped ${skipped}`:''}` });
     res.json({ deleted, skipped });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ADMIN/FINANCE: manually re-apply the employee's current approval flow to their
+// pending expenses (works regardless of the org auto-reapply setting).
+router.post('/:id/reapply-approval-flow', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res) => {
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'Not found' });
+    const r = await reapplyApprovalFlowForUser(req.params.id);
+    await logAudit(req.user, 'APPROVAL_FLOW_REAPPLIED', { targetType: 'USER', targetId: req.params.id, details: `Manual re-apply: ${r.updated||0} re-routed, ${r.autoApproved||0} auto-approved (of ${r.total||0} pending)` });
+    res.json(r);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

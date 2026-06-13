@@ -289,6 +289,7 @@ export default function SettingsPage() {
         categoryGlCodes: glCodes,
         defaultPassword: s.defaultPassword,
         wallpaperStyle: s.wallpaperStyle ?? settings?.wallpaperStyle,
+        autoReapplyApprovalFlow: s.autoReapplyApprovalFlow ?? settings?.autoReapplyApprovalFlow,
       };
       const updated = await api.patch('/settings', payload);
       applyTheme(updated);
@@ -419,6 +420,22 @@ export default function SettingsPage() {
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* Auto re-apply approval flow */}
+            <div className="border border-gray-100 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 pr-3">
+                  <p className="text-sm font-medium text-gray-700">Auto re-apply approval flow</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    When ON, editing an employee's approvers/manager/order/rule automatically re-routes their already-pending expenses to the new flow. When OFF, only newly submitted expenses use the new flow (you can still re-apply manually per employee).
+                  </p>
+                </div>
+                <button onClick={()=>set('autoReapplyApprovalFlow', !s?.autoReapplyApprovalFlow)}
+                  className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${s?.autoReapplyApprovalFlow?'bg-green-600':'bg-gray-300'}`}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${s?.autoReapplyApprovalFlow?'translate-x-7':'translate-x-1'}`} />
+                </button>
+              </div>
             </div>
           </div>
         )}

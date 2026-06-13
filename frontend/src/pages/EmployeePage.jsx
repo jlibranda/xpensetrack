@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import toast from '../lib/toast';
+import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import ReceiptImage from '../components/ReceiptImage';
 
@@ -23,6 +25,20 @@ const ROLE_BADGE = {
 export default function EmployeePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
+  const canManage = ['ADMIN','FINANCE'].includes(currentUser?.role);
+  const [reapplying, setReapplying] = useState(false);
+
+  const reapplyFlow = async () => {
+    if (reapplying) return;
+    if (!window.confirm("Re-apply this employee's current approval flow to their pending expenses? Approvers already removed will be dropped; approvals already given by remaining approvers are kept.")) return;
+    setReapplying(true);
+    try {
+      const r = await api.post(`/users/${id}/reapply-approval-flow`, {});
+      toast.success(`Re-applied: ${r.updated||0} re-routed, ${r.autoApproved||0} auto-approved`);
+    } catch (e) { toast.error(e.error || 'Re-apply failed'); }
+    finally { setReapplying(false); }
+  };
   const [user, setUser] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -144,11 +160,17 @@ export default function EmployeePage() {
             )}
           </div>
 
-          <div className="mt-4 pt-4 border-t border-gray-50 flex gap-2">
+          <div className="mt-4 pt-4 border-t border-gray-50 flex flex-wrap gap-2">
             <button onClick={() => navigate('/users', { state: { editUserId: id } })}
               className="px-4 py-2 bg-brand-400 text-white rounded-lg text-sm font-medium hover:bg-brand-600">
               Edit employee
             </button>
+            {canManage && (
+              <button onClick={reapplyFlow} disabled={reapplying}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+                {reapplying ? 'Re-applying…' : '↻ Re-apply approval flow to pending'}
+              </button>
+            )}
           </div>
         </div>
       )}

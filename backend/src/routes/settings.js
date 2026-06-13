@@ -52,7 +52,7 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
   try {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
-            wallpaperStyle, accessControl } = req.body;
+            wallpaperStyle, autoReapplyApprovalFlow, accessControl } = req.body;
     const s = await getOrCreate();
     const updated = await prisma.orgSettings.update({
       where: { id: s.id },
@@ -62,6 +62,7 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
         approvalLevels: approvalLevels ? Number(approvalLevels) : undefined,
         primaryColor, darkMode,
         wallpaperStyle: wallpaperStyle || undefined,
+        autoReapplyApprovalFlow: typeof autoReapplyApprovalFlow === 'boolean' ? autoReapplyApprovalFlow : undefined,
         categories: Array.isArray(categories) ? categories.join(',') : categories,
         expenseTypes: Array.isArray(expenseTypes) ? expenseTypes.join(',') : expenseTypes,
         categoryGlCodes: categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined,
