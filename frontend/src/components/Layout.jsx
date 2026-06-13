@@ -250,7 +250,7 @@ export default function Layout() {
               )}
             </button>
             {showNotif && (
-              <div className="absolute right-0 top-12 w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border shadow-xl z-50 overflow-hidden bg-white"
+              <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-80 rounded-xl border shadow-xl z-50 overflow-hidden bg-white"
                 style={darkMode ? { backgroundColor:'#1e293b', borderColor:'#334155' } : { borderColor:'#e5e7eb' }}>
                 <div className="flex items-center justify-between px-4 py-3 border-b"
                   style={{ borderColor: darkMode ? '#334155' : '#f3f4f6' }}>

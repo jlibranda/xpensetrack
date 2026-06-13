@@ -31,6 +31,9 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const canExport = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
   const canViewSpending = ['FINANCE','ADMIN'].includes(user?.role);
+  // Detect dark mode (the app toggles a `dark` class on <html>) for chart text colors.
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const axisColor = isDark ? '#cbd5e1' : '#475569';
 
   // Export this month's report — must include the auth token (download opens
   // in a new tab, so it can't use the normal Authorization header).
@@ -95,13 +98,17 @@ export default function DashboardPage() {
         {/* Chart — spending summary is for Finance/Admin only */}
         {canViewSpending && (
         <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">Spending by category</h2>
+          <h2 className="text-sm font-medium mb-3" style={{ color: axisColor }}>Spending by category</h2>
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v) => format(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: '0.5px solid #e5e7eb' }} />
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 40 }}>
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false}
+                  interval={0} angle={-35} textAnchor="end" height={50} />
+                <YAxis tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} width={50} />
+                <Tooltip formatter={(v) => format(v)}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${isDark ? '#334155' : '#e5e7eb'}`, backgroundColor: isDark ? '#1e293b' : '#ffffff', color: isDark ? '#f1f5f9' : '#111827' }}
+                  labelStyle={{ color: isDark ? '#f1f5f9' : '#111827' }}
+                  cursor={{ fill: isDark ? 'rgba(148,163,184,0.1)' : 'rgba(0,0,0,0.04)' }} />
                 <Bar dataKey="value" fill="#1D9E75" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
