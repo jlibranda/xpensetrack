@@ -30,9 +30,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const [showNotif, setShowNotif] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [showTin, setShowTin] = useState(false);
   const notifRef = useRef();
-  const tinRef = useRef();
 
   const canApprove = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
   const isManagerOnly = user?.role === 'MANAGER'; // managers don't get Analytics
@@ -64,7 +62,6 @@ export default function Layout() {
   useEffect(() => {
     const handler = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false);
-      if (tinRef.current && !tinRef.current.contains(e.target)) setShowTin(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -184,6 +181,12 @@ export default function Layout() {
         </nav>
 
         <div className="p-3 border-t border-white/10">
+          {settings?.tin && (
+            <div className="md:hidden mb-3 px-1">
+              <p className="text-xs text-gray-400">Employer TIN</p>
+              <p className="text-sm font-semibold text-white tracking-wide">{settings.tin}</p>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/profile')}
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
@@ -217,24 +220,10 @@ export default function Layout() {
               ☰
             </button>
             {settings?.tin && (
-              <div className="relative shrink-0" ref={tinRef}>
-                <button onClick={() => setShowTin(v => !v)}
-                  className="text-xs md:text-sm font-medium whitespace-nowrap flex items-center gap-1"
-                  style={{ color: darkMode ? '#cbd5e1' : '#475569' }}
-                  title="Tap to view full TIN">
-                  <span style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>TIN:</span>
-                  {/* Short preview on mobile (tap to reveal); full number on larger screens */}
-                  <span className="sm:hidden">{(settings.tin || '').slice(0, 5)}…</span>
-                  <span className="hidden sm:inline">{settings.tin}</span>
-                </button>
-                {showTin && (
-                  <div className="absolute left-0 top-9 rounded-lg border shadow-xl z-50 px-4 py-3 whitespace-nowrap"
-                    style={darkMode ? { backgroundColor:'#1e293b', borderColor:'#334155' } : { backgroundColor:'#ffffff', borderColor:'#e5e7eb' }}>
-                    <p className="text-xs mb-0.5" style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>Employer TIN</p>
-                    <p className="text-base font-bold tracking-wide" style={{ color: darkMode ? '#f1f5f9' : '#111827' }}>{settings.tin}</p>
-                  </div>
-                )}
-              </div>
+              <span className="hidden md:inline text-sm font-medium whitespace-nowrap"
+                style={{ color: darkMode ? '#cbd5e1' : '#475569' }}>
+                <span style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>TIN: </span>{settings.tin}
+              </span>
             )}
           </div>
 
