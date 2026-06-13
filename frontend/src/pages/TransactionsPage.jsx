@@ -47,10 +47,6 @@ export default function TransactionsPage() {
   const [procDate, setProcDate] = useState({});
 
   // delete panel
-  const [showDelete, setShowDelete] = useState(false);
-  const [delFrom, setDelFrom] = useState('');
-  const [delTo, setDelTo] = useState('');
-  const [delStatus, setDelStatus] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [selected, setSelected] = useState([]); // ids checked for deletion
 
@@ -94,20 +90,6 @@ export default function TransactionsPage() {
       await api.post(`/expenses/${id}/unmark-processed`, {});
       await load();
     } catch (e) { setMsg({ text: e.error || 'Failed', ok: false }); }
-  };
-
-  const runDelete = async () => {
-    if (!delFrom && !delTo) { setMsg({ text: 'Set a date range to delete', ok: false }); return; }
-    const label = `${delFrom || '…'} to ${delTo || '…'}${delStatus ? ` (status: ${delStatus})` : ' (all statuses)'}`;
-    if (!window.confirm(`PERMANENTLY delete all transactions with expense date ${label}? This cannot be undone.`)) return;
-    setDeleting(true); setMsg({ text: '', ok: true });
-    try {
-      const r = await api.post('/expenses/bulk-delete', { from: delFrom || undefined, to: delTo || undefined, status: delStatus || undefined });
-      setMsg({ text: `Deleted ${r.deleted} transaction(s)`, ok: true }); toast.success(`Deleted ${r.deleted} transaction(s)`);
-      setShowDelete(false); setDelFrom(''); setDelTo(''); setDelStatus('');
-      await load();
-    } catch (e) { setMsg({ text: e.error || 'Delete failed', ok: false }); }
-    finally { setDeleting(false); }
   };
 
   const deleteSelected = async () => {
@@ -164,47 +146,11 @@ export default function TransactionsPage() {
             style={{ backgroundColor: '#16a34a' }}>
             ⬇ Export Excel
           </button>
-          {isAdmin && (
-            <button onClick={() => setShowDelete(!showDelete)}
-              className="px-3 py-2 rounded-lg text-sm font-semibold text-white"
-              style={{ backgroundColor: '#dc2626' }}>
-              🗑 Delete by date range
-            </button>
-          )}
         </div>
       </div>
 
       {msg.text && (
         <div className={`mb-4 px-3 py-2 rounded-lg text-sm border ${msg.ok ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{msg.text}</div>
-      )}
-
-      {isAdmin && showDelete && (
-        <div className="mb-4 rounded-xl border p-4" style={{ borderColor: 'rgba(220,38,38,0.4)', backgroundColor: 'rgba(220,38,38,0.08)' }}>
-          <h3 className="text-sm font-bold text-red-600 mb-2">Permanently delete transactions</h3>
-          <p className="text-xs text-gray-500 mb-3">Deletes every transaction whose expense date falls in the range. This cannot be undone.</p>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">From</label>
-              <input type="date" value={delFrom} onChange={e => setDelFrom(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">To</label>
-              <input type="date" value={delTo} onChange={e => setDelTo(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Status (optional)</label>
-              <select value={delStatus} onChange={e => setDelStatus(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
-                <option value="">All statuses</option>
-                {['DRAFT','PENDING','APPROVED','RETURNED','REJECTED','PROCESSED','CANCELLED'].map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <button onClick={runDelete} disabled={deleting}
-              className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60"
-              style={{ backgroundColor: '#dc2626' }}>
-              {deleting ? 'Deleting…' : 'Delete permanently'}
-            </button>
-          </div>
-        </div>
       )}
 
       {/* Filters */}
