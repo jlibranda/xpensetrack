@@ -31,6 +31,14 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const canExport = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
   const canViewSpending = ['FINANCE','ADMIN'].includes(user?.role);
+
+  // Scope tabs for "This month's overview":
+  //  Employee/Manager: Self, Team   |   Finance: Self, Team, All   |   Admin: none (sees all)
+  const role = user?.role;
+  const scopeTabs = role === 'ADMIN' ? []
+    : role === 'FINANCE' ? [['self','Self'],['team','Team'],['all','All']]
+    : [['self','Self'],['team','Team']];
+  const [scope, setScope] = useState(role === 'ADMIN' ? 'all' : 'self');
   // Detect dark mode (the app toggles a `dark` class on <html>) for chart text colors.
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
   const axisColor = isDark ? '#cbd5e1' : '#475569';
@@ -55,12 +63,12 @@ export default function DashboardPage() {
 
     Promise.all([
       api.get('/expenses?limit=8'),
-      api.get(`/reports/summary?from=${from}&to=${to}`).catch(() => null),
+      api.get(`/reports/summary?from=${from}&to=${to}&scope=${scope}`).catch(() => null),
     ]).then(([exp, sum]) => {
       setExpenses(exp.expenses || []);
       setSummary(sum);
     }).finally(() => setLoading(false));
-  }, []);
+  }, [scope]);
 
   const chartData = summary?.byCategory
     ? Object.entries(summary.byCategory).map(([name, value]) => ({ name: name.charAt(0) + name.slice(1).toLowerCase(), value }))
@@ -71,20 +79,33 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-medium text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">This month's overview</p>
         </div>
+        {scopeTabs.length > 0 && (
+          <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+            {scopeTabs.map(([val, label]) => (
+              <button key={val} onClick={() => setScope(val)}
+                className="px-4 py-1.5 font-medium transition-colors"
+                style={scope === val
+                  ? { backgroundColor: 'var(--brand-color,#1D9E75)', color: '#fff' }
+                  : { backgroundColor: 'transparent', color: isDark ? '#cbd5e1' : '#475569' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
           { label: 'Total this month', value: format(summary?.totalPhp || 0), sub: `${summary?.count || 0} expenses` },
-          { label: 'Pending approval', value: format(pending), sub: `${expenses.filter(e=>e.status==='PENDING').length} claims`, accent: 'text-amber-600' },
-          { label: 'Approved', value: format(approved), sub: `${expenses.filter(e=>e.status==='APPROVED').length} claims`, accent: 'text-green-600' },
-          { label: 'Processed', value: format(expenses.filter(e=>e.status==='PROCESSED').reduce((s,e)=>s+e.amountPhp,0)), sub: `${expenses.filter(e=>e.status==='PROCESSED').length} claims` },
+          { label: 'Pending approval', value: `${summary?.pendingCount || 0}`, sub: 'claims', accent: 'text-amber-600' },
+          { label: 'Approved / Processed', value: format(summary?.totalPhp || 0), sub: `${summary?.count || 0} claims`, accent: 'text-green-600' },
+          { label: 'Rejected', value: `${summary?.rejectedCount || 0}`, sub: 'claims', accent: 'text-red-500' },
         ].map((m, i) => (
           <div key={i} className="bg-gray-50 rounded-xl p-4">
             <p className="text-xs text-gray-600 font-medium uppercase tracking-wide mb-1">{m.label}</p>
