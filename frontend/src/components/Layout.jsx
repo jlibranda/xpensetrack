@@ -13,7 +13,7 @@ const NAV = [
   { to:'/expenses/new', label:'Add Expense', icon:'+' },
 ];
 const MANAGER_NAV = [
-  { to:'/approvals', label:'Approvals', icon:'✓' },
+  { to:'/approvals', label:'My Approvals', icon:'✓' },
   { to:'/reports', label:'Reports', icon:'📊' },
   { to:'/analytics', label:'Analytics', icon:'📈' },
 ];

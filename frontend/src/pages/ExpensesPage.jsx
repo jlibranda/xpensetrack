@@ -124,7 +124,12 @@ export default function ExpensesPage() {
                       {new Date(e.expenseDate).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})} · {e.category.toLowerCase()}
                     </p>
                     {['REJECTED','RETURNED','CANCELLED'].includes(e.status) && getApprovalNote(e) && (
-                      <p className="text-xs text-red-500 mt-0.5 truncate">↩ {getApprovalNote(e)}</p>
+                      <p className="text-xs mt-1 px-2 py-1 rounded-md font-medium"
+                        style={e.status==='RETURNED'
+                          ? { backgroundColor:'rgba(217,119,6,0.12)', color:'#b45309', border:'1px solid rgba(217,119,6,0.35)' }
+                          : { backgroundColor:'rgba(220,38,38,0.10)', color:'#b91c1c', border:'1px solid rgba(220,38,38,0.30)' }}>
+                        {e.status==='RETURNED' ? '↩ Returned: ' : e.status==='REJECTED' ? '✕ Rejected: ' : '🚫 '}{getApprovalNote(e)}
+                      </p>
                     )}
                   </div>
                   <div className="text-right shrink-0">
@@ -169,26 +174,28 @@ export default function ExpensesPage() {
                 <div className="space-y-2">
                   {[...selected.approvals].sort((a,b)=>(a.stepOrder||a.level||0)-(b.stepOrder||b.level||0)).map((a, i) => {
                     const isApproved = a.status === 'APPROVED';
-                    const isRejected = a.status === 'REJECTED';
-                    const accent = isApproved ? '#16a34a' : isRejected ? '#dc2626' : '#dc2626';
+                    const isReturned = a.status === 'REJECTED' && (a.notes||'').startsWith('[RETURNED]');
+                    const isRejected = a.status === 'REJECTED' && !isReturned;
+                    const accent = isApproved ? '#16a34a' : isReturned ? '#d97706' : isRejected ? '#dc2626' : '#dc2626';
+                    const cleanNote = (a.notes||'').startsWith('[auto]') ? '' : (a.notes||'').replace(/^\[RETURNED\]\s*/, '');
                     return (
                       <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg border"
                         style={{
-                          backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)',
-                          borderColor: isApproved ? 'rgba(22,163,74,0.35)' : 'rgba(220,38,38,0.35)',
+                          backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : isReturned ? 'rgba(217,119,6,0.12)' : 'rgba(220,38,38,0.12)',
+                          borderColor: isApproved ? 'rgba(22,163,74,0.35)' : isReturned ? 'rgba(217,119,6,0.35)' : 'rgba(220,38,38,0.35)',
                         }}>
                         <div className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold mt-0.5 shrink-0 text-white"
                           style={{ backgroundColor: accent }}>
-                          {isApproved ? '✓' : isRejected ? '✗' : '⌛'}
+                          {isApproved ? '✓' : isReturned ? '↩' : isRejected ? '✗' : '⌛'}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold">
                             <span className="trail-name">{personName(a.approver)}</span>
                           </p>
                           <p className="text-xs font-semibold" style={{ color: accent }}>
-                            {isApproved ? 'Approved' : isRejected ? 'Rejected / Returned' : 'Pending approval'}
+                            {isApproved ? 'Approved' : isReturned ? 'Returned' : isRejected ? 'Rejected' : 'Pending approval'}
                           </p>
-                          {a.notes && <p className="text-xs text-gray-400 italic mt-0.5">{a.notes}</p>}
+                          {cleanNote && <p className="text-sm mt-1 font-medium" style={{ color: accent }}>"{cleanNote}"</p>}
                         </div>
                       </div>
                     );
@@ -208,7 +215,7 @@ export default function ExpensesPage() {
 
             {/* Actions */}
             <div className="flex flex-col gap-2 border-t border-gray-50 pt-3">
-              {['DRAFT', 'REJECTED', 'RETURNED', 'CANCELLED'].includes(selected.status) && (
+              {['DRAFT', 'RETURNED', 'CANCELLED'].includes(selected.status) && (
                 <button onClick={() => navigate(`/expenses/${selected.id}/edit`)}
                   className="w-full py-2 bg-brand-400 text-white rounded-lg text-xs font-medium hover:bg-brand-600">
                   ✏️ Edit & resubmit
@@ -220,7 +227,7 @@ export default function ExpensesPage() {
                   🚫 Cancel expense
                 </button>
               )}
-              {['DRAFT', 'REJECTED', 'RETURNED', 'CANCELLED'].includes(selected.status) && (
+              {['DRAFT', 'RETURNED', 'CANCELLED'].includes(selected.status) && (
                 <button onClick={() => handleDelete(selected.id)}
                   className="w-full py-2 border border-red-100 text-red-600 rounded-lg text-xs hover:bg-red-50">
                   🗑️ Delete permanently

@@ -185,14 +185,16 @@ router.post('/:id/reject', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMI
     if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
     if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
 
-    // Any single rejection sends the whole expense back to the employee.
+    // Rejection is FINAL. Mark this approval rejected, clear all OTHER pending
+    // approvals so the expense leaves every approver's queue, and reject the expense.
     await prisma.$transaction([
       prisma.approval.update({ where: { id: approval.id }, data: { status: 'REJECTED', notes } }),
+      prisma.approval.updateMany({ where: { expenseId: approval.expenseId, status: 'PENDING', id: { not: approval.id } }, data: { status: 'REJECTED', notes: '[auto] expense rejected' } }),
       prisma.expense.update({ where: { id: approval.expenseId }, data: { status: 'REJECTED' } }),
     ]);
     await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'REJECTED').catch(() => {});
     await createNotification(approval.expense.submittedById, 'EXPENSE_REJECTED',
-      'Expense rejected', `"${approval.expense.title}" was rejected${notes ? `: ${notes}` : ''}. You can edit and resubmit it.`, '/expenses');
+      'Expense rejected', `"${approval.expense.title}" was rejected${notes ? `: ${notes}` : ''}. This decision is final.`, '/expenses');
     await logAudit(req.user, 'EXPENSE_REJECTED', { targetType: 'EXPENSE', targetId: approval.expenseId, details: `Rejected "${approval.expense.title}"${notes?`: ${notes}`:''}` });
     res.json({ message: 'Rejected' });
   } catch (err) { res.status(500).json({ error: err.message }); }

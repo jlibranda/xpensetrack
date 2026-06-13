@@ -200,7 +200,7 @@ router.patch('/:id', authenticate, async (req, res) => {
     const e = await prisma.expense.findUnique({where:{id:req.params.id}});
     if(!e) return res.status(404).json({error:'Not found'});
     if(e.submittedById!==req.user.id && req.user.role==='EMPLOYEE') return res.status(403).json({error:'Forbidden'});
-    if(!['DRAFT','REJECTED','RETURNED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
+    if(!['DRAFT','RETURNED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
     const { title, orNumber, merchant, description, amount, currency, category, expenseType, receiptId, costCenter, expenseDate } = req.body;
     const amountPhp = amount ? await toPhp(Number(amount), currency||e.currency) : undefined;
     const updated = await prisma.expense.update({
@@ -228,7 +228,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     });
     if(!expense) return res.status(404).json({error:'Not found'});
     if(expense.submittedById!==req.user.id) return res.status(403).json({error:'Forbidden'});
-    if(!['DRAFT','REJECTED','RETURNED','CANCELLED'].includes(expense.status)) return res.status(400).json({error:'Already submitted'});
+    if(!['DRAFT','RETURNED','CANCELLED'].includes(expense.status)) return res.status(400).json({error:'Already submitted'});
 
     const submitter = expense.submittedBy;
 
@@ -316,7 +316,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     const e = await prisma.expense.findUnique({where:{id:req.params.id}});
     if(!e) return res.status(404).json({error:'Not found'});
     if(e.submittedById!==req.user.id && req.user.role!=='ADMIN') return res.status(403).json({error:'Forbidden'});
-    if(!['DRAFT','CANCELLED','REJECTED','RETURNED'].includes(e.status)) return res.status(400).json({error:'Cannot delete'});
+    if(!['DRAFT','CANCELLED','RETURNED'].includes(e.status)) return res.status(400).json({error:'Cannot delete'});
     await prisma.approval.deleteMany({where:{expenseId:e.id}});
     await prisma.expense.delete({where:{id:e.id}});
     res.json({message:'Deleted'});

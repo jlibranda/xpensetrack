@@ -69,7 +69,7 @@ export default function ApprovalsPage() {
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-xl font-medium text-gray-900">Approvals</h1>
+        <h1 className="text-xl font-medium text-gray-900">My Approvals</h1>
         <p className="text-sm text-gray-500 mt-0.5">
           <span className="inline-flex items-center justify-center min-w-6 h-6 px-2 rounded-full bg-red-500 text-white text-sm font-bold mr-1">{approvals.length}</span>
           pending · {history.length} actioned
