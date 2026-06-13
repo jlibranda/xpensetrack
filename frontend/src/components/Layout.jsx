@@ -217,14 +217,12 @@ export default function Layout() {
               ☰
             </button>
             {settings?.tin && (
-              <div className="relative" ref={tinRef}>
+              <div className="relative min-w-0" ref={tinRef}>
                 <button onClick={() => setShowTin(v => !v)}
-                  className="text-xs md:text-sm font-medium whitespace-nowrap flex items-center gap-1"
-                  style={{ color: darkMode ? '#cbd5e1' : '#475569' }}>
-                  <span style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>TIN:</span>
-                  {/* Full number on larger screens; tap to reveal on small screens */}
-                  <span className="hidden sm:inline">{settings.tin}</span>
-                  <span className="sm:hidden underline decoration-dotted">view</span>
+                  className="text-xs md:text-sm font-medium whitespace-nowrap truncate max-w-[40vw] sm:max-w-none block"
+                  style={{ color: darkMode ? '#cbd5e1' : '#475569' }}
+                  title="Tap to view full TIN">
+                  <span style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>TIN: </span>{settings.tin}
                 </button>
                 {showTin && (
                   <div className="absolute left-0 top-9 rounded-lg border shadow-xl z-50 px-4 py-3 whitespace-nowrap"
