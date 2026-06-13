@@ -52,6 +52,7 @@ export default function TransactionsPage() {
   const [delTo, setDelTo] = useState('');
   const [delStatus, setDelStatus] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [selected, setSelected] = useState([]); // ids checked for deletion
 
   const load = async () => {
     setLoading(true);
@@ -109,6 +110,26 @@ export default function TransactionsPage() {
     finally { setDeleting(false); }
   };
 
+  const deleteSelected = async () => {
+    if (selected.length === 0) return;
+    if (!window.confirm(`PERMANENTLY delete ${selected.length} selected transaction(s)? This cannot be undone.`)) return;
+    setDeleting(true); setMsg({ text: '', ok: true });
+    try {
+      const r = await api.post('/expenses/delete-selected', { ids: selected });
+      setMsg({ text: `Deleted ${r.deleted} transaction(s)`, ok: true }); toast.success(`Deleted ${r.deleted} transaction(s)`);
+      setSelected([]);
+      await load();
+    } catch (e) { setMsg({ text: e.error || 'Delete failed', ok: false }); }
+    finally { setDeleting(false); }
+  };
+
+  const toggleSelect = (id) => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+  const allVisibleSelected = visibleRows.length > 0 && visibleRows.every(e => selected.includes(e.id));
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) setSelected(s => s.filter(id => !visibleRows.some(e => e.id === id)));
+    else setSelected(s => [...new Set([...s, ...visibleRows.map(e => e.id)])]);
+  };
+
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
   const exportExcel = () => {
@@ -131,6 +152,13 @@ export default function TransactionsPage() {
           <p className="text-sm text-gray-500">{visibleRows.length} shown</p>
         </div>
         <div className="flex items-center gap-2">
+          {isAdmin && selected.length > 0 && (
+            <button onClick={deleteSelected} disabled={deleting}
+              className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60"
+              style={{ backgroundColor: '#dc2626' }}>
+              {deleting ? 'Deleting…' : `🗑 Delete selected (${selected.length})`}
+            </button>
+          )}
           <button onClick={exportExcel}
             className="px-3 py-2 rounded-lg text-sm font-semibold text-white"
             style={{ backgroundColor: '#16a34a' }}>
@@ -217,6 +245,12 @@ export default function TransactionsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
+                {isAdmin && (
+                  <th className="px-3 py-3 w-8">
+                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll}
+                      title="Select all" className="w-4 h-4 cursor-pointer" />
+                  </th>
+                )}
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Employee</th>
                 <th className="px-4 py-3">Description</th>
@@ -231,6 +265,12 @@ export default function TransactionsPage() {
             <tbody>
               {visibleRows.map(e => (
                 <tr key={e.id} className="border-b border-gray-50">
+                  {isAdmin && (
+                    <td className="px-3 py-3">
+                      <input type="checkbox" checked={selected.includes(e.id)} onChange={() => toggleSelect(e.id)}
+                        className="w-4 h-4 cursor-pointer" />
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-gray-600">{fmtDate(e.expenseDate)}</td>
                   <td className="px-4 py-3 font-medium text-gray-800">{personName(e.submittedBy)}</td>
                   <td className="px-4 py-3 text-gray-600">{e.merchant || e.title}</td>

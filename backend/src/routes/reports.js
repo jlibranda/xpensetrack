@@ -166,7 +166,7 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
       { 'Metric': 'Total Approved (PHP)', 'Value': Number(totalPhp.toFixed(2)) },
       { 'Metric': 'Pending', 'Value': expenses.filter(e=>e.status==='PENDING').length },
       { 'Metric': 'Approved', 'Value': expenses.filter(e=>e.status==='APPROVED').length },
-      { 'Metric': 'Processed', 'Value': expenses.filter(e=>e.status==='PROCESSED').length },
+      { 'Metric': 'Processed', 'Value': expenses.filter(e=>e.processedAt).length },
       { 'Metric': 'Rejected', 'Value': expenses.filter(e=>e.status==='REJECTED').length },
       { 'Metric': 'Report Generated', 'Value': new Date().toLocaleString() },
     ];

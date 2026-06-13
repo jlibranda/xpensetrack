@@ -325,6 +325,20 @@ router.delete('/:id', authenticate, async (req, res) => {
 
 // ADMIN: permanently delete ALL expenses within a date range (by expenseDate).
 // Optional status filter; if omitted, deletes every status in range.
+// ADMIN: delete specific transactions by id (from checkbox selection).
+router.post('/delete-selected', authenticate, requireRole('ADMIN'), async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No transactions selected.' });
+    }
+    await prisma.approval.deleteMany({ where: { expenseId: { in: ids } } });
+    const result = await prisma.expense.deleteMany({ where: { id: { in: ids } } });
+    await logAudit(req.user, 'TRANSACTION_BULK_DELETED', { targetType: 'TRANSACTION', details: `Deleted ${result.count} selected transaction(s)` });
+    res.json({ deleted: result.count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/bulk-delete', authenticate, requireRole('ADMIN'), async (req, res) => {
   try {
     const { from, to, status } = req.body;

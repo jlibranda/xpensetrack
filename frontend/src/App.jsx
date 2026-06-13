@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import { NotificationProvider } from './context/NotificationContext';
-import { OrgProvider } from './context/OrgContext';
+import { OrgProvider, useOrg } from './context/OrgContext';
 import Layout from './components/Layout';
 import Toaster from './components/Toaster';
 import LoginPage from './pages/LoginPage';
@@ -22,8 +22,9 @@ import AuditLogPage from './pages/AuditLogPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 
-function PrivateRoute({ children, roles }) {
+function PrivateRoute({ children, roles, permission }) {
   const { user, loading } = useAuth();
+  const { settings } = useOrg();
   if (loading) return (
     <div className="flex items-center justify-center h-screen">
       <div className="text-center">
@@ -34,7 +35,16 @@ function PrivateRoute({ children, roles }) {
     </div>
   );
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
+  // ADMIN always allowed. If a permission is given, check the org access-control
+  // list for it (falling back to the roles prop); otherwise check roles directly.
+  if (user.role !== 'ADMIN') {
+    if (permission) {
+      const allowed = settings?.accessControl?.[permission] || roles || ['ADMIN'];
+      if (!allowed.includes(user.role)) return <Navigate to="/" replace />;
+    } else if (roles && !roles.includes(user.role)) {
+      return <Navigate to="/" replace />;
+    }
+  }
   return children;
 }
 
@@ -66,7 +76,7 @@ function AppRoutes() {
         <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
         <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />
         <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
-        <Route path="audit" element={<PrivateRoute roles={['ADMIN']}><AuditLogPage /></PrivateRoute>} />
+        <Route path="audit" element={<PrivateRoute permission="view_audit_log" roles={['ADMIN']}><AuditLogPage /></PrivateRoute>} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
