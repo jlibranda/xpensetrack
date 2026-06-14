@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
+import { useAuth } from '../context/AuthContext';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -23,6 +24,9 @@ export default function ReportsPage() {
   const [userId, setUserId] = useState('');
   const { format } = useCurrency();
   const { settings } = useOrg();
+  const { user } = useAuth();
+  const canExport = user?.role === 'ADMIN' ||
+    (settings?.accessControl?.export_reports || ['MANAGER','FINANCE','ADMIN']).includes(user?.role);
   const glCodes = settings?.categoryGlCodes || {};
   const glNorm = Object.fromEntries(Object.entries(glCodes).map(([k, v]) => [String(k).trim().toUpperCase(), v]));
   const glFor = (cat) => glNorm[String(cat || '').trim().toUpperCase()] || '—';
@@ -104,10 +108,12 @@ export default function ReportsPage() {
           <button onClick={load} className="px-4 py-2 bg-brand-400 text-white rounded-lg text-sm font-medium hover:bg-brand-600">
             Generate
           </button>
-          <button onClick={exportExcel}
-            className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-1.5">
-            ⬇ Export Excel
-          </button>
+          {canExport && (
+            <button onClick={exportExcel}
+              className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-1.5">
+              ⬇ Export Excel
+            </button>
+          )}
         </div>
       </div>
 

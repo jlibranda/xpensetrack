@@ -1,7 +1,7 @@
 // src/routes/reports.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requirePermission } = require('../middleware/auth');
 const XLSX = require('xlsx');
 const prisma = new PrismaClient();
 
@@ -152,7 +152,7 @@ router.get('/dashboard', authenticate, async (req, res) => {
 });
 
 // GET /api/reports/aging — outstanding items bucketed by age (Finance/Admin/Manager)
-router.get('/aging', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
+router.get('/aging', authenticate, requirePermission('view_reports', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
     const scope = await teamScopeFilter(req.user);
     const baseWhere = scope ? { submittedById: { in: scope } } : {};
@@ -206,7 +206,7 @@ router.get('/aging', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), a
 });
 
 // GET /api/reports/export — Excel download
-router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
+router.get('/export', authenticate, requirePermission('export_reports', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
     const { from, to, userId, status, processed } = req.query;
     const where = {};

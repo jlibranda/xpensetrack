@@ -13,9 +13,9 @@ const NAV = [
   { to:'/expenses/new', label:'Add Expense', icon:'+' },
 ];
 const MANAGER_NAV = [
-  { to:'/approvals', label:'My Approvals', icon:'✓' },
-  { to:'/reports', label:'Reports', icon:'📊' },
-  { to:'/analytics', label:'Analytics', icon:'📈' },
+  { to:'/approvals', label:'My Approvals', icon:'✓', perm:'approve_expenses' },
+  { to:'/reports', label:'Reports', icon:'📊', perm:'view_reports' },
+  { to:'/analytics', label:'Analytics', icon:'📈', perm:'view_analytics' },
 ];
 const ADMIN_NAV = [
   { to:'/users', label:'Users', icon:'👥' },
@@ -34,6 +34,17 @@ export default function Layout() {
 
   const canApprove = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
   const isManagerOnly = user?.role === 'MANAGER'; // managers don't get Analytics
+  // Permission check driven by Access Control settings (ADMIN always allowed).
+  const DEFAULT_NAV_PERMS = {
+    approve_expenses: ['MANAGER','FINANCE','ADMIN'],
+    view_reports: ['MANAGER','FINANCE','ADMIN'],
+    view_analytics: ['FINANCE','ADMIN'],
+  };
+  const can = (perm) => {
+    if (user?.role === 'ADMIN') return true;
+    const allowed = settings?.accessControl?.[perm] || DEFAULT_NAV_PERMS[perm] || ['ADMIN'];
+    return allowed.includes(user?.role);
+  };
   const isAdmin = ['ADMIN','FINANCE'].includes(user?.role);
   const brandColor = settings?.primaryColor || '#1D9E75';
   // Dark mode is a PERSONAL, per-device preference. If the user hasn't chosen,
@@ -146,7 +157,7 @@ export default function Layout() {
                 </NavLink>
               )}
               <p className="pt-3 pb-1 px-3 text-xs text-gray-400 uppercase tracking-wider font-medium">Management</p>
-              {MANAGER_NAV.filter(item => !(isManagerOnly && item.to === '/analytics')).map(item => (
+              {MANAGER_NAV.filter(item => can(item.perm)).map(item => (
                 <NavLink key={item.to} to={item.to} className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
                   <span className="w-4 text-center text-sm">{item.icon}</span>

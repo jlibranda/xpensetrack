@@ -9,6 +9,7 @@ const DEFAULT_PERMS = {
   approve_expenses: ['MANAGER', 'FINANCE', 'ADMIN'],
   view_team_expenses: ['MANAGER', 'FINANCE', 'ADMIN'],
   view_reports: ['MANAGER', 'FINANCE', 'ADMIN'],
+  view_analytics: ['FINANCE', 'ADMIN'],
   export_reports: ['MANAGER', 'FINANCE', 'ADMIN'],
   second_approval: ['FINANCE', 'ADMIN'],
   mark_reimbursed: ['FINANCE', 'ADMIN'],

@@ -70,9 +70,9 @@ function AppRoutes() {
         <Route path="expenses/new" element={<AddExpensePage />} />
         <Route path="expenses/:id/edit" element={<AddExpensePage />} />
         <Route path="approvals" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
-        <Route path="reports" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
+        <Route path="reports" element={<PrivateRoute permission="view_reports" roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
         <Route path="transactions" element={<PrivateRoute roles={['FINANCE','ADMIN']}><TransactionsPage /></PrivateRoute>} />
-        <Route path="analytics" element={<PrivateRoute roles={['FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
+        <Route path="analytics" element={<PrivateRoute permission="view_analytics" roles={['FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
         <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
         <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />
         <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
