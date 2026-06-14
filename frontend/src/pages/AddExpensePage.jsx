@@ -53,6 +53,19 @@ export default function AddExpensePage() {
 
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
 
+  const removeReceipt = () => {
+    setReceiptId(''); setReceiptPreview(''); setReceiptIsPdf(false);
+    if (fileRef.current) fileRef.current.value = '';
+    // Clear the details that were auto-filled from the receipt.
+    setForm(f => ({
+      ...f,
+      orNumber: '', merchant: '', amount: '', currency: 'PHP',
+      category: '', title: '',
+      expenseDate: new Date().toISOString().split('T')[0],
+    }));
+    setError('');
+  };
+
   const handleScan = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -171,7 +184,7 @@ export default function AddExpensePage() {
               {!scanning && !receiptIsPdf && <p className="text-[11px] text-gray-400 mt-0.5">Tap the image to zoom in</p>}
               <div className="flex gap-3 mt-2">
                 <button onClick={() => fileRef.current.click()} className="text-xs text-gray-400 hover:text-gray-600">Replace</button>
-                <button onClick={() => { setReceiptId(''); setReceiptPreview(''); setReceiptIsPdf(false); fileRef.current.value=''; }} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                <button onClick={removeReceipt} className="text-xs text-red-400 hover:text-red-600">Remove</button>
               </div>
             </div>
           </div>
@@ -187,6 +200,7 @@ export default function AddExpensePage() {
 
       {/* Form */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
+        <fieldset disabled={scanning} className={scanning ? 'opacity-50 pointer-events-none' : ''}>
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -253,6 +267,7 @@ export default function AddExpensePage() {
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 resize-none" />
           </div>
         </div>
+        </fieldset>
       </div>
 
       {error && (
@@ -263,12 +278,12 @@ export default function AddExpensePage() {
       {success && <div className="mb-3 px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-sm text-green-700">{success}</div>}
 
       <div className="flex gap-3">
-        <button onClick={() => handleSubmit('submit')} disabled={submitting}
+        <button onClick={() => handleSubmit("submit")} disabled={submitting || scanning}
           className="flex-1 py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
           style={{backgroundColor:brandColor}}>
           {submitting ? 'Submitting...' : '📤 Submit for approval'}
         </button>
-        <button onClick={() => handleSubmit('draft')} disabled={submitting}
+        <button onClick={() => handleSubmit("draft")} disabled={submitting || scanning}
           className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60">
           💾 Draft
         </button>
@@ -313,7 +328,7 @@ export default function AddExpensePage() {
               <button onClick={() => setZoomScale(s => Math.max(1, +(s - 0.5).toFixed(1)))}
                 className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-lg leading-none">−</button>
               <span className="w-12 text-center">{Math.round(zoomScale * 100)}%</span>
-              <button onClick={() => setZoomScale(s => Math.min(5, +(s + 0.5).toFixed(1)))}
+              <button onClick={() => setZoomScale(s => Math.min(3, +(s + 0.5).toFixed(1)))}
                 className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-lg leading-none">+</button>
               <button onClick={() => setZoomOpen(false)}
                 className="ml-2 w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-lg leading-none">✕</button>
@@ -321,8 +336,8 @@ export default function AddExpensePage() {
           </div>
           <div className="flex-1 overflow-auto p-4" onClick={e => e.stopPropagation()}>
             <img src={receiptPreview} alt="Receipt full"
-              onClick={() => setZoomScale(s => (s >= 3 ? 1 : +(s + 1).toFixed(1)))}
-              style={{ transform: `scale(${zoomScale})`, transformOrigin: 'top center', transition: 'transform 0.15s', cursor: zoomScale >= 3 ? 'zoom-out' : 'zoom-in' }}
+              onClick={() => setZoomScale(s => (s >= 2.5 ? 1 : +(s + 0.5).toFixed(1)))}
+              style={{ transform: `scale(${zoomScale})`, transformOrigin: 'top center', transition: 'transform 0.15s', cursor: zoomScale >= 2.5 ? "zoom-out" : "zoom-in" }}
               className="mx-auto max-w-full rounded-lg" />
           </div>
           <p className="text-center text-white/60 text-xs pb-3">Tap image to zoom · tap outside to close</p>
