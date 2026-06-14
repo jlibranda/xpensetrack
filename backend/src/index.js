@@ -61,6 +61,24 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`XpenseTrack API v4 running on port ${PORT}`);
   // Begin periodic USD->PHP rate refresh (auto mode only).
   try { require('./lib/fxrate').startFxRefresh(); } catch (e) { console.error('fxrate start failed:', e.message); }
+  // One-time admin recovery: if BOOTSTRAP_ADMIN_EMAIL is set, ensure those
+  // users are ADMIN + active. Use to restore an admin, then remove the env var.
+  (async () => {
+    const raw = process.env.BOOTSTRAP_ADMIN_EMAIL;
+    if (!raw) return;
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+      const emails = raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      for (const email of emails) {
+        const r = await prisma.user.updateMany({
+          where: { email: { equals: email, mode: 'insensitive' } },
+          data: { role: 'ADMIN', isActive: true },
+        });
+        console.log(`→ Bootstrap admin: ${email} (${r.count} user(s) set to ADMIN)`);
+      }
+    } catch (e) { console.error('Bootstrap admin failed:', e.message); }
+  })();
 });
 
 server.on('error', (err) => {

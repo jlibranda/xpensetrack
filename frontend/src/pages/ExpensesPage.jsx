@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import ReceiptImage from '../components/ReceiptImage';
 import { useCurrency } from '../context/CurrencyContext';
+import { useAuth } from '../context/AuthContext';
 
 const STATUS_BADGE = {
   DRAFT: 'bg-blue-50 text-blue-700',
@@ -29,6 +30,12 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const { user } = useAuth();
+  // Self / Team scope toggle (Finance & Admin also get All).
+  const scopeTabs = ['FINANCE','ADMIN'].includes(user?.role)
+    ? [['self','Self'],['team','Team'],['all','All']]
+    : [['self','Self'],['team','Team']];
+  const [scope, setScope] = useState('self');
   const [selected, setSelected] = useState(null);
   const [cancelModal, setCancelModal] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -41,13 +48,15 @@ export default function ExpensesPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const params = filter ? `?status=${filter}` : '';
-      const data = await api.get(`/expenses${params}`);
+      const qs = new URLSearchParams();
+      if (filter) qs.set('status', filter);
+      qs.set('scope', scope);
+      const data = await api.get(`/expenses?${qs.toString()}`);
       setExpenses(data.expenses || []);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { load(); }, [filter, scope]);
 
   const handleCancel = async () => {
     try {
@@ -91,6 +100,17 @@ export default function ExpensesPage() {
         <div className="mb-4 px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-sm text-green-700">{actionMsg}</div>
       )}
 
+      {/* Scope toggle */}
+      <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+        {scopeTabs.map(([val, label]) => (
+          <button key={val} onClick={() => { setScope(val); setSelected(null); }}
+            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${scope === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+            style={scope === val ? { backgroundColor: 'var(--brand-color,#1D9E75)' } : {}}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Filter tabs */}
       <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">
         {[['','All'],['DRAFT','Drafts'],['PENDING','Pending'],['APPROVED','Approved'],['RETURNED','Returned'],['REJECTED','Rejected'],['PROCESSED','Processed'],['CANCELLED','Cancelled']].map(([val, label]) => (
@@ -120,6 +140,9 @@ export default function ExpensesPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{e.merchant || e.title}</p>
                       {e.orNumber && <p className="text-xs text-gray-400">OR: {e.orNumber}</p>}
+                    {scope !== 'self' && e.submittedBy && (
+                      <p className="text-xs text-gray-500 mt-0.5">👤 {personName(e.submittedBy)}</p>
+                    )}
                     <p className="text-xs text-gray-400 mt-0.5">
                       {new Date(e.expenseDate).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})} · {e.category.toLowerCase()}
                     </p>
