@@ -175,9 +175,47 @@ function parseReceiptText(raw) {
   }
 
   // --- OR / receipt number ---
+  // Look for labels in priority order; the captured value MUST contain a digit
+  // (so we don't grab plain words like "NORTH"). Accept same-line or next-line.
   let orNumber = null;
-  const orM = text.match(/(?:OR\s*(?:No|Number|#)?|Invoice\s*(?:No|#)?|Receipt\s*(?:No|#)?|TXN|Ref(?:erence)?\s*(?:No|#)?)\s*[:.#]?\s*([A-Za-z0-9\-]{3,})/i);
-  if (orM) orNumber = orM[1];
+  const orLabels = [
+    /official\s*receipt\s*(?:no\.?|number|#)?/i,
+    /\bO\.?R\.?\s*(?:no\.?|number|#)?/i,
+    /\bS\.?I\.?\s*(?:no\.?|number|#)?/i,       // Sales Invoice
+    /invoice\s*(?:no\.?|number|#)?/i,
+    /receipt\s*(?:no\.?|number|#)?/i,
+    /(?:transaction|trans|txn)\s*(?:no\.?|id|#)?/i,
+    /(?:reference|ref)\s*(?:no\.?|#)?/i,
+  ];
+  // A plausible receipt-number token: has a digit, 3–24 chars, letters/digits/dashes/slashes.
+  const looksLikeRef = (v) => {
+    if (!v) return false;
+    const t = v.trim().replace(/[)\].,;]+$/, '');
+    if (!/\d/.test(t)) return false;                 // must contain a digit
+    if (t.length < 3 || t.length > 24) return false;
+    if (/^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$/.test(t)) return false; // looks like a date
+    if (/^\+?\d[\d\s-]{8,}$/.test(t) && /^\+?\d/.test(t) && t.replace(/\D/g,'').length >= 10) return false; // phone
+    if (/^\d{3}-\d{3}-\d{3}/.test(t)) return false;  // looks like a TIN
+    return /^[A-Za-z0-9][A-Za-z0-9\-/]*$/.test(t);
+  };
+
+  outer:
+  for (const label of orLabels) {
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      const m = l.match(label);
+      if (!m) continue;
+      // Text right after the label on the same line.
+      const after = l.slice(m.index + m[0].length).replace(/^[:.#\s-]+/, '');
+      const tokenSame = after.split(/\s{2,}|\s(?=[A-Za-z]{4,}\b)/)[0]?.trim();
+      if (looksLikeRef(tokenSame)) { orNumber = tokenSame.replace(/[)\].,;]+$/, ''); break outer; }
+      // Otherwise, a token on the next line.
+      if (i + 1 < lines.length) {
+        const tokenNext = lines[i + 1].trim().split(/\s+/)[0];
+        if (looksLikeRef(tokenNext)) { orNumber = tokenNext.replace(/[)\].,;]+$/, ''); break outer; }
+      }
+    }
+  }
 
   // --- Merchant: first meaningful non-numeric line near the top ---
   let merchant = '';
