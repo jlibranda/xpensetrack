@@ -39,6 +39,14 @@ export default function LoginPage() {
       .catch(() => {});
   }, []);
 
+  // Keep the global `html.dark` class in sync with the toggle. The app's CSS
+  // applies dark styling to inputs and the page body via `html.dark` !important
+  // rules, so without this the toggle would only restyle part of the page.
+  useEffect(() => {
+    if (dark) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [dark]);
+
   const toggleDark = () => {
     const next = !dark;
     setDark(next);
