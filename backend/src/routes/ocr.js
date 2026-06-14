@@ -9,6 +9,29 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 const CATEGORIES = ['MEALS', 'TRAVEL', 'ACCOMMODATION', 'SUPPLIES', 'COMMUNICATIONS', 'OTHER'];
 
+// Enhance a phone photo for better OCR: downscale (under the 1MB free-tier limit),
+// convert to grayscale, and boost contrast. Returns a JPEG buffer, or null on failure.
+async function preprocessImage(buffer) {
+  try {
+    const Jimp = require('jimp');
+    const image = await Jimp.read(buffer);
+    const maxDim = 2000;
+    if (image.bitmap.width > maxDim || image.bitmap.height > maxDim) image.scaleToFit(maxDim, maxDim);
+    image.greyscale().normalize().contrast(0.2);
+    let quality = 80;
+    let out = await image.clone().quality(quality).getBufferAsync(Jimp.MIME_JPEG);
+    // Keep under ~1MB for the OCR.space free tier.
+    while (out.length > 1000000 && quality > 30) {
+      quality -= 15;
+      out = await image.clone().quality(quality).getBufferAsync(Jimp.MIME_JPEG);
+    }
+    return out;
+  } catch (e) {
+    console.error('Image preprocess failed:', e.message);
+    return null;
+  }
+}
+
 // Parse raw OCR text (from OCR.space) into structured receipt fields.
 function parseReceiptText(raw) {
   const text = raw.replace(/\r/g, '');
@@ -136,7 +159,14 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
         const body = new URLSearchParams();
         const mime = req.file.mimetype || 'image/jpeg';
         const isPdf = mime.includes('pdf') || (req.file.originalname || '').toLowerCase().endsWith('.pdf');
-        body.append('base64Image', `data:${mime};base64,${req.file.buffer.toString('base64')}`);
+        // Enhance photos for better recognition (PDFs are sent as-is).
+        let sendBuffer = req.file.buffer;
+        let sendMime = mime;
+        if (!isPdf) {
+          const enhanced = await preprocessImage(req.file.buffer);
+          if (enhanced) { sendBuffer = enhanced; sendMime = 'image/jpeg'; }
+        }
+        body.append('base64Image', `data:${sendMime};base64,${sendBuffer.toString('base64')}`);
         body.append('filetype', isPdf ? 'PDF' : 'Auto');
         body.append('OCREngine', '2');
         body.append('scale', 'true');
