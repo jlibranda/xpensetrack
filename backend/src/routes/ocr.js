@@ -7,17 +7,48 @@ const { authenticate } = require('../middleware/auth');
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-// Determine an expense category from the merchant name.
-//  1) Search this company's PAST expenses for the same merchant and reuse the
-//     category that's been used most often (self-improving, reflects real usage).
-//  2) Fall back to a built-in dictionary of common merchants / keywords.
-async function categoryFromMerchant(merchant) {
+// Pick the best matching system category for a set of keyword hints.
+// Only ever returns a category that exists in the org's configured list.
+function matchSystemCategory(systemCats, hints) {
+  if (!systemCats || !systemCats.length) return null;
+  const lc = systemCats.map(c => ({ raw: c, low: c.toLowerCase() }));
+  for (const h of hints) {
+    const found = lc.find(c => c.low.includes(h));
+    if (found) return found.raw;
+  }
+  return null;
+}
+
+// Map a keyword group (from merchant/text) to hint words we search for inside
+// the real system category names.
+function categoryHints(text) {
+  const s = (text || '').toLowerCase();
+  if (/jollibee|mcdo|mcdonald|kfc|chowking|greenwich|mang inasal|max'?s|starbucks|coffee|cafe|restaurant|grill|kitchen|bakery|pizza|burger|food|eatery|carinderia|dining|meal/.test(s)) return ['meal', 'entertainment', 'food', 'dining'];
+  if (/hotel|inn|resort|lodging|airbnb|motel|pension|hostel/.test(s)) return ['hotel', 'accommodation', 'lodging', 'travel - hotel'];
+  if (/airline|flight|cebu pacific|philippine airlines|airasia|air ticket|boarding/.test(s)) return ['air ticket', 'air', 'flight', 'travel'];
+  if (/grab|angkas|joyride|taxi|uber|lalamove|fare|toll|petron|shell|caltex|seaoil|gas|fuel|bus|jeepney|parking|transport/.test(s)) return ['travel - others', 'travel', 'parking', 'transport'];
+  if (/globe|smart|pldt|converge|sky|dito|tnt|telecom|load|prepaid|internet|data|sim|mobile/.test(s)) return ['mobile', 'communication', 'phone', 'internet'];
+  if (/office|supplies|stationery|national book|paper|ink|printing|print/.test(s)) return ['office', 'printing', 'supplies'];
+  if (/hardware|ace hardware|wilcon|tools|equipment/.test(s)) return ['hardware', 'equipment', 'tools'];
+  if (/cleaning|janitorial|sanitation/.test(s)) return ['cleaning'];
+  if (/training|seminar|course|education/.test(s)) return ['education', 'training'];
+  if (/furniture|fixture|chair|desk|table/.test(s)) return ['furniture', 'fixtures'];
+  if (/rent|lease/.test(s)) return ['rent'];
+  return [];
+}
+
+// Determine a SYSTEM category from the merchant name.
+//  1) Search past expenses for the same merchant and reuse the category used most
+//     often (these are already valid system categories).
+//  2) Fall back to keyword hints mapped onto the org's configured categories.
+// Never invents a category outside the system list.
+async function categoryFromMerchant(merchant, systemCats) {
   const m = (merchant || '').trim();
   if (m.length < 3) return null;
 
-  // --- 1) Learn from past expenses ---
+  // --- 1) Learn from past expenses (already valid system categories) ---
   try {
-    const keyword = m.split(/\s+/)[0]; // first significant word, e.g. "JOLLIBEE"
+    const keyword = m.split(/\s+/)[0];
     if (keyword.length >= 3) {
       const rows = await prisma.expense.findMany({
         where: { merchant: { contains: keyword, mode: 'insensitive' } },
@@ -29,22 +60,14 @@ async function categoryFromMerchant(merchant) {
         const counts = {};
         for (const r of rows) counts[r.category] = (counts[r.category] || 0) + 1;
         const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-        if (best) return best[0];
+        // Only reuse it if it's still a valid system category.
+        if (best && (!systemCats || systemCats.includes(best[0]))) return best[0];
       }
     }
   } catch (e) { console.error('merchant history lookup failed:', e.message); }
 
-  // --- 2) Built-in dictionary fallback ---
-  const s = m.toLowerCase();
-  const dict = [
-    [/jollibee|mcdo|mcdonald|kfc|chowking|greenwich|mang inasal|max'?s|starbucks|coffee|cafe|restaurant|grill|kitchen|bakery|pizza|burger|food|eatery|carinderia|grocery|supermarket|sm market|puregold|robinsons supermarket/, 'MEALS'],
-    [/grab|angkas|joyride|taxi|uber|lalamove|fare|toll|petron|shell|caltex|seaoil|gas|fuel|cebu pacific|philippine airlines|pal|airasia|airline|flight|bus|jeepney|ticket|parking/, 'TRAVEL'],
-    [/hotel|inn|resort|lodging|airbnb|motel|pension|hostel/, 'ACCOMMODATION'],
-    [/office|supplies|stationery|national book|paper|ink|hardware|ace hardware|wilcon/, 'SUPPLIES'],
-    [/globe|smart|pldt|converge|sky|dito|tnt|telecom|load|prepaid|internet|data|sim/, 'COMMUNICATIONS'],
-  ];
-  for (const [re, cat] of dict) if (re.test(s)) return cat;
-  return null;
+  // --- 2) Keyword hints mapped to real system categories ---
+  return matchSystemCategory(systemCats, categoryHints(m));
 }
 
 const CATEGORIES = ['MEALS', 'TRAVEL', 'ACCOMMODATION', 'SUPPLIES', 'COMMUNICATIONS', 'OTHER'];
@@ -133,14 +156,8 @@ function parseReceiptText(raw) {
     if (l.length >= 3 && !/^\d/.test(l) && !/receipt|invoice|official/i.test(l)) { merchant = l; break; }
   }
 
-  // --- Category guess from keywords ---
-  let category = 'OTHER';
-  if (/restaurant|cafe|coffee|food|grill|kitchen|jollibee|mcdo|grocery|mart|store/i.test(lower)) category = 'MEALS';
-  else if (/hotel|inn|resort|lodging/i.test(lower)) category = 'ACCOMMODATION';
-  else if (/grab|taxi|fare|toll|gas|fuel|petron|shell|airline|ticket/i.test(lower)) category = 'TRAVEL';
-  else if (/office|supplies|stationery|paper|ink/i.test(lower)) category = 'SUPPLIES';
-  else if (/load|prepaid|telecom|globe|smart|internet|data/i.test(lower)) category = 'COMMUNICATIONS';
-
+  // Category is resolved later against the system's configured list (via the
+  // merchant lookup), so we don't emit an invented category here.
   return {
     merchant: merchant || '',
     title: merchant || '',
@@ -148,7 +165,7 @@ function parseReceiptText(raw) {
     amount: amount,
     currency,
     date,
-    category: CATEGORIES.includes(category) ? category : 'OTHER',
+    category: '',
   };
 }
 
@@ -158,6 +175,13 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
     const receipt = await prisma.receipt.create({
       data: { data: req.file.buffer, mimeType: req.file.mimetype || 'image/jpeg', filename: req.file.originalname || 'receipt' },
     });
+
+    // The org's configured category list — OCR must only ever pick from these.
+    let systemCats = [];
+    try {
+      const org = await prisma.orgSettings.findFirst();
+      systemCats = (org?.categories || '').split(',').map(s => s.trim()).filter(Boolean);
+    } catch (e) { console.error('could not load categories:', e.message); }
 
     let parsed = null;
     let aiUsed = false;
@@ -176,7 +200,7 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
             max_tokens: 500,
             messages: [{ role: 'user', content: [
               { type: 'image', source: { type: 'base64', media_type: req.file.mimetype, data: base64 } },
-              { type: 'text', text: 'You are a receipt parser. Return ONLY a JSON object: {"merchant":"","title":"","orNumber":"","amount":123.45,"currency":"PHP","date":"YYYY-MM-DD","category":"MEALS"}. category is one of MEALS, TRAVEL, ACCOMMODATION, SUPPLIES, COMMUNICATIONS, OTHER. Use null for missing date/orNumber. No markdown, JSON only.' },
+              { type: 'text', text: `You are a receipt parser. Return ONLY a JSON object: {"merchant":"","title":"","orNumber":"","amount":123.45,"currency":"PHP","date":"YYYY-MM-DD","category":""}. The category MUST be exactly one of these (copy verbatim): ${systemCats.join(' | ')}. If unsure, leave category as "". Use null for missing date/orNumber. No markdown, JSON only.` },
             ] }],
           }),
         });
@@ -229,18 +253,22 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
 
     if (!anthropicKey && !ocrSpaceKey) console.log('No OCR key set - skipping parse');
 
-    // Refine the category by looking up the merchant (past expenses + dictionary).
-    // This overrides a missing/OTHER guess with what the company actually uses.
-    if (parsed && parsed.merchant) {
-      try {
-        const cat = await categoryFromMerchant(parsed.merchant);
-        if (cat && (!parsed.category || parsed.category === 'OTHER')) parsed.category = cat;
-      } catch (e) { console.error('category lookup error:', e.message); }
+    // Resolve the category against the SYSTEM list only — never invent one.
+    if (parsed) {
+      // Drop any category that isn't a valid system category.
+      if (parsed.category && systemCats.length && !systemCats.includes(parsed.category)) parsed.category = '';
+      // If still unset, derive it from the merchant (history + keyword hints).
+      if (!parsed.category && parsed.merchant) {
+        try {
+          const cat = await categoryFromMerchant(parsed.merchant, systemCats);
+          if (cat) parsed.category = cat;
+        } catch (e) { console.error('category lookup error:', e.message); }
+      }
     }
 
     res.json({
       receiptId: receipt.id,
-      parsed: parsed || { merchant:'', title:'', orNumber:'', amount:null, currency:'PHP', date:null, category:'OTHER' },
+      parsed: parsed || { merchant:'', title:'', orNumber:'', amount:null, currency:'PHP', date:null, category:'' },
       aiUsed,
     });
   } catch (err) {

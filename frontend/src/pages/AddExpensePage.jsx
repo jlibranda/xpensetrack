@@ -74,7 +74,8 @@ export default function AddExpensePage() {
           orNumber: res.parsed.orNumber || f.orNumber,
           amount: res.parsed.amount?.toString() || f.amount,
           currency: res.parsed.currency || f.currency,
-          category: res.parsed.category || f.category,
+          // Reflect the scanned category on the dropdown only if it's a valid system category.
+          category: (res.parsed.category && categories.includes(res.parsed.category)) ? res.parsed.category : f.category,
           expenseDate: res.parsed.date || f.expenseDate,
         }));
         if (res.aiUsed) setError('✨ AI filled in details from your receipt (merchant, OR number, amount, date). Please review and adjust if needed.');
