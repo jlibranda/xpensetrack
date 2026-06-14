@@ -48,6 +48,13 @@ export default function Layout() {
   // The Management section shows if the user can see any item in it (incl. an
   // Employee granted approvals access), or Transactions (Finance/Admin).
   const showManagement = MANAGER_NAV.some(item => can(item.perm)) || ['FINANCE','ADMIN'].includes(user?.role);
+  // Settings/Users are reachable by their base roles OR any role granted the
+  // relevant permission via Access Control.
+  const SETTINGS_PERMS = ['manage_settings','edit_categories','manage_expense_types','manage_password','manage_access_control','upload_branding','change_branding'];
+  const canSettings = ['ADMIN','FINANCE'].includes(user?.role) || SETTINGS_PERMS.some(p => can(p));
+  const canUsers = ['ADMIN','FINANCE','MANAGER'].includes(user?.role) || can('manage_users');
+  const canAudit = user?.role === 'ADMIN' || (settings?.accessControl?.view_audit_log || ['ADMIN']).includes(user?.role);
+  const showAdmin = canSettings || canUsers || canAudit;
   const isAdmin = ['ADMIN','FINANCE'].includes(user?.role);
   const brandColor = settings?.primaryColor || '#1D9E75';
   // Dark mode is a PERSONAL, per-device preference. If the user hasn't chosen,
@@ -173,17 +180,24 @@ export default function Layout() {
             </>
           )}
 
-          {isAdmin && (
+          {showAdmin && (
             <>
               <p className="pt-3 pb-1 px-3 text-xs text-gray-400 uppercase tracking-wider font-medium">Admin</p>
-              {ADMIN_NAV.map(item => (
-                <NavLink key={item.to} to={item.to} className={navLinkClass}
+              {canUsers && (
+                <NavLink to="/users" className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
-                  <span className="w-4 text-center text-sm">{item.icon}</span>
-                  <span>{item.label}</span>
+                  <span className="w-4 text-center text-sm">👥</span>
+                  <span>Users</span>
                 </NavLink>
-              ))}
-              {(user?.role === 'ADMIN' || (settings?.accessControl?.view_audit_log || ['ADMIN']).includes(user?.role)) && (
+              )}
+              {canSettings && (
+                <NavLink to="/settings" className={navLinkClass}
+                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  <span className="w-4 text-center text-sm">⚙</span>
+                  <span>Settings</span>
+                </NavLink>
+              )}
+              {canAudit && (
                 <NavLink to="/audit" className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
                   <span className="w-4 text-center text-sm">📋</span>

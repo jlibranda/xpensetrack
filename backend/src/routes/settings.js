@@ -48,7 +48,7 @@ router.get('/', authenticate, async (req, res) => {
   catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res) => {
+router.patch('/', authenticate, async (req, res) => {
   try {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,

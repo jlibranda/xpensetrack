@@ -22,7 +22,7 @@ import AuditLogPage from './pages/AuditLogPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 
-function PrivateRoute({ children, roles, permission }) {
+function PrivateRoute({ children, roles, permission, anyPermission }) {
   const { user, loading } = useAuth();
   const { settings } = useOrg();
   if (loading) return (
@@ -35,15 +35,25 @@ function PrivateRoute({ children, roles, permission }) {
     </div>
   );
   if (!user) return <Navigate to="/login" replace />;
-  // ADMIN always allowed. If a permission is given, check the org access-control
-  // list for it (falling back to the roles prop); otherwise check roles directly.
+  // ADMIN always allowed. A single `permission` checks the access-control list
+  // for that key (falling back to `roles`). `anyPermission` grants access if the
+  // role is in the base `roles` floor OR has been granted ANY of those perms.
   if (user.role !== 'ADMIN') {
+    let blocked = false;
     if (permission) {
       const allowed = settings?.accessControl?.[permission] || roles || ['ADMIN'];
-      if (!allowed.includes(user.role)) return <Navigate to="/" replace />;
+      if (!allowed.includes(user.role)) blocked = true;
+    } else if (anyPermission) {
+      const inFloor = roles ? roles.includes(user.role) : false;
+      const granted = anyPermission.some(p => {
+        const a = settings?.accessControl?.[p];
+        return Array.isArray(a) && a.includes(user.role);
+      });
+      if (!inFloor && !granted) blocked = true;
     } else if (roles && !roles.includes(user.role)) {
-      return <Navigate to="/" replace />;
+      blocked = true;
     }
+    if (blocked) return <Navigate to="/" replace />;
   }
   return children;
 }
@@ -73,9 +83,9 @@ function AppRoutes() {
         <Route path="reports" element={<PrivateRoute permission="view_reports" roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
         <Route path="transactions" element={<PrivateRoute roles={['FINANCE','ADMIN']}><TransactionsPage /></PrivateRoute>} />
         <Route path="analytics" element={<PrivateRoute permission="view_analytics" roles={['FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
-        <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><UsersPage /></PrivateRoute>} />
-        <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']}><EmployeePage /></PrivateRoute>} />
-        <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']}><SettingsPage /></PrivateRoute>} />
+        <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']} anyPermission={['manage_users']}><UsersPage /></PrivateRoute>} />
+        <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']} anyPermission={['manage_users']}><EmployeePage /></PrivateRoute>} />
+        <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']} anyPermission={['manage_settings','edit_categories','manage_expense_types','manage_password','manage_access_control','upload_branding','change_branding']}><SettingsPage /></PrivateRoute>} />
         <Route path="audit" element={<PrivateRoute permission="view_audit_log" roles={['ADMIN']}><AuditLogPage /></PrivateRoute>} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
