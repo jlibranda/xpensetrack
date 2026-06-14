@@ -222,17 +222,31 @@ function parseReceiptText(raw) {
     return best;
   };
 
+  // Pass 1: label AND number on the SAME line (strongest, e.g. "SI # 202076").
   for (const label of orLabels) {
     if (orNumber) break;
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
       if (orExcludeLabel.test(l)) continue;
       if (!label.test(l)) continue;
-      orNumber = extractRef(l);                              // same line
-      if (!orNumber && i + 1 < lines.length && !orExcludeLabel.test(lines[i + 1])) {
-        orNumber = extractRef(lines[i + 1]);                 // next line
-      }
+      const ref = extractRef(l);
+      if (ref) { orNumber = ref; break; }
+    }
+  }
+  // Pass 2: label on its own line, number on the next line (e.g. "Official Receipt No.\nOR-55421").
+  if (!orNumber) {
+    for (const label of orLabels) {
       if (orNumber) break;
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i];
+        if (orExcludeLabel.test(l)) continue;
+        if (!label.test(l)) continue;
+        if (extractRef(l)) continue; // same-line number already handled in pass 1
+        if (i + 1 < lines.length && !orExcludeLabel.test(lines[i + 1])) {
+          const ref = extractRef(lines[i + 1]);
+          if (ref) { orNumber = ref; break; }
+        }
+      }
     }
   }
 
@@ -276,15 +290,20 @@ function parseReceiptText(raw) {
     }).join(' ').trim();
   };
 
+  // The store name lives at the TOP of the receipt. Payment-method words like
+  // "GRAB", "GCASH", "MAYA", "CASH" appear in the body, so we only brand-detect
+  // within the header to avoid mistaking the payment method for the merchant.
+  const headerLines = lines.slice(0, 7);
+  const headerText = headerLines.join(' ');
   let merchant = '';
-  // Brand detection first (most reliable).
-  for (const [re, name] of brandHints) { if (re.test(text)) { merchant = name; break; } }
+  for (const [re, name] of brandHints) { if (re.test(headerText)) { merchant = name; break; } }
 
-  // Otherwise, first meaningful line, with redundant words removed.
+  // Otherwise, the first meaningful header line (store name), with redundant words removed.
   if (!merchant) {
-    const noise = /receipt|invoice|official|hope you enjoyed|thank you|welcome|your ride|total|amount|booking|order summary|customer copy/i;
-    for (const l of lines.slice(0, 8)) {
-      if (l.length >= 3 && !/^\d/.test(l) && !noise.test(l)) {
+    const noise = /receipt|invoice|official|hope you enjoyed|thank you|welcome|your ride|total|amount|booking|order summary|customer copy|owned\s*&?\s*op|vat\s*reg|^tin\b|machine\s*sn|^min\b/i;
+    const payment = /^(grab|gcash|maya|paymaya|cash|visa|master|amex|card|debit|credit|change|amount|gross|net)\b/i;
+    for (const l of headerLines) {
+      if (l.length >= 3 && !/^\d/.test(l) && !noise.test(l) && !payment.test(l)) {
         merchant = dedupeWords(l);
         if (merchant.length >= 3) break;
       }
