@@ -23,7 +23,7 @@ function matchSystemCategory(systemCats, hints) {
 // the real system category names.
 function categoryHints(text) {
   const s = (text || '').toLowerCase();
-  if (/jollibee|mcdo|mcdonald|kfc|chowking|greenwich|mang inasal|max'?s|starbucks|coffee|cafe|restaurant|grill|kitchen|bakery|pizza|burger|food|eatery|carinderia|dining|meal/.test(s)) return ['meal', 'entertainment', 'food', 'dining'];
+  if (/jollibee|mcdo|mcdonald|kfc|chowking|greenwich|mang inasal|max'?s|starbucks|coffee|cafe|tea|milk\s*tea|milktea|coco|juice|beverage|drink|smoothie|shake|snack|dessert|donut|bakery|bread|cake|restaurant|grill|kitchen|pizza|burger|chicken|bbq|barbecue|lechon|seafood|food|eatery|carinderia|canteen|deli|bistro|dining|meal|resto|fastfood|fast food/.test(s)) return ['meal', 'entertainment', 'food', 'dining'];
   if (/hotel|inn|resort|lodging|airbnb|motel|pension|hostel/.test(s)) return ['hotel', 'accommodation', 'lodging', 'travel - hotel'];
   if (/airline|flight|cebu pacific|philippine airlines|airasia|air ticket|boarding/.test(s)) return ['air ticket', 'air', 'flight', 'travel'];
   if (/grab|angkas|joyride|taxi|uber|lalamove|fare|toll|petron|shell|caltex|seaoil|gas|fuel|bus|jeepney|parking|transport/.test(s)) return ['travel - others', 'travel', 'parking', 'transport'];
@@ -67,7 +67,12 @@ async function categoryFromMerchant(merchant, systemCats) {
   } catch (e) { console.error('merchant history lookup failed:', e.message); }
 
   // --- 2) Keyword hints mapped to real system categories ---
-  return matchSystemCategory(systemCats, categoryHints(m));
+  const hinted = matchSystemCategory(systemCats, categoryHints(m));
+  if (hinted) return hinted;
+
+  // --- 3) Neutral fallback: a "miscellaneous"/"other"/"general" system category
+  //        (so an undetected merchant doesn't default to whatever is first in the list).
+  return matchSystemCategory(systemCats, ['miscellaneous', 'other', 'general office', 'general']);
 }
 
 const CATEGORIES = ['MEALS', 'TRAVEL', 'ACCOMMODATION', 'SUPPLIES', 'COMMUNICATIONS', 'OTHER'];
