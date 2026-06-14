@@ -65,19 +65,26 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   // users are ADMIN + active. Use to restore an admin, then remove the env var.
   (async () => {
     const raw = process.env.BOOTSTRAP_ADMIN_EMAIL;
-    if (!raw) return;
+    if (!raw) { console.log('Bootstrap admin: BOOTSTRAP_ADMIN_EMAIL not set, skipping'); return; }
     try {
       const { PrismaClient } = require('@prisma/client');
       const prisma = new PrismaClient();
-      const emails = raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      const emails = raw.split(',').map(e => e.trim()).filter(Boolean);
       for (const email of emails) {
-        const r = await prisma.user.updateMany({
-          where: { email: { equals: email, mode: 'insensitive' } },
-          data: { role: 'ADMIN', isActive: true },
-        });
-        console.log(`→ Bootstrap admin: ${email} (${r.count} user(s) set to ADMIN)`);
+        // Match case-insensitively by scanning (avoids relying on provider-specific
+        // filter modes). Update by id, which always works.
+        const all = await prisma.user.findMany({ select: { id: true, email: true, role: true } });
+        const matches = all.filter(u => (u.email || '').toLowerCase() === email.toLowerCase());
+        if (matches.length === 0) {
+          console.log(`Bootstrap admin: NO user found for "${email}". Existing emails: ${all.map(u => u.email).join(', ')}`);
+          continue;
+        }
+        for (const m of matches) {
+          await prisma.user.update({ where: { id: m.id }, data: { role: 'ADMIN', isActive: true } });
+          console.log(`Bootstrap admin: set ${m.email} (was ${m.role}) -> ADMIN`);
+        }
       }
-    } catch (e) { console.error('Bootstrap admin failed:', e.message); }
+    } catch (e) { console.error('Bootstrap admin FAILED:', e.message, e.stack); }
   })();
 });
 
