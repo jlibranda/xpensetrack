@@ -183,8 +183,8 @@ export default function AddExpensePage() {
               {scanning && <p className="text-xs text-gray-400 mt-0.5 animate-pulse">Extracting details...</p>}
               {!scanning && !receiptIsPdf && <p className="text-[11px] text-gray-400 mt-0.5">Tap the image to zoom in</p>}
               <div className="flex gap-3 mt-2">
-                <button onClick={() => fileRef.current.click()} className="text-xs text-gray-400 hover:text-gray-600">Replace</button>
-                <button onClick={removeReceipt} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                <button onClick={() => fileRef.current.click()} disabled={scanning} className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Replace</button>
+                <button onClick={removeReceipt} disabled={scanning} className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed">Remove</button>
               </div>
             </div>
           </div>
@@ -331,14 +331,16 @@ export default function AddExpensePage() {
               <button onClick={() => setZoomScale(s => Math.min(3, +(s + 0.5).toFixed(1)))}
                 className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-lg leading-none">+</button>
               <button onClick={() => setZoomOpen(false)}
-                className="ml-2 w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-lg leading-none">✕</button>
+                className="ml-3 px-4 h-10 rounded-lg bg-white text-gray-900 font-semibold text-sm flex items-center gap-1.5 shadow-lg hover:bg-gray-100">
+                ✕ Close
+              </button>
             </div>
           </div>
-          <div className="flex-1 overflow-auto p-4" onClick={e => e.stopPropagation()}>
+          <div className="flex-1 overflow-auto p-4 flex items-start justify-center" onClick={e => e.stopPropagation()}>
             <img src={receiptPreview} alt="Receipt full"
               onClick={() => setZoomScale(s => (s >= 2.5 ? 1 : +(s + 0.5).toFixed(1)))}
               style={{ transform: `scale(${zoomScale})`, transformOrigin: 'top center', transition: 'transform 0.15s', cursor: zoomScale >= 2.5 ? "zoom-out" : "zoom-in" }}
-              className="mx-auto max-w-full rounded-lg" />
+              className="max-w-full max-h-[70vh] object-contain rounded-lg" />
           </div>
           <p className="text-center text-white/60 text-xs pb-3">Tap image to zoom · tap outside to close</p>
         </div>
