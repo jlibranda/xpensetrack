@@ -14,7 +14,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   const { user: acUser } = useAuth();
   const acIsAdmin = acUser?.role === 'ADMIN';
   // A non-admin managing access control must never see/grant these.
-  const SENSITIVE_PERMS = ['reset_passwords', 'upload_branding', 'change_branding', 'impersonate_user'];
+  const SENSITIVE_PERMS = ['manage_password', 'reset_passwords', 'upload_branding', 'change_branding', 'impersonate_user'];
   const DEFAULT_PERMS = {
     view_approvals: ['MANAGER','FINANCE','ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],

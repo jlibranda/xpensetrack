@@ -69,7 +69,7 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
       if (req.user.role === 'ADMIN') {
         accessControlJson = JSON.stringify(accessControl);
       } else {
-        const SENSITIVE = ['reset_passwords', 'upload_branding', 'change_branding', 'impersonate_user'];
+        const SENSITIVE = ['manage_password', 'reset_passwords', 'upload_branding', 'change_branding', 'impersonate_user'];
         let existing = {};
         try { existing = s.accessControlJson ? JSON.parse(s.accessControlJson) : {}; } catch (e) { existing = {}; }
         const merged = { ...accessControl };

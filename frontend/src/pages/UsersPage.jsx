@@ -348,16 +348,6 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Role legend */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        {[['EMPLOYEE','Submit expenses'],['MANAGER','1st approver'],['FINANCE','2nd approver + reports'],['ADMIN','Full access']].map(([r,d]) => (
-          <div key={r} className="bg-gray-50 rounded-xl p-3">
-            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_BADGE[r]}`}>{r}</span>
-            <p className="text-xs text-gray-400 mt-1">{d}</p>
-          </div>
-        ))}
-      </div>
-
       {/* Add/Edit form */}
       {tab === 'add' && (
         <div className="bg-white rounded-xl border border-gray-100 p-5 mb-5">

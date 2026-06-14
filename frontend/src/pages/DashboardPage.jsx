@@ -62,7 +62,7 @@ export default function DashboardPage() {
     const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
     Promise.all([
-      api.get('/expenses?limit=8'),
+      api.get(`/expenses?limit=8&scope=${scope}`),
       api.get(`/reports/summary?from=${from}&to=${to}&scope=${scope}`).catch(() => null),
     ]).then(([exp, sum]) => {
       setExpenses(exp.expenses || []);

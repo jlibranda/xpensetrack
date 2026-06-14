@@ -25,13 +25,44 @@ const expenseInclude = {
   receipt: { select: { id:true, mimeType:true, filename:true } },
 };
 
+// People who report to / are approved by this user (excludes the user themselves) —
+// mirrors the reports summary "team" definition so the dashboard stays consistent.
+async function teamMemberIds(userId) {
+  const everyone = await prisma.user.findMany({ select: { id: true, managerId: true, approverIds: true, approvalFlowJson: true } });
+  const ids = new Set();
+  for (const u of everyone) {
+    if (u.id === userId) continue;
+    if (u.managerId === userId) { ids.add(u.id); continue; }
+    const additional = (u.approverIds || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (additional.includes(userId)) { ids.add(u.id); continue; }
+    if (u.approvalFlowJson) {
+      try {
+        const steps = JSON.parse(u.approvalFlowJson);
+        if (Array.isArray(steps) && steps.some(s => (s.approvers || []).includes(userId))) ids.add(u.id);
+      } catch (e) { /* ignore */ }
+    }
+  }
+  return [...ids];
+}
+
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { status, category, from, to, page=1, limit=20 } = req.query;
+    const { status, category, from, to, page=1, limit=20, scope } = req.query;
     const where = {};
-    if (req.user.role === 'EMPLOYEE') {
+    const role = req.user.role;
+    if (scope) {
+      // Dashboard scope toggle: self | team | all (all is Finance/Admin only).
+      let requested = scope;
+      if (requested === 'all' && !['FINANCE','ADMIN'].includes(role)) requested = 'team';
+      if (requested === 'self') {
+        where.submittedById = req.user.id;
+      } else if (requested === 'team') {
+        const team = await teamMemberIds(req.user.id);
+        where.submittedById = { in: team.length ? team : ['__none__'] };
+      } // 'all' -> no submittedById filter
+    } else if (role === 'EMPLOYEE') {
       where.submittedById = req.user.id;
-    } else if (req.user.role === 'MANAGER') {
+    } else if (role === 'MANAGER') {
       const ids = (await prisma.user.findMany({ where:{managerId:req.user.id}, select:{id:true} })).map(u=>u.id);
       where.submittedById = { in: [req.user.id, ...ids] };
     }
