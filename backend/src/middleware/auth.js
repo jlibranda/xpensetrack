@@ -6,13 +6,9 @@ const prisma = new PrismaClient();
 // Sensible defaults if Access Control hasn't been configured yet.
 // Mirrors the frontend DEFAULT_PERMS so behaviour is consistent.
 const DEFAULT_PERMS = {
-  approve_expenses: ['MANAGER', 'FINANCE', 'ADMIN'],
-  view_team_expenses: ['MANAGER', 'FINANCE', 'ADMIN'],
   view_reports: ['MANAGER', 'FINANCE', 'ADMIN'],
   view_analytics: ['FINANCE', 'ADMIN'],
   export_reports: ['MANAGER', 'FINANCE', 'ADMIN'],
-  second_approval: ['FINANCE', 'ADMIN'],
-  mark_reimbursed: ['FINANCE', 'ADMIN'],
   edit_categories: ['FINANCE', 'ADMIN'],
   manage_settings: ['FINANCE', 'ADMIN'],
   manage_users: ['ADMIN'],
@@ -49,31 +45,31 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-// Permission gate driven by Access Control settings.
-// ADMIN always passes. Otherwise we read the saved accessControl map;
-// if the permission isn't configured, we fall back to DEFAULT_PERMS,
-// and if that's also missing, to the provided fallbackRoles (default ADMIN).
-const requirePermission = (permKey, fallbackRoles = ['ADMIN']) => async (req, res, next) => {
+// Programmatic permission check (returns boolean). ADMIN always true.
+const hasPermission = async (user, permKey, fallbackRoles = ['ADMIN']) => {
+  if (!user) return false;
+  if (user.role === 'ADMIN') return true;
+  let allowed = null;
   try {
-    if (req.user.role === 'ADMIN') return next(); // ADMIN always allowed
-
-    let allowed = null;
     const settings = await prisma.orgSettings.findFirst();
     if (settings && settings.accessControlJson) {
-      try {
-        const ac = JSON.parse(settings.accessControlJson);
-        if (ac && Array.isArray(ac[permKey])) allowed = ac[permKey];
-      } catch (e) { /* fall through to defaults */ }
+      const ac = JSON.parse(settings.accessControlJson);
+      if (ac && Array.isArray(ac[permKey])) allowed = ac[permKey];
     }
-    if (!allowed) allowed = DEFAULT_PERMS[permKey] || fallbackRoles;
+  } catch (e) { /* fall through to defaults */ }
+  if (!allowed) allowed = DEFAULT_PERMS[permKey] || fallbackRoles;
+  return allowed.includes(user.role);
+};
 
-    if (!allowed.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
+// Permission gate middleware (driven by Access Control settings).
+const requirePermission = (permKey, fallbackRoles = ['ADMIN']) => async (req, res, next) => {
+  try {
+    const ok = await hasPermission(req.user, permKey, fallbackRoles);
+    if (!ok) return res.status(403).json({ error: 'Insufficient permissions' });
     next();
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 };
 
-module.exports = { authenticate, requireRole, requirePermission };
+module.exports = { authenticate, requireRole, requirePermission, hasPermission };

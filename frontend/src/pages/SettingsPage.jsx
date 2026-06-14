@@ -12,17 +12,9 @@ const TABS = ['General','Branding','Categories','Expense Types','Password','Acce
 // Separate component for Access Control tab
 function AccessControlTab({ settings, navigate, refresh }) {
   const DEFAULT_PERMS = {
-    submit_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
-    view_own_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
-    upload_receipts: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
-    cancel_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
-    approve_expenses: ['MANAGER','FINANCE','ADMIN'],
-    view_team_expenses: ['MANAGER','FINANCE','ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],
     view_analytics: ['FINANCE','ADMIN'],
     export_reports: ['MANAGER','FINANCE','ADMIN'],
-    second_approval: ['FINANCE','ADMIN'],
-    mark_reimbursed: ['FINANCE','ADMIN'],
     view_audit_log: ['ADMIN'],
     edit_categories: ['FINANCE','ADMIN'],
     manage_settings: ['FINANCE','ADMIN'],
@@ -35,17 +27,9 @@ function AccessControlTab({ settings, navigate, refresh }) {
   };
 
   const PERM_LABELS = {
-    submit_expenses: 'Submit expenses',
-    view_own_expenses: 'View own expenses',
-    upload_receipts: 'Upload receipts & AI auto-fill',
-    cancel_expenses: 'Cancel own expenses',
-    approve_expenses: 'Approve / Reject / Return expenses',
-    view_team_expenses: 'View team expenses',
     view_reports: 'View reports',
     view_analytics: 'View analytics',
     export_reports: 'Export Excel reports',
-    second_approval: 'Second-level approval (Finance)',
-    mark_reimbursed: 'Mark expenses as processed',
     view_audit_log: 'View audit log',
     edit_categories: 'Edit categories & GL codes',
     manage_settings: 'Manage app settings',
@@ -234,6 +218,15 @@ export default function SettingsPage() {
 
   const isFinance = ['FINANCE','ADMIN'].includes(user?.role);
   const isAdmin = user?.role === 'ADMIN';
+  // Permission checks driven by Access Control (ADMIN always allowed).
+  const can = (permKey, fallback) => {
+    if (user?.role === 'ADMIN') return true;
+    return (settings?.accessControl?.[permKey] || fallback).includes(user?.role);
+  };
+  const canEditCategories = can('edit_categories', ['FINANCE','ADMIN']);
+  const canUploadBranding = can('upload_branding', ['ADMIN']);
+  const canChangeBranding = can('change_branding', ['ADMIN']);
+  const canSeeBranding = canUploadBranding || canChangeBranding;
 
   // Exchange rate (USD -> PHP) — separate from the main settings form.
   const [fx, setFx] = useState(null);          // { usdPhpRate, auto, updatedAt }
@@ -355,7 +348,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1 flex-wrap">
-        {TABS.filter(t => (t!=='Access Control' && t!=='Branding' && t!=='Password') || isAdmin).map(t => (
+        {TABS.filter(t => t === 'Branding' ? canSeeBranding : ((t!=='Access Control' && t!=='Password') || isAdmin)).map(t => (
           <button key={t} onClick={()=>setTab(t)}
             className={`px-3 py-1.5 rounded-md text-xs transition-colors ${tab===t?'bg-white font-medium shadow-sm':'text-gray-500 hover:text-gray-700'}`}>
             {t}
@@ -456,10 +449,11 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {tab === 'Branding' && isAdmin && (
+        {tab === 'Branding' && canSeeBranding && (
           <div className="space-y-5">
             <h2 className="text-sm font-medium text-gray-700 mb-3">Branding & appearance</h2>
             {/* Logo */}
+            {canUploadBranding && (
             <div>
               <label className="block text-xs text-gray-500 mb-2">Company logo</label>
               <div className="flex items-center gap-4">
@@ -472,7 +466,9 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+            )}
             {/* Color */}
+            {canChangeBranding && (
             <div>
               <label className="block text-xs text-gray-500 mb-2">Primary color</label>
               <div className="flex items-center gap-3">
@@ -490,7 +486,9 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
+            )}
             {/* Wallpaper */}
+            {canUploadBranding && (
             <div>
               <label className="block text-xs text-gray-500 mb-2">App wallpaper / background</label>
               {s?.wallpaperUrl ? (
@@ -525,6 +523,7 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
+            )}
           </div>
         )}
 
@@ -532,6 +531,7 @@ export default function SettingsPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium text-gray-700">Expense categories & GL codes</h2>
+              {canEditCategories && (
               <div className="flex gap-2">
                 <button onClick={async () => {
                   await api.post('/settings/reset-categories');
@@ -540,19 +540,22 @@ export default function SettingsPage() {
                 }} className="px-3 py-1.5 text-xs border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-50">↺ Reset to defaults</button>
                 <button onClick={addCat} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">+ Add</button>
               </div>
+              )}
             </div>
             <div className="space-y-2">
               {cats.map((cat, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <input value={cat} onChange={e=>updateCat(i,e.target.value)} placeholder="Category name"
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 uppercase" />
-                  <input value={glCodes[cat]||''} onChange={e=>updateGl(cat,e.target.value)} placeholder="GL code"
-                    className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
-                  <button onClick={()=>removeCat(i)} className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                  <input value={cat} onChange={e=>updateCat(i,e.target.value)} placeholder="Category name" disabled={!canEditCategories}
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 uppercase disabled:bg-gray-50 disabled:text-gray-500" />
+                  <input value={glCodes[cat]||''} onChange={e=>updateGl(cat,e.target.value)} placeholder="GL code" disabled={!canEditCategories}
+                    className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono disabled:bg-gray-50 disabled:text-gray-500" />
+                  {canEditCategories && (
+                    <button onClick={()=>removeCat(i)} className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                  )}
                 </div>
               ))}
             </div>
-            <p className="text-xs text-gray-400 mt-2">GL code is the General Ledger account code for accounting integration.</p>
+            <p className="text-xs text-gray-400 mt-2">{canEditCategories ? 'GL code is the General Ledger account code for accounting integration.' : 'You have view-only access to categories.'}</p>
           </div>
         )}
 

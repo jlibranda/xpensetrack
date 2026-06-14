@@ -1,7 +1,7 @@
 // src/routes/settings.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requirePermission, hasPermission } = require('../middleware/auth');
 const multer = require('multer');
 const prisma = new PrismaClient();
 const { refreshUsdPhpRate, getUsdPhpRate } = require('../lib/fxrate');
@@ -54,19 +54,23 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
             wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl } = req.body;
     const s = await getOrCreate();
+    // Field-level permission: only apply category / branding changes if allowed.
+    const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
+    const canBrand = await hasPermission(req.user, 'change_branding', ['ADMIN']);
     const updated = await prisma.orgSettings.update({
       where: { id: s.id },
       data: {
         companyName, defaultCurrency,
         receiptRequiredAbove: receiptRequiredAbove ? Number(receiptRequiredAbove) : undefined,
         approvalLevels: approvalLevels ? Number(approvalLevels) : undefined,
-        primaryColor, darkMode,
-        wallpaperStyle: wallpaperStyle || undefined,
+        primaryColor: canBrand ? primaryColor : undefined,
+        darkMode,
+        wallpaperStyle: canBrand ? (wallpaperStyle || undefined) : undefined,
         autoReapplyApprovalFlow: typeof autoReapplyApprovalFlow === 'boolean' ? autoReapplyApprovalFlow : undefined,
         tin: tin !== undefined ? (tin || null) : undefined,
-        categories: Array.isArray(categories) ? categories.join(',') : categories,
+        categories: canCats ? (Array.isArray(categories) ? categories.join(',') : categories) : undefined,
         expenseTypes: Array.isArray(expenseTypes) ? expenseTypes.join(',') : expenseTypes,
-        categoryGlCodes: categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined,
+        categoryGlCodes: canCats ? (categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined) : undefined,
         defaultPassword: defaultPassword || undefined,
         accessControlJson: accessControl !== undefined ? JSON.stringify(accessControl) : undefined,
       },
@@ -75,7 +79,7 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/logo', authenticate, requireRole('ADMIN'), upload.single('logo'), async (req, res) => {
+router.post('/logo', authenticate, requirePermission('upload_branding', ['ADMIN']), upload.single('logo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file' });
     const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
@@ -85,7 +89,7 @@ router.post('/logo', authenticate, requireRole('ADMIN'), upload.single('logo'), 
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/wallpaper', authenticate, requireRole('ADMIN'), upload.single('wallpaper'), async (req, res) => {
+router.post('/wallpaper', authenticate, requirePermission('upload_branding', ['ADMIN']), upload.single('wallpaper'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file' });
     const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
@@ -95,7 +99,7 @@ router.post('/wallpaper', authenticate, requireRole('ADMIN'), upload.single('wal
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-router.delete('/wallpaper', authenticate, requireRole('ADMIN'), async (req, res) => {
+router.delete('/wallpaper', authenticate, requirePermission('upload_branding', ['ADMIN']), async (req, res) => {
   try {
     const s = await getOrCreate();
     await prisma.orgSettings.update({ where: { id: s.id }, data: { wallpaperUrl: null } });
@@ -120,7 +124,7 @@ router.get('/public', async (req, res) => {
 
 
 // POST /api/settings/reset-categories — force reset to new default categories
-router.post('/reset-categories', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res) => {
+router.post('/reset-categories', authenticate, requirePermission('edit_categories', ['FINANCE','ADMIN']), async (req, res) => {
   try {
     const s = await getOrCreate();
     const updated = await prisma.orgSettings.update({
