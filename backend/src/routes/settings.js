@@ -54,25 +54,28 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
             wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl } = req.body;
     const s = await getOrCreate();
-    // Field-level permission: only apply category / branding changes if allowed.
+    // Field-level permission: apply each group only if the user is allowed.
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
     const canBrand = await hasPermission(req.user, 'change_branding', ['ADMIN']);
+    const canManage = await hasPermission(req.user, 'manage_settings', ['FINANCE', 'ADMIN']);
     const updated = await prisma.orgSettings.update({
       where: { id: s.id },
       data: {
-        companyName, defaultCurrency,
-        receiptRequiredAbove: receiptRequiredAbove ? Number(receiptRequiredAbove) : undefined,
-        approvalLevels: approvalLevels ? Number(approvalLevels) : undefined,
+        companyName: canManage ? companyName : undefined,
+        defaultCurrency: canManage ? defaultCurrency : undefined,
+        receiptRequiredAbove: canManage && receiptRequiredAbove ? Number(receiptRequiredAbove) : undefined,
+        approvalLevels: canManage && approvalLevels ? Number(approvalLevels) : undefined,
         primaryColor: canBrand ? primaryColor : undefined,
-        darkMode,
+        darkMode: canManage ? darkMode : undefined,
         wallpaperStyle: canBrand ? (wallpaperStyle || undefined) : undefined,
-        autoReapplyApprovalFlow: typeof autoReapplyApprovalFlow === 'boolean' ? autoReapplyApprovalFlow : undefined,
-        tin: tin !== undefined ? (tin || null) : undefined,
+        autoReapplyApprovalFlow: canManage && typeof autoReapplyApprovalFlow === 'boolean' ? autoReapplyApprovalFlow : undefined,
+        tin: canManage && tin !== undefined ? (tin || null) : undefined,
         categories: canCats ? (Array.isArray(categories) ? categories.join(',') : categories) : undefined,
         expenseTypes: Array.isArray(expenseTypes) ? expenseTypes.join(',') : expenseTypes,
         categoryGlCodes: canCats ? (categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined) : undefined,
-        defaultPassword: defaultPassword || undefined,
-        accessControlJson: accessControl !== undefined ? JSON.stringify(accessControl) : undefined,
+        defaultPassword: canManage ? (defaultPassword || undefined) : undefined,
+        // Access-control changes are Admin-only (the editor UI is Admin-only too).
+        accessControlJson: (req.user.role === 'ADMIN' && accessControl !== undefined) ? JSON.stringify(accessControl) : undefined,
       },
     });
     res.json(parseSettings(updated));
@@ -148,7 +151,7 @@ router.get('/exchange-rate', authenticate, async (req, res) => {
 });
 
 // PATCH /api/settings/exchange-rate — admin sets manual rate or toggles auto mode
-router.patch('/exchange-rate', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res) => {
+router.patch('/exchange-rate', authenticate, requirePermission('manage_settings', ['FINANCE','ADMIN']), async (req, res) => {
   try {
     const { usdPhpRate, auto } = req.body;
     const s = await getOrCreate();
@@ -167,7 +170,7 @@ router.patch('/exchange-rate', authenticate, requireRole('ADMIN', 'FINANCE'), as
 });
 
 // POST /api/settings/exchange-rate/refresh — admin forces an immediate auto-fetch
-router.post('/exchange-rate/refresh', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res) => {
+router.post('/exchange-rate/refresh', authenticate, requirePermission('manage_settings', ['FINANCE','ADMIN']), async (req, res) => {
   try {
     const result = await refreshUsdPhpRate();
     res.json(result);

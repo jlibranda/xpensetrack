@@ -227,6 +227,7 @@ export default function SettingsPage() {
   const canUploadBranding = can('upload_branding', ['ADMIN']);
   const canChangeBranding = can('change_branding', ['ADMIN']);
   const canSeeBranding = canUploadBranding || canChangeBranding;
+  const canManageSettings = can('manage_settings', ['FINANCE','ADMIN']);
 
   // Exchange rate (USD -> PHP) — separate from the main settings form.
   const [fx, setFx] = useState(null);          // { usdPhpRate, auto, updatedAt }
@@ -359,6 +360,8 @@ export default function SettingsPage() {
       <div className="bg-white rounded-xl border border-gray-100 p-5">
 
         {tab === 'General' && (
+          <fieldset disabled={!canManageSettings} className={!canManageSettings ? 'opacity-60' : ''}>
+          {!canManageSettings && <p className="text-xs text-amber-600 mb-3">You have view-only access to general settings.</p>}
           <div className="space-y-4">
             <h2 className="text-sm font-medium text-gray-700 mb-3">General settings</h2>
             <div>
@@ -400,7 +403,7 @@ export default function SettingsPage() {
                 {fx?.updatedAt ? `Last updated ${new Date(fx.updatedAt).toLocaleString('en-PH')}` : 'Not yet updated'}
               </p>
 
-              {isFinance && (
+              {canManageSettings && (
                 <div className="mt-3 space-y-2">
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
@@ -447,6 +450,7 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+          </fieldset>
         )}
 
         {tab === 'Branding' && canSeeBranding && (
