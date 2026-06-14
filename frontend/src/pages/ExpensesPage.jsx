@@ -31,11 +31,12 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const { user } = useAuth();
-  // Self / Team scope toggle (Finance & Admin also get All).
-  const scopeTabs = ['FINANCE','ADMIN'].includes(user?.role)
-    ? [['self','Self'],['team','Team'],['all','All']]
+  // Self / Team scope toggle. Admin has no toggle (My Expenses = their own);
+  // Finance also gets All.
+  const scopeTabs = user?.role === 'ADMIN' ? []
+    : user?.role === 'FINANCE' ? [['self','Self'],['team','Team'],['all','All']]
     : [['self','Self'],['team','Team']];
-  const [scope, setScope] = useState('self');
+  const [scope, setScope] = useState(user?.role === 'ADMIN' ? 'all' : 'self');
   const [selected, setSelected] = useState(null);
   const [cancelModal, setCancelModal] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -101,15 +102,17 @@ export default function ExpensesPage() {
       )}
 
       {/* Scope toggle */}
-      <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
-        {scopeTabs.map(([val, label]) => (
-          <button key={val} onClick={() => { setScope(val); setSelected(null); }}
-            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${scope === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-            style={scope === val ? { backgroundColor: 'var(--brand-color,#1D9E75)' } : {}}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {scopeTabs.length > 0 && (
+        <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+          {scopeTabs.map(([val, label]) => (
+            <button key={val} onClick={() => { setScope(val); setSelected(null); }}
+              className={`px-3 py-1.5 rounded-md text-xs transition-colors ${scope === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+              style={scope === val ? { backgroundColor: 'var(--brand-color,#1D9E75)' } : {}}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filter tabs */}
       <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">

@@ -28,7 +28,7 @@ export default function AnalyticsPage() {
 
       const [summary, expenses] = await Promise.all([
         api.get(`/reports/summary?from=${from.toISOString().split('T')[0]}&to=${now.toISOString().split('T')[0]}`),
-        api.get(`/expenses?limit=200`),
+        api.get(`/expenses?limit=1000`),
       ]);
       setData({ summary, expenses: expenses.expenses || [] });
     } finally { setLoading(false); }
@@ -38,9 +38,12 @@ export default function AnalyticsPage() {
 
   const { summary = {}, expenses = [] } = data || {};
 
+  // Proper-case multi-word labels (e.g. "OFFICE SUPPLIES" -> "Office Supplies").
+  const titleCase = (s) => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
   // Category breakdown
   const categoryData = summary?.byCategory
-    ? Object.entries(summary.byCategory).map(([name, value]) => ({ name: name.charAt(0)+name.slice(1).toLowerCase(), value: Math.round(value) })).sort((a,b)=>b.value-a.value)
+    ? Object.entries(summary.byCategory).map(([name, value]) => ({ name: titleCase(name), value: Math.round(value) })).sort((a,b)=>b.value-a.value)
     : [];
 
   // Employee spending
@@ -48,14 +51,27 @@ export default function AnalyticsPage() {
     ? Object.entries(summary?.byEmployee || {}).map(([name, value]) => ({ name: name?.split(' ')?.[0] || name, value: Math.round(value || 0) })).sort((a,b)=>b.value-a.value).slice(0,8)
     : [];
 
-  // Monthly trend (last 6 months)
-  const monthlyMap = {};
+  // Monthly trend — last 6 calendar months ending this month, in chronological
+  // order, zero-filled. Counts only APPROVED/PROCESSED (actual spend).
+  const trendNow = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(trendNow.getFullYear(), trendNow.getMonth() - i, 1);
+    months.push({
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      label: d.toLocaleDateString('en-PH', { month: 'short', year: '2-digit' }),
+      value: 0,
+    });
+  }
+  const monthIndex = Object.fromEntries(months.map((m, idx) => [m.key, idx]));
   expenses.forEach(e => {
-    if (!['APPROVED','PROCESSED'].includes(e.status)) return;
-    const m = new Date(e.expenseDate).toLocaleDateString('en-PH', {month:'short', year:'2-digit'});
-    monthlyMap[m] = (monthlyMap[m] || 0) + e.amountPhp;
+    if (!['APPROVED', 'PROCESSED'].includes(e.status)) return;
+    const d = new Date(e.expenseDate);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (key in monthIndex) months[monthIndex[key]].value += e.amountPhp;
   });
-  const monthlyData = Object.entries(monthlyMap).slice(-6).map(([month, value]) => ({ month, value: Math.round(value) }));
+  const monthlyData = months.map(m => ({ month: m.label, value: Math.round(m.value) }));
+  const hasMonthly = monthlyData.some(m => m.value > 0);
 
   // Status breakdown
   const statusMap = {};
@@ -69,6 +85,7 @@ export default function AnalyticsPage() {
     deptMap[d] = (deptMap[d]||0) + e.amountPhp;
   });
   const deptData = Object.entries(deptMap).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a,b)=>b.value-a.value);
+  const deptTotal = deptData.reduce((s,d)=>s+d.value, 0) || 1;
 
   const totalApproved = summary?.totalPhp || 0;
   const avgExpense = summary?.count > 0 ? totalApproved / summary.count : 0;
@@ -110,7 +127,7 @@ export default function AnalyticsPage() {
         {/* Monthly trend */}
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <h2 className="text-sm font-medium text-gray-700 mb-3">Monthly spending trend</h2>
-          {monthlyData.length > 0 ? (
+          {hasMonthly ? (
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={monthlyData}>
                 <XAxis dataKey="month" tick={{fontSize:11}} axisLine={false} tickLine={false} />
@@ -166,7 +183,7 @@ export default function AnalyticsPage() {
                     <span className="font-medium text-gray-900">{format(d.value)}</span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${(d.value/totalApproved*100).toFixed(0)}%`, backgroundColor: COLORS[i%COLORS.length] }} />
+                    <div className="h-full rounded-full" style={{ width: `${(d.value/deptTotal*100).toFixed(0)}%`, backgroundColor: COLORS[i%COLORS.length] }} />
                   </div>
                 </div>
               ))}

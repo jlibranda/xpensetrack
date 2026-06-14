@@ -36,10 +36,10 @@ export default function ReportsPage() {
     load();
   }, []);
 
-  const load = async () => {
+  const load = async (f = from, t = to) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ from, to });
+      const params = new URLSearchParams({ from: f, to: t });
       if (userId) params.append('userId', userId);
       const data = await api.get(`/reports/summary?${params}`);
       setSummary(data);
@@ -52,13 +52,21 @@ export default function ReportsPage() {
     }
   };
 
-  const setQuickRange = (months) => {
+  const setQuickRange = (mode) => {
     const end = new Date();
-    const start = new Date();
-    start.setMonth(start.getMonth() - months + 1);
-    start.setDate(1);
-    setFrom(start.toISOString().split('T')[0]);
-    setTo(end.toISOString().split('T')[0]);
+    let start;
+    if (mode === 'year') {
+      start = new Date(end.getFullYear(), 0, 1); // Jan 1 of the current year
+    } else {
+      start = new Date();
+      start.setMonth(start.getMonth() - mode + 1);
+      start.setDate(1);
+    }
+    const f = start.toISOString().split('T')[0];
+    const t = end.toISOString().split('T')[0];
+    setFrom(f);
+    setTo(t);
+    load(f, t); // apply immediately
   };
 
   const exportExcel = () => {
@@ -79,7 +87,7 @@ export default function ReportsPage() {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
         <div className="flex flex-wrap gap-2 mb-3">
-          {[['This month', 1], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 12]].map(([label, m]) => (
+          {[['This month', 1], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 'year']].map(([label, m]) => (
             <button key={label} onClick={() => setQuickRange(m)}
               className="px-3 py-1 border border-gray-200 rounded-full text-xs text-gray-600 hover:bg-gray-50">
               {label}
@@ -105,7 +113,7 @@ export default function ReportsPage() {
               {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
-          <button onClick={load} className="px-4 py-2 bg-brand-400 text-white rounded-lg text-sm font-medium hover:bg-brand-600">
+          <button onClick={() => load()} className="px-4 py-2 bg-brand-400 text-white rounded-lg text-sm font-medium hover:bg-brand-600">
             Generate
           </button>
           {canExport && (
