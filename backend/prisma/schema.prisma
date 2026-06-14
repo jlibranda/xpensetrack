@@ -15,7 +15,7 @@ model User {
   firstName      String
   lastName       String
   passwordHash   String
-  role           Role            @default(EMPLOYEE)
+  role           String          @default("EMPLOYEE")
   department     String?
   costCenter     String?
   position       String?
@@ -37,13 +37,6 @@ model User {
   passwordResets PasswordReset[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-}
-
-enum Role {
-  EMPLOYEE
-  MANAGER
-  FINANCE
-  ADMIN
 }
 
 model Expense {

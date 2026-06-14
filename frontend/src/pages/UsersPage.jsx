@@ -6,13 +6,14 @@ import api from '../lib/api';
 import toast from '../lib/toast';
 import { useOrg } from '../context/OrgContext';
 
-const ROLES = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'];
+const BASE_ROLES = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'];
 const ROLE_BADGE = {
   EMPLOYEE:'bg-blue-600 text-white', 
   MANAGER:'bg-purple-600 text-white',
   FINANCE:'bg-amber-500 text-white', 
   ADMIN:'bg-green-600 text-white',
 };
+const badgeFor = (role) => ROLE_BADGE[role] || 'bg-gray-500 text-white';
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -34,6 +35,11 @@ export default function UsersPage() {
   const [deletingUsers, setDeletingUsers] = useState(false);
   const [apprLoading, setApprLoading] = useState(false);
   const { settings } = useOrg();
+  const ROLES = (() => {
+    const custom = settings?.accessControl?.__roles__;
+    const list = Array.isArray(custom) && custom.length ? custom : BASE_ROLES;
+    return [...new Set([...BASE_ROLES, ...list])];
+  })();
   const dark = !!settings?.darkMode;
   const navigate = useNavigate();
   const location = useLocation();
@@ -646,7 +652,7 @@ export default function UsersPage() {
                           <p className="text-xs text-gray-400">{u.position||''}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_BADGE[u.role]}`}>{u.role}</span>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${badgeFor(u.role)}`}>{u.role}</span>
                         </td>
                         <td className="px-4 py-3 hidden lg:table-cell">
                           {manager ? <span className="text-xs text-gray-600">{fullName(manager)}</span> : <span className="text-xs text-gray-300">—</span>}

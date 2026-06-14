@@ -59,8 +59,13 @@ function AccessControlTab({ settings, navigate, refresh }) {
   });
   const [saved2, setSaved2] = useState(false);
   const [saving2, setSaving2] = useState(false);
-  const [roles, setRoles] = useState(['EMPLOYEE','MANAGER','FINANCE','ADMIN']);
+  const [roles, setRoles] = useState(() => {
+    const saved = settings?.accessControl?.__roles__;
+    return (Array.isArray(saved) && saved.length) ? saved : ['EMPLOYEE','MANAGER','FINANCE','ADMIN'];
+  });
   const ROLES = roles;
+  // Non-admins never see or edit the ADMIN column.
+  const visibleRoles = acIsAdmin ? ROLES : ROLES.filter(r => r !== 'ADMIN');
   const LOCKED = ['ADMIN']; // Admin always has all perms
   const ROLE_COLORS = {
     EMPLOYEE:'bg-blue-600 text-white',
@@ -82,7 +87,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   const savePerms = async () => {
     setSaving2(true);
     try {
-      await api.patch('/settings', { accessControl: perms });
+      await api.patch('/settings', { accessControl: { ...perms, __roles__: roles } });
       if (refresh) refresh();
       setSaved2(true);
       setTimeout(() => setSaved2(false), 2000);
@@ -95,8 +100,9 @@ function AccessControlTab({ settings, navigate, refresh }) {
 
   const resetPerms = async () => {
     setPerms(DEFAULT_PERMS);
+    setRoles(['EMPLOYEE','MANAGER','FINANCE','ADMIN']);
     try {
-      await api.patch('/settings', { accessControl: DEFAULT_PERMS });
+      await api.patch('/settings', { accessControl: { ...DEFAULT_PERMS, __roles__: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'] } });
       if (refresh) refresh();
     } catch(e) {}
   };
@@ -157,7 +163,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
           <thead>
             <tr className="border-b" style={{backgroundColor:'#1e293b'}}>
               <th className="text-left py-3 px-4 font-bold text-white">Permission</th>
-              {ROLES.map(r => {
+              {visibleRoles.map(r => {
                 const isDefault = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'].includes(r);
                 return (
                   <th key={r} className="text-center py-3 px-3 min-w-[90px]">
@@ -177,7 +183,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
             {Object.keys(DEFAULT_PERMS).filter(key => acIsAdmin || !SENSITIVE_PERMS.includes(key)).map((key, i) => (
               <tr key={key} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                 <td className="py-2.5 px-4 font-semibold" style={{color:'#111827'}}>{PERM_LABELS[key]}</td>
-                {ROLES.map(role => {
+                {visibleRoles.map(role => {
                   const hasAccess = (perms[key] || []).includes(role);
                   const isAdmin = role === 'ADMIN';
                   return (
