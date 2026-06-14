@@ -83,8 +83,8 @@ function AppRoutes() {
         <Route path="reports" element={<PrivateRoute permission="view_reports" roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
         <Route path="transactions" element={<PrivateRoute roles={['FINANCE','ADMIN']}><TransactionsPage /></PrivateRoute>} />
         <Route path="analytics" element={<PrivateRoute permission="view_analytics" roles={['FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
-        <Route path="users" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']} anyPermission={['manage_users']}><UsersPage /></PrivateRoute>} />
-        <Route path="users/:id" element={<PrivateRoute roles={['ADMIN','FINANCE','MANAGER']} anyPermission={['manage_users']}><EmployeePage /></PrivateRoute>} />
+        <Route path="users" element={<PrivateRoute permission="manage_users"><UsersPage /></PrivateRoute>} />
+        <Route path="users/:id" element={<PrivateRoute permission="manage_users"><EmployeePage /></PrivateRoute>} />
         <Route path="settings" element={<PrivateRoute roles={['ADMIN','FINANCE']} anyPermission={['manage_settings','edit_categories','manage_expense_types','manage_password','manage_access_control','upload_branding','change_branding']}><SettingsPage /></PrivateRoute>} />
         <Route path="audit" element={<PrivateRoute permission="view_audit_log" roles={['ADMIN']}><AuditLogPage /></PrivateRoute>} />
         <Route path="profile" element={<ProfilePage />} />

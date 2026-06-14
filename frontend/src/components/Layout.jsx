@@ -52,7 +52,7 @@ export default function Layout() {
   // relevant permission via Access Control.
   const SETTINGS_PERMS = ['manage_settings','edit_categories','manage_expense_types','manage_password','manage_access_control','upload_branding','change_branding'];
   const canSettings = ['ADMIN','FINANCE'].includes(user?.role) || SETTINGS_PERMS.some(p => can(p));
-  const canUsers = ['ADMIN','FINANCE','MANAGER'].includes(user?.role) || can('manage_users');
+  const canUsers = user?.role === 'ADMIN' || can('manage_users');
   const canAudit = user?.role === 'ADMIN' || (settings?.accessControl?.view_audit_log || ['ADMIN']).includes(user?.role);
   const showAdmin = canSettings || canUsers || canAudit;
   const isAdmin = ['ADMIN','FINANCE'].includes(user?.role);
