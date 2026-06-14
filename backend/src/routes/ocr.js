@@ -175,44 +175,65 @@ function parseReceiptText(raw) {
   }
 
   // --- OR / receipt number ---
-  // Look for labels in priority order; the captured value MUST contain a digit
-  // (so we don't grab plain words like "NORTH"). Accept same-line or next-line.
+  // Search a comprehensive set of receipt-number labels in priority order.
+  // The captured value MUST contain a digit (so plain words like "NORTH" are
+  // never taken). Accepts the value on the same line or the next line.
   let orNumber = null;
   const orLabels = [
-    /official\s*receipt\s*(?:no\.?|number|#)?/i,
-    /\bO\.?R\.?\s*(?:no\.?|number|#)?/i,
-    /\bS\.?I\.?\s*(?:no\.?|number|#)?/i,       // Sales Invoice
+    /official\s*receipt\s*(?:no\.?|nbr\.?|number|#)?/i,
+    /\bO\.?\s*R\.?\s*(?:no\.?|nbr\.?|number|#)?/i,        // OR, O.R., OR No, OR#
+    /(?:sales?\s*invoice|charge\s*invoice|cash\s*invoice)\s*(?:no\.?|number|#)?/i,
+    /\bS\.?\s*I\.?\s*(?:no\.?|number|#)?/i,                // SI, S.I., SI No, SI#
+    /\bC\.?\s*I\.?\s*(?:no\.?|number|#)?/i,                // CI (Charge Invoice)
+    /(?:collection|cash|provisional|acknowledgement|acknowledgment)\s*receipt\s*(?:no\.?|number|#)?/i,
+    /\bC\.?\s*R\.?\s*(?:no\.?|number|#)?/i,                // CR (Collection/Cash Receipt)
     /invoice\s*(?:no\.?|number|#)?/i,
     /receipt\s*(?:no\.?|number|#)?/i,
-    /(?:transaction|trans|txn)\s*(?:no\.?|id|#)?/i,
+    /(?:transaction|trans|txn|tran)\s*(?:no\.?|id|#)?/i,
+    /(?:document|doc)\s*(?:no\.?|#)?/i,
+    /(?:bill|check|chk|tab)\s*(?:no\.?|#)?/i,              // restaurant bill/check no
+    /folio\s*(?:no\.?|#)?/i,                               // hotel folio
+    /(?:order|ord)\s*(?:no\.?|#)?/i,
+    /(?:slip|sequence|seq|trace)\s*(?:no\.?|#)?/i,
     /(?:reference|ref)\s*(?:no\.?|#)?/i,
+    /(?:ticket|tkt)\s*(?:no\.?|#)?/i,
   ];
-  // A plausible receipt-number token: has a digit, 3–24 chars, letters/digits/dashes/slashes.
+
+  // Labels that look numeric but are NOT the receipt number — never use the
+  // value next to these (machine serials, BIR permits, TINs, terminal IDs, etc.).
+  const orExcludeLabel = /(serial|machine|min\b|s\/?n\b|accredit|permit|birth|vat\s*reg|tin\b|terminal|pos\s*id|store\s*code|branch\s*code|atp\b|ptu\b)/i;
+
+  // A plausible receipt-number token.
   const looksLikeRef = (v) => {
     if (!v) return false;
-    const t = v.trim().replace(/[)\].,;]+$/, '');
-    if (!/\d/.test(t)) return false;                 // must contain a digit
-    if (t.length < 3 || t.length > 24) return false;
-    if (/^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$/.test(t)) return false; // looks like a date
-    if (/^\+?\d[\d\s-]{8,}$/.test(t) && /^\+?\d/.test(t) && t.replace(/\D/g,'').length >= 10) return false; // phone
-    if (/^\d{3}-\d{3}-\d{3}/.test(t)) return false;  // looks like a TIN
+    const t = v.trim().replace(/^[:.#\-]+/, '').replace(/[)\].,;:]+$/, '');
+    if (!/\d/.test(t)) return false;                 // must contain at least one digit
+    if (t.length < 3 || t.length > 28) return false;
+    if (/^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/.test(t)) return false;       // a date
+    if (/\d{1,2}:\d{2}/.test(t)) return false;                            // a time
+    if (t.replace(/\D/g, '').length >= 10 && /^\+?[\d\s().-]+$/.test(t)) return false; // phone
+    if (/^\d{3}-\d{3}-\d{3}(-\d{3,})?$/.test(t)) return false;            // a TIN
+    if (/^(php|usd|p|\$)?[\d,]+\.\d{2}$/i.test(t)) return false;          // a money amount
     return /^[A-Za-z0-9][A-Za-z0-9\-/]*$/.test(t);
   };
+
+  const cleanRef = (t) => t.trim().replace(/^[:.#\-]+/, '').replace(/[)\].,;:]+$/, '');
 
   outer:
   for (const label of orLabels) {
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
+      if (orExcludeLabel.test(l)) continue;          // skip serial/permit/TIN lines
       const m = l.match(label);
       if (!m) continue;
-      // Text right after the label on the same line.
+      // Value right after the label on the same line.
       const after = l.slice(m.index + m[0].length).replace(/^[:.#\s-]+/, '');
       const tokenSame = after.split(/\s{2,}|\s(?=[A-Za-z]{4,}\b)/)[0]?.trim();
-      if (looksLikeRef(tokenSame)) { orNumber = tokenSame.replace(/[)\].,;]+$/, ''); break outer; }
-      // Otherwise, a token on the next line.
-      if (i + 1 < lines.length) {
+      if (looksLikeRef(tokenSame)) { orNumber = cleanRef(tokenSame); break outer; }
+      // Otherwise the first token on the next line.
+      if (i + 1 < lines.length && !orExcludeLabel.test(lines[i + 1])) {
         const tokenNext = lines[i + 1].trim().split(/\s+/)[0];
-        if (looksLikeRef(tokenNext)) { orNumber = tokenNext.replace(/[)\].,;]+$/, ''); break outer; }
+        if (looksLikeRef(tokenNext)) { orNumber = cleanRef(tokenNext); break outer; }
       }
     }
   }
