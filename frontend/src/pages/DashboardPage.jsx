@@ -7,12 +7,12 @@ import { useCurrency } from '../context/CurrencyContext';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_BADGE = {
-  DRAFT: 'bg-blue-50 text-blue-700',
-  PENDING: 'bg-amber-50 text-amber-700',
-  APPROVED: 'bg-green-50 text-green-700',
-  REJECTED: 'bg-red-50 text-red-700',
-  RETURNED: 'bg-amber-100 text-amber-700',
-  PROCESSED: 'bg-blue-100 text-blue-700',
+  DRAFT: 'bg-gray-500 text-white',
+  PENDING: 'bg-amber-500 text-white',
+  APPROVED: 'bg-green-600 text-white',
+  REJECTED: 'bg-red-600 text-white',
+  RETURNED: 'bg-orange-500 text-white',
+  PROCESSED: 'bg-blue-600 text-white',
 };
 
 export default function DashboardPage() {
