@@ -7,6 +7,46 @@ const { authenticate } = require('../middleware/auth');
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+// Determine an expense category from the merchant name.
+//  1) Search this company's PAST expenses for the same merchant and reuse the
+//     category that's been used most often (self-improving, reflects real usage).
+//  2) Fall back to a built-in dictionary of common merchants / keywords.
+async function categoryFromMerchant(merchant) {
+  const m = (merchant || '').trim();
+  if (m.length < 3) return null;
+
+  // --- 1) Learn from past expenses ---
+  try {
+    const keyword = m.split(/\s+/)[0]; // first significant word, e.g. "JOLLIBEE"
+    if (keyword.length >= 3) {
+      const rows = await prisma.expense.findMany({
+        where: { merchant: { contains: keyword, mode: 'insensitive' } },
+        select: { category: true },
+        take: 50,
+        orderBy: { createdAt: 'desc' },
+      });
+      if (rows.length) {
+        const counts = {};
+        for (const r of rows) counts[r.category] = (counts[r.category] || 0) + 1;
+        const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+        if (best) return best[0];
+      }
+    }
+  } catch (e) { console.error('merchant history lookup failed:', e.message); }
+
+  // --- 2) Built-in dictionary fallback ---
+  const s = m.toLowerCase();
+  const dict = [
+    [/jollibee|mcdo|mcdonald|kfc|chowking|greenwich|mang inasal|max'?s|starbucks|coffee|cafe|restaurant|grill|kitchen|bakery|pizza|burger|food|eatery|carinderia|grocery|supermarket|sm market|puregold|robinsons supermarket/, 'MEALS'],
+    [/grab|angkas|joyride|taxi|uber|lalamove|fare|toll|petron|shell|caltex|seaoil|gas|fuel|cebu pacific|philippine airlines|pal|airasia|airline|flight|bus|jeepney|ticket|parking/, 'TRAVEL'],
+    [/hotel|inn|resort|lodging|airbnb|motel|pension|hostel/, 'ACCOMMODATION'],
+    [/office|supplies|stationery|national book|paper|ink|hardware|ace hardware|wilcon/, 'SUPPLIES'],
+    [/globe|smart|pldt|converge|sky|dito|tnt|telecom|load|prepaid|internet|data|sim/, 'COMMUNICATIONS'],
+  ];
+  for (const [re, cat] of dict) if (re.test(s)) return cat;
+  return null;
+}
+
 const CATEGORIES = ['MEALS', 'TRAVEL', 'ACCOMMODATION', 'SUPPLIES', 'COMMUNICATIONS', 'OTHER'];
 
 // Enhance a phone photo for better OCR: downscale (under the 1MB free-tier limit),
@@ -188,6 +228,15 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
     }
 
     if (!anthropicKey && !ocrSpaceKey) console.log('No OCR key set - skipping parse');
+
+    // Refine the category by looking up the merchant (past expenses + dictionary).
+    // This overrides a missing/OTHER guess with what the company actually uses.
+    if (parsed && parsed.merchant) {
+      try {
+        const cat = await categoryFromMerchant(parsed.merchant);
+        if (cat && (!parsed.category || parsed.category === 'OTHER')) parsed.category = cat;
+      } catch (e) { console.error('category lookup error:', e.message); }
+    }
 
     res.json({
       receiptId: receipt.id,
