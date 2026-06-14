@@ -1,7 +1,7 @@
 // src/routes/approvals.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requirePermission } = require('../middleware/auth');
 const { sendStatusUpdateEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
@@ -65,7 +65,7 @@ async function chainModeForExpense(expense) {
 
 // ---- routes --------------------------------------------------------------
 
-router.get('/pending', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
+router.get('/pending', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
     const baseWhere = req.user.role === 'ADMIN'
       ? { status: 'PENDING' }
@@ -93,7 +93,7 @@ router.get('/pending', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/history', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
+router.get('/history', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
     const where = req.user.role === 'ADMIN'
       ? { status: { not: 'PENDING' } }
@@ -108,7 +108,7 @@ router.get('/history', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'),
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/:id/approve', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
+router.post('/:id/approve', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
     const { notes } = req.body;
     const approval = await prisma.approval.findUnique({
@@ -174,7 +174,7 @@ router.post('/:id/approve', authenticate, requireRole('MANAGER', 'FINANCE', 'ADM
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/:id/reject', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
+router.post('/:id/reject', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
     const { notes } = req.body;
     const approval = await prisma.approval.findUnique({
@@ -201,7 +201,7 @@ router.post('/:id/reject', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMI
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/:id/return', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
+router.post('/:id/return', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
     const { notes } = req.body;
     if (!notes) return res.status(400).json({ error: 'Comment required when returning' });

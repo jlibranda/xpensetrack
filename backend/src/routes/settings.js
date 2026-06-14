@@ -58,6 +58,26 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
     const canBrand = await hasPermission(req.user, 'change_branding', ['ADMIN']);
     const canManage = await hasPermission(req.user, 'manage_settings', ['FINANCE', 'ADMIN']);
+    const canExpTypes = await hasPermission(req.user, 'manage_expense_types', ['FINANCE', 'ADMIN']);
+    const canPassword = await hasPermission(req.user, 'manage_password', ['ADMIN']);
+    const canAccessCtrl = await hasPermission(req.user, 'manage_access_control', ['ADMIN']);
+
+    // Access-control write: Admin sets anything; a non-admin manager may edit the
+    // matrix EXCEPT the 4 sensitive permissions, which are preserved from current.
+    let accessControlJson = undefined;
+    if (accessControl !== undefined && canAccessCtrl) {
+      if (req.user.role === 'ADMIN') {
+        accessControlJson = JSON.stringify(accessControl);
+      } else {
+        const SENSITIVE = ['reset_passwords', 'upload_branding', 'change_branding', 'impersonate_user'];
+        let existing = {};
+        try { existing = s.accessControlJson ? JSON.parse(s.accessControlJson) : {}; } catch (e) { existing = {}; }
+        const merged = { ...accessControl };
+        for (const k of SENSITIVE) merged[k] = existing[k] || ['ADMIN'];
+        accessControlJson = JSON.stringify(merged);
+      }
+    }
+
     const updated = await prisma.orgSettings.update({
       where: { id: s.id },
       data: {
@@ -71,11 +91,10 @@ router.patch('/', authenticate, requireRole('ADMIN', 'FINANCE'), async (req, res
         autoReapplyApprovalFlow: canManage && typeof autoReapplyApprovalFlow === 'boolean' ? autoReapplyApprovalFlow : undefined,
         tin: canManage && tin !== undefined ? (tin || null) : undefined,
         categories: canCats ? (Array.isArray(categories) ? categories.join(',') : categories) : undefined,
-        expenseTypes: Array.isArray(expenseTypes) ? expenseTypes.join(',') : expenseTypes,
+        expenseTypes: canExpTypes ? (Array.isArray(expenseTypes) ? expenseTypes.join(',') : expenseTypes) : undefined,
         categoryGlCodes: canCats ? (categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined) : undefined,
-        defaultPassword: canManage ? (defaultPassword || undefined) : undefined,
-        // Access-control changes are Admin-only (the editor UI is Admin-only too).
-        accessControlJson: (req.user.role === 'ADMIN' && accessControl !== undefined) ? JSON.stringify(accessControl) : undefined,
+        defaultPassword: canPassword ? (defaultPassword || undefined) : undefined,
+        accessControlJson,
       },
     });
     res.json(parseSettings(updated));

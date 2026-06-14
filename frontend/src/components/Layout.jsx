@@ -13,7 +13,7 @@ const NAV = [
   { to:'/expenses/new', label:'Add Expense', icon:'+' },
 ];
 const MANAGER_NAV = [
-  { to:'/approvals', label:'My Approvals', icon:'✓', perm:'approve_expenses' },
+  { to:'/approvals', label:'My Approvals', icon:'✓', perm:'view_approvals' },
   { to:'/reports', label:'Reports', icon:'📊', perm:'view_reports' },
   { to:'/analytics', label:'Analytics', icon:'📈', perm:'view_analytics' },
 ];
@@ -36,7 +36,7 @@ export default function Layout() {
   const isManagerOnly = user?.role === 'MANAGER'; // managers don't get Analytics
   // Permission check driven by Access Control settings (ADMIN always allowed).
   const DEFAULT_NAV_PERMS = {
-    approve_expenses: ['MANAGER','FINANCE','ADMIN'],
+    view_approvals: ['MANAGER','FINANCE','ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],
     view_analytics: ['FINANCE','ADMIN'],
   };
@@ -45,6 +45,9 @@ export default function Layout() {
     const allowed = settings?.accessControl?.[perm] || DEFAULT_NAV_PERMS[perm] || ['ADMIN'];
     return allowed.includes(user?.role);
   };
+  // The Management section shows if the user can see any item in it (incl. an
+  // Employee granted approvals access), or Transactions (Finance/Admin).
+  const showManagement = MANAGER_NAV.some(item => can(item.perm)) || ['FINANCE','ADMIN'].includes(user?.role);
   const isAdmin = ['ADMIN','FINANCE'].includes(user?.role);
   const brandColor = settings?.primaryColor || '#1D9E75';
   // Dark mode is a PERSONAL, per-device preference. If the user hasn't chosen,
@@ -147,7 +150,7 @@ export default function Layout() {
             </NavLink>
           ))}
 
-          {canApprove && (
+          {showManagement && (
             <>
               {['FINANCE','ADMIN'].includes(user?.role) && (
                 <NavLink to="/transactions" className={navLinkClass}

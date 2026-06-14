@@ -69,7 +69,7 @@ function AppRoutes() {
         <Route path="expenses" element={<ExpensesPage />} />
         <Route path="expenses/new" element={<AddExpensePage />} />
         <Route path="expenses/:id/edit" element={<AddExpensePage />} />
-        <Route path="approvals" element={<PrivateRoute roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
+        <Route path="approvals" element={<PrivateRoute permission="view_approvals" roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
         <Route path="reports" element={<PrivateRoute permission="view_reports" roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
         <Route path="transactions" element={<PrivateRoute roles={['FINANCE','ADMIN']}><TransactionsPage /></PrivateRoute>} />
         <Route path="analytics" element={<PrivateRoute permission="view_analytics" roles={['FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />

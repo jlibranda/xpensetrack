@@ -11,13 +11,21 @@ const TABS = ['General','Branding','Categories','Expense Types','Password','Acce
 
 // Separate component for Access Control tab
 function AccessControlTab({ settings, navigate, refresh }) {
+  const { user: acUser } = useAuth();
+  const acIsAdmin = acUser?.role === 'ADMIN';
+  // A non-admin managing access control must never see/grant these.
+  const SENSITIVE_PERMS = ['reset_passwords', 'upload_branding', 'change_branding', 'impersonate_user'];
   const DEFAULT_PERMS = {
+    view_approvals: ['MANAGER','FINANCE','ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],
     view_analytics: ['FINANCE','ADMIN'],
     export_reports: ['MANAGER','FINANCE','ADMIN'],
     view_audit_log: ['ADMIN'],
     edit_categories: ['FINANCE','ADMIN'],
+    manage_expense_types: ['FINANCE','ADMIN'],
     manage_settings: ['FINANCE','ADMIN'],
+    manage_password: ['ADMIN'],
+    manage_access_control: ['ADMIN'],
     manage_users: ['ADMIN'],
     toggle_access: ['ADMIN'],
     reset_passwords: ['ADMIN'],
@@ -27,12 +35,16 @@ function AccessControlTab({ settings, navigate, refresh }) {
   };
 
   const PERM_LABELS = {
+    view_approvals: 'Access My Approvals',
     view_reports: 'View reports',
     view_analytics: 'View analytics',
     export_reports: 'Export Excel reports',
     view_audit_log: 'View audit log',
     edit_categories: 'Edit categories & GL codes',
+    manage_expense_types: 'Manage expense types',
     manage_settings: 'Manage app settings',
+    manage_password: 'View / set default password',
+    manage_access_control: 'Manage access control',
     manage_users: 'Manage users',
     toggle_access: 'Activate / deactivate user access',
     reset_passwords: 'Reset any user password',
@@ -162,7 +174,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
             </tr>
           </thead>
           <tbody>
-            {Object.keys(DEFAULT_PERMS).map((key, i) => (
+            {Object.keys(DEFAULT_PERMS).filter(key => acIsAdmin || !SENSITIVE_PERMS.includes(key)).map((key, i) => (
               <tr key={key} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                 <td className="py-2.5 px-4 font-semibold" style={{color:'#111827'}}>{PERM_LABELS[key]}</td>
                 {ROLES.map(role => {
@@ -228,6 +240,9 @@ export default function SettingsPage() {
   const canChangeBranding = can('change_branding', ['ADMIN']);
   const canSeeBranding = canUploadBranding || canChangeBranding;
   const canManageSettings = can('manage_settings', ['FINANCE','ADMIN']);
+  const canExpenseTypes = can('manage_expense_types', ['FINANCE','ADMIN']);
+  const canPassword = can('manage_password', ['ADMIN']);
+  const canAccessControl = can('manage_access_control', ['ADMIN']);
 
   // Exchange rate (USD -> PHP) — separate from the main settings form.
   const [fx, setFx] = useState(null);          // { usdPhpRate, auto, updatedAt }
@@ -349,7 +364,13 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1 flex-wrap">
-        {TABS.filter(t => t === 'Branding' ? canSeeBranding : ((t!=='Access Control' && t!=='Password') || isAdmin)).map(t => (
+        {TABS.filter(t => {
+          if (t === 'Branding') return canSeeBranding;
+          if (t === 'Expense Types') return canExpenseTypes;
+          if (t === 'Password') return canPassword;
+          if (t === 'Access Control') return canAccessControl;
+          return true; // General, Categories
+        }).map(t => (
           <button key={t} onClick={()=>setTab(t)}
             className={`px-3 py-1.5 rounded-md text-xs transition-colors ${tab===t?'bg-white font-medium shadow-sm':'text-gray-500 hover:text-gray-700'}`}>
             {t}
@@ -563,7 +584,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {tab === 'Expense Types' && (
+        {tab === 'Expense Types' && canExpenseTypes && (
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium text-gray-700">Expense types</h2>
@@ -582,7 +603,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {tab === 'Password' && isAdmin && (
+        {tab === 'Password' && canPassword && (
           <div>
             <h2 className="text-sm font-medium text-gray-700 mb-4">Password manager</h2>
             <div className="bg-amber-500 border border-amber-600 rounded-lg p-3 mb-4 text-xs text-white font-medium">
@@ -602,7 +623,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {tab === 'Access Control' && isAdmin && <AccessControlTab settings={settings} navigate={navigate} refresh={refresh} />}
+        {tab === 'Access Control' && canAccessControl && <AccessControlTab settings={settings} navigate={navigate} refresh={refresh} />}
 
         {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
 
