@@ -2,6 +2,7 @@
 // Displays a receipt (image OR pdf). Clicking an image opens an in-app zoom
 // modal (no new browser window), matching the Add Expense receipt zoom.
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -74,8 +75,8 @@ export default function ReceiptImage({ receiptId, className = '', onClick }) {
       )}
 
       {/* In-app zoom modal */}
-      {zoomOpen && src && !isPdf && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex flex-col" onClick={() => setZoomOpen(false)}>
+      {zoomOpen && src && !isPdf && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/80 flex flex-col" onClick={() => setZoomOpen(false)}>
           <div className="flex items-center justify-between p-3 text-white text-sm">
             <span>Receipt</span>
             <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
@@ -97,12 +98,13 @@ export default function ReceiptImage({ receiptId, className = '', onClick }) {
               className="max-w-full max-h-[70vh] object-contain rounded-lg" />
           </div>
           <p className="text-center text-white/60 text-xs pb-3">Tap image to zoom · tap outside to close</p>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* In-app PDF viewer (browser's built-in PDF controls handle zoom/scroll) */}
-      {pdfOpen && src && isPdf && (
-        <div className="fixed inset-0 z-[60] bg-black/85 flex flex-col" onClick={() => setPdfOpen(false)}>
+      {pdfOpen && src && isPdf && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/85 flex flex-col" onClick={() => setPdfOpen(false)}>
           <div className="flex items-center justify-between p-3 text-white text-sm">
             <span>Receipt (PDF)</span>
             <button onClick={() => setPdfOpen(false)}
@@ -113,7 +115,8 @@ export default function ReceiptImage({ receiptId, className = '', onClick }) {
           <div className="flex-1 px-3 pb-3" onClick={e => e.stopPropagation()}>
             <iframe src={src} title="Receipt PDF full" className="w-full h-full rounded-lg bg-white" />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

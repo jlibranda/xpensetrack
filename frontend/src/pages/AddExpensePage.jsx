@@ -22,6 +22,7 @@ export default function AddExpensePage() {
   const [receiptIsPdf, setReceiptIsPdf] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
+  const [pdfOpen, setPdfOpen] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dupes, setDupes] = useState([]);
@@ -167,7 +168,7 @@ export default function AddExpensePage() {
         {receiptPreview ? (
           <div className="flex items-start gap-3">
             {receiptIsPdf ? (
-              <div onClick={() => window.open(receiptPreview,'_blank')}
+              <div onClick={() => setPdfOpen(true)}
                 className="w-24 h-24 rounded-lg border border-gray-200 shrink-0 cursor-pointer flex flex-col items-center justify-center bg-gray-50 text-gray-500">
                 <span className="text-2xl">📄</span>
                 <span className="text-[10px] mt-1 font-medium">PDF receipt</span>
@@ -343,6 +344,22 @@ export default function AddExpensePage() {
               className="max-w-full max-h-[70vh] object-contain rounded-lg" />
           </div>
           <p className="text-center text-white/60 text-xs pb-3">Tap image to zoom · tap outside to close</p>
+        </div>
+      )}
+
+      {/* In-app PDF viewer for uploaded PDF receipts */}
+      {pdfOpen && receiptPreview && receiptIsPdf && (
+        <div className="fixed inset-0 z-[60] bg-black/85 flex flex-col" onClick={() => setPdfOpen(false)}>
+          <div className="flex items-center justify-between p-3 text-white text-sm">
+            <span>Receipt (PDF)</span>
+            <button onClick={() => setPdfOpen(false)}
+              className="px-4 h-10 rounded-lg bg-white text-gray-900 font-semibold text-sm flex items-center gap-1.5 shadow-lg hover:bg-gray-100">
+              ✕ Close
+            </button>
+          </div>
+          <div className="flex-1 px-3 pb-3" onClick={e => e.stopPropagation()}>
+            <iframe src={receiptPreview} title="Receipt PDF full" className="w-full h-full rounded-lg bg-white" />
+          </div>
         </div>
       )}
     </div>
