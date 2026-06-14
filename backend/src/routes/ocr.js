@@ -78,17 +78,36 @@ async function categoryFromMerchant(merchant, systemCats) {
 const CATEGORIES = ['MEALS', 'TRAVEL', 'ACCOMMODATION', 'SUPPLIES', 'COMMUNICATIONS', 'OTHER'];
 
 // Enhance a phone photo for better OCR: downscale (under the 1MB free-tier limit),
-// convert to grayscale, and boost contrast. Returns a JPEG buffer, or null on failure.
+// grayscale, auto-brightness, contrast boost, and a mild sharpen. Returns a JPEG
+// buffer, or null on failure.
 async function preprocessImage(buffer) {
   try {
     const Jimp = require('jimp');
     const image = await Jimp.read(buffer);
     const maxDim = 2000;
     if (image.bitmap.width > maxDim || image.bitmap.height > maxDim) image.scaleToFit(maxDim, maxDim);
-    image.greyscale().normalize().contrast(0.2);
+
+    image.greyscale().normalize();
+
+    // Auto-brightness: sample a small clone to estimate average luminance,
+    // then brighten dark photos / tone down washed-out ones.
+    try {
+      const probe = image.clone().resize(40, Jimp.AUTO);
+      let sum = 0, n = 0;
+      probe.scan(0, 0, probe.bitmap.width, probe.bitmap.height, function (x, y, idx) {
+        sum += this.bitmap.data[idx]; n++;
+      });
+      const mean = n ? sum / n : 128; // 0..255
+      if (mean < 110) image.brightness(Math.min(0.4, (110 - mean) / 255));
+      else if (mean > 200) image.brightness(-Math.min(0.25, (mean - 200) / 255));
+    } catch (e) { /* brightness is best-effort */ }
+
+    image.contrast(0.18);
+    // Mild sharpen to crisp up text edges.
+    image.convolute([[0, -1, 0], [-1, 5, -1], [0, -1, 0]]);
+
     let quality = 80;
     let out = await image.clone().quality(quality).getBufferAsync(Jimp.MIME_JPEG);
-    // Keep under ~1MB for the OCR.space free tier.
     while (out.length > 1000000 && quality > 30) {
       quality -= 15;
       out = await image.clone().quality(quality).getBufferAsync(Jimp.MIME_JPEG);
@@ -308,7 +327,6 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
     // Fallback: OCR.space (free). Returns raw text; we parse it into fields.
     if (!parsed && ocrSpaceKey) {
       try {
-        const body = new URLSearchParams();
         const mime = req.file.mimetype || 'image/jpeg';
         const isPdf = mime.includes('pdf') || (req.file.originalname || '').toLowerCase().endsWith('.pdf');
         // Enhance photos for better recognition (PDFs are sent as-is).
@@ -318,23 +336,34 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
           const enhanced = await preprocessImage(req.file.buffer);
           if (enhanced) { sendBuffer = enhanced; sendMime = 'image/jpeg'; }
         }
-        body.append('base64Image', `data:${sendMime};base64,${sendBuffer.toString('base64')}`);
-        body.append('filetype', isPdf ? 'PDF' : 'Auto');
-        body.append('OCREngine', '2');
-        body.append('scale', 'true');
-        body.append('isTable', 'true');
-        const ocrRes = await fetch('https://api.ocr.space/parse/image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', apikey: ocrSpaceKey },
-          body,
-        });
-        const ocrData = await ocrRes.json();
-        const rawText = ocrData?.ParsedResults?.[0]?.ParsedText || '';
-        if (rawText) {
+        const b64 = `data:${sendMime};base64,${sendBuffer.toString('base64')}`;
+
+        const callOcr = async (engine) => {
+          const body = new URLSearchParams();
+          body.append('base64Image', b64);
+          body.append('filetype', isPdf ? 'PDF' : 'Auto');
+          body.append('OCREngine', String(engine));
+          body.append('scale', 'true');
+          body.append('isTable', 'true');
+          body.append('detectOrientation', 'true'); // auto-rotate tilted/rotated photos
+          const r = await fetch('https://api.ocr.space/parse/image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', apikey: ocrSpaceKey },
+            body,
+          });
+          const data = await r.json();
+          return data?.ParsedResults?.[0]?.ParsedText || '';
+        };
+
+        // Try the more accurate engine first; if it yields nothing, retry with engine 1.
+        let rawText = await callOcr(2);
+        if (!rawText || rawText.trim().length < 5) rawText = await callOcr(1);
+
+        if (rawText && rawText.trim().length >= 5) {
           parsed = parseReceiptText(rawText);
           aiUsed = true;
         } else {
-          console.error('OCR.space no text:', ocrData?.ErrorMessage || ocrData?.OCRExitCode);
+          console.error('OCR.space returned no usable text');
         }
       } catch (e) { console.error('OCR.space error:', e.message); }
     }
