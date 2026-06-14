@@ -75,7 +75,7 @@ router.get('/summary', authenticate, async (req, res) => {
     } // 'all' -> no submittedById filter (company-wide)
 
     const [approved, pending, rejected, all] = await Promise.all([
-      prisma.expense.findMany({ where: { ...where, status: { in: ['APPROVED', 'PROCESSED'] } }, include: { submittedBy: { select: { firstName: true, lastName: true, department: true } } } }),
+      prisma.expense.findMany({ where: { ...where, status: { in: ['APPROVED', 'PROCESSED'] } }, include: { submittedBy: { select: { firstName: true, lastName: true, department: true, costCenter: true } } } }),
       prisma.expense.count({ where: { ...where, status: 'PENDING' } }),
       prisma.expense.count({ where: { ...where, status: 'REJECTED' } }),
       prisma.expense.count({ where }),
@@ -91,11 +91,39 @@ router.get('/summary', authenticate, async (req, res) => {
     const byEmployee = approved.reduce((acc, e) => { const k = `${e.submittedBy.firstName||''} ${e.submittedBy.lastName||''}`.trim(); acc[k] = (acc[k] || 0) + e.amountPhp; return acc; }, {});
     const byDepartment = approved.reduce((acc, e) => { const k = e.submittedBy.department || 'Unknown'; acc[k] = (acc[k] || 0) + e.amountPhp; return acc; }, {});
 
+    // GL-code map (category -> GL code) from org settings, for the GL rollup.
+    let glMap = {};
+    try {
+      const org = await prisma.orgSettings.findFirst();
+      if (org?.categoryGlCodes) {
+        const raw = JSON.parse(org.categoryGlCodes);
+        glMap = Object.fromEntries(Object.entries(raw).map(([k, v]) => [String(k).trim().toUpperCase(), v]));
+      }
+    } catch (e) { glMap = {}; }
+    const glFor = (e) => e.glCode || glMap[String(e.category || '').trim().toUpperCase()] || 'Unmapped';
+
+    const byCostCenter = approved.reduce((acc, e) => { const k = e.costCenter || e.submittedBy.costCenter || 'Unassigned'; acc[k] = (acc[k] || 0) + e.amountPhp; return acc; }, {});
+    const byGlCode = approved.reduce((acc, e) => { const k = glFor(e); acc[k] = (acc[k] || 0) + e.amountPhp; return acc; }, {});
+
+    // Computed VAT (assumes amounts are VAT-inclusive at 12%). VATable = gross / 1.12.
+    const VAT_RATE = 0.12;
+    const vatNet = totalPhp / (1 + VAT_RATE);
+    const vat = {
+      rate: VAT_RATE,
+      gross: +totalPhp.toFixed(2),
+      vatable: +vatNet.toFixed(2),
+      vatAmount: +(totalPhp - vatNet).toFixed(2),
+    };
+    const vatByCategory = Object.fromEntries(Object.entries(byCategory).map(([c, amt]) => {
+      const net = amt / (1 + VAT_RATE);
+      return [c, { gross: +amt.toFixed(2), vatable: +net.toFixed(2), vatAmount: +(amt - net).toFixed(2) }];
+    }));
+
     res.json({ scope: requested, totalPhp, count: approved.length,
       approvedPhp, approvedCount: approvedOnly.length,
       processedPhp, processedCount: processedOnly.length,
       pendingCount: pending, rejectedCount: rejected, totalCount: all,
-      byCategory, byEmployee, byDepartment });
+      byCategory, byEmployee, byDepartment, byCostCenter, byGlCode, vat, vatByCategory });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -119,6 +147,60 @@ router.get('/dashboard', authenticate, async (req, res) => {
       pending: { amount: pending._sum.amountPhp || 0, count: pending._count },
       approved: { amount: approved._sum.amountPhp || 0, count: approved._count },
       reimbursed: { amount: reimbursed._sum.amountPhp || 0, count: reimbursed._count },
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/reports/aging — outstanding items bucketed by age (Finance/Admin/Manager)
+router.get('/aging', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), async (req, res) => {
+  try {
+    const scope = await teamScopeFilter(req.user);
+    const baseWhere = scope ? { submittedById: { in: scope } } : {};
+    const now = Date.now();
+    const DAY = 86400000;
+    const bucketOf = (d) => d <= 7 ? '0-7' : d <= 14 ? '8-14' : d <= 30 ? '15-30' : '30+';
+    const emptyBuckets = () => ({ '0-7': { count: 0, amount: 0 }, '8-14': { count: 0, amount: 0 }, '15-30': { count: 0, amount: 0 }, '30+': { count: 0, amount: 0 } });
+    const name = (u) => `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || '—';
+
+    // Pending approval — aged from when it was submitted (createdAt).
+    const pending = await prisma.expense.findMany({
+      where: { ...baseWhere, status: 'PENDING' },
+      include: { submittedBy: { select: { firstName: true, lastName: true } } },
+    });
+    const pendingBuckets = emptyBuckets();
+    const pendingItems = [];
+    for (const e of pending) {
+      const days = Math.max(0, Math.floor((now - new Date(e.createdAt).getTime()) / DAY));
+      const b = bucketOf(days);
+      pendingBuckets[b].count++; pendingBuckets[b].amount += e.amountPhp;
+      pendingItems.push({ id: e.id, title: e.title, merchant: e.merchant, category: e.category, amountPhp: e.amountPhp, employee: name(e.submittedBy), days, since: e.createdAt });
+    }
+
+    // Approved but not yet paid — aged from the approval decision (latest APPROVED approval), fallback to updatedAt.
+    const approvedUnpaid = await prisma.expense.findMany({
+      where: { ...baseWhere, status: 'APPROVED' },
+      include: {
+        submittedBy: { select: { firstName: true, lastName: true } },
+        approvals: { where: { status: 'APPROVED' }, orderBy: { updatedAt: 'desc' }, take: 1 },
+      },
+    });
+    const approvedBuckets = emptyBuckets();
+    const approvedItems = [];
+    for (const e of approvedUnpaid) {
+      const approvedAt = e.approvals[0]?.updatedAt || e.updatedAt;
+      const days = Math.max(0, Math.floor((now - new Date(approvedAt).getTime()) / DAY));
+      const b = bucketOf(days);
+      approvedBuckets[b].count++; approvedBuckets[b].amount += e.amountPhp;
+      approvedItems.push({ id: e.id, title: e.title, merchant: e.merchant, category: e.category, amountPhp: e.amountPhp, employee: name(e.submittedBy), days, since: approvedAt });
+    }
+
+    pendingItems.sort((a, b) => b.days - a.days);
+    approvedItems.sort((a, b) => b.days - a.days);
+    const sum = (items) => +items.reduce((s, i) => s + i.amountPhp, 0).toFixed(2);
+
+    res.json({
+      pending: { buckets: pendingBuckets, total: sum(pendingItems), count: pendingItems.length, items: pendingItems.slice(0, 100) },
+      approvedUnpaid: { buckets: approvedBuckets, total: sum(approvedItems), count: approvedItems.length, items: approvedItems.slice(0, 100) },
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -180,6 +262,8 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
       'Amount': e.amount,
       'Currency': e.currency,
       'Amount (PHP)': Number(e.amountPhp.toFixed(2)),
+      'VATable (PHP)': Number((e.amountPhp / 1.12).toFixed(2)),
+      'Input VAT (PHP)': Number((e.amountPhp - e.amountPhp / 1.12).toFixed(2)),
       'Status': e.status,
       'Processed': e.processedAt ? 'Yes' : 'No',
       'Processed / Payout Date': fmtDate(e.processedAt),
@@ -189,7 +273,7 @@ router.get('/export', authenticate, requireRole('MANAGER', 'FINANCE', 'ADMIN'), 
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
       {wch:12},{wch:16},{wch:26},{wch:16},{wch:14},{wch:30},{wch:25},
-      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:12},{wch:11},{wch:20}
+      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:11},{wch:20}
     ];
     // Bold header row
     const headerRange = XLSX.utils.decode_range(ws['!ref']);

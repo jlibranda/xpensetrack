@@ -11,6 +11,7 @@ const MONTHS = [
 
 export default function ReportsPage() {
   const [summary, setSummary] = useState(null);
+  const [aging, setAging] = useState(null);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const now = new Date();
@@ -38,6 +39,8 @@ export default function ReportsPage() {
       if (userId) params.append('userId', userId);
       const data = await api.get(`/reports/summary?${params}`);
       setSummary(data);
+      // Aging is company/scope-wide outstanding (not date-filtered).
+      try { setAging(await api.get('/reports/aging')); } catch { setAging(null); }
     } catch {
       setSummary(null);
     } finally {
@@ -156,6 +159,100 @@ export default function ReportsPage() {
             </div>
           )}
 
+          {/* VAT summary (computed, assumes 12% VAT-inclusive amounts) */}
+          {summary.vat && summary.totalPhp > 0 && (
+            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden mb-4">
+              <div className="px-4 py-3 border-b border-gray-50">
+                <h2 className="text-sm font-medium text-gray-700">VAT summary (computed)</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Estimate — assumes amounts are VAT-inclusive at 12%. VATable = amount ÷ 1.12.</p>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-gray-50">
+                <div className="p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Gross</p>
+                  <p className="text-lg font-medium text-gray-900">{format(summary.vat.gross)}</p>
+                </div>
+                <div className="p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">VATable (net)</p>
+                  <p className="text-lg font-medium text-gray-900">{format(summary.vat.vatable)}</p>
+                </div>
+                <div className="p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Input VAT</p>
+                  <p className="text-lg font-medium text-brand-600">{format(summary.vat.vatAmount)}</p>
+                </div>
+              </div>
+              {summary.vatByCategory && Object.keys(summary.vatByCategory).length > 0 && (
+                <table className="w-full text-sm border-t border-gray-50">
+                  <thead><tr className="bg-gray-50">
+                    <th className="px-4 py-2.5 text-left text-xs text-gray-500 font-medium">Category</th>
+                    <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Gross</th>
+                    <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">VATable</th>
+                    <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Input VAT</th>
+                  </tr></thead>
+                  <tbody>
+                    {Object.entries(summary.vatByCategory).sort((a,b)=>b[1].gross-a[1].gross).map(([cat, v]) => (
+                      <tr key={cat} className="border-t border-gray-50">
+                        <td className="px-4 py-2.5 text-gray-900 capitalize">{cat.toLowerCase()}</td>
+                        <td className="px-4 py-2.5 text-right text-gray-600">{format(v.gross)}</td>
+                        <td className="px-4 py-2.5 text-right text-gray-600">{format(v.vatable)}</td>
+                        <td className="px-4 py-2.5 text-right font-medium text-brand-600">{format(v.vatAmount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* By cost center */}
+          {summary.byCostCenter && Object.keys(summary.byCostCenter).length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden mb-4">
+              <div className="px-4 py-3 border-b border-gray-50">
+                <h2 className="text-sm font-medium text-gray-700">By cost center</h2>
+              </div>
+              <table className="w-full text-sm">
+                <thead><tr className="bg-gray-50">
+                  <th className="px-4 py-2.5 text-left text-xs text-gray-500 font-medium">Cost Center</th>
+                  <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Amount</th>
+                  <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Share</th>
+                </tr></thead>
+                <tbody>
+                  {Object.entries(summary.byCostCenter).sort((a,b)=>b[1]-a[1]).map(([cc, amt]) => (
+                    <tr key={cc} className="border-t border-gray-50">
+                      <td className="px-4 py-3 text-gray-900">{cc}</td>
+                      <td className="px-4 py-3 text-right font-medium">{format(amt)}</td>
+                      <td className="px-4 py-3 text-right text-gray-400 text-xs">{summary.totalPhp>0?((amt/summary.totalPhp)*100).toFixed(1):0}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* By GL code */}
+          {summary.byGlCode && Object.keys(summary.byGlCode).length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden mb-4">
+              <div className="px-4 py-3 border-b border-gray-50">
+                <h2 className="text-sm font-medium text-gray-700">By GL code</h2>
+              </div>
+              <table className="w-full text-sm">
+                <thead><tr className="bg-gray-50">
+                  <th className="px-4 py-2.5 text-left text-xs text-gray-500 font-medium">GL Code</th>
+                  <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Amount</th>
+                  <th className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">Share</th>
+                </tr></thead>
+                <tbody>
+                  {Object.entries(summary.byGlCode).sort((a,b)=>b[1]-a[1]).map(([code, amt]) => (
+                    <tr key={code} className="border-t border-gray-50">
+                      <td className="px-4 py-3 text-gray-900">{code}</td>
+                      <td className="px-4 py-3 text-right font-medium">{format(amt)}</td>
+                      <td className="px-4 py-3 text-right text-gray-400 text-xs">{summary.totalPhp>0?((amt/summary.totalPhp)*100).toFixed(1):0}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {summary.byEmployee && Object.keys(summary.byEmployee).length > 0 && (
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-50">
@@ -187,10 +284,63 @@ export default function ReportsPage() {
               <p className="text-gray-400 text-sm">No approved expenses found for this period.</p>
             </div>
           )}
+
+          {/* Aging / outstanding */}
+          {aging && (
+            <div className="mt-6">
+              <h2 className="text-sm font-medium text-gray-700 mb-2">Aging / outstanding</h2>
+              <p className="text-xs text-gray-400 mb-3">Current outstanding items by age (not limited to the date range above).</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <AgingCard title="Pending approval" subtitle="aged from date submitted" data={aging.pending} format={format} />
+                <AgingCard title="Approved, not yet paid" subtitle="aged from approval date" data={aging.approvedUnpaid} format={format} />
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div className="py-12 text-center text-sm text-gray-400">Select a date range and click Generate.</div>
       )}
+    </div>
+  );
+}
+
+const BUCKET_COLOR = {
+  '0-7': 'text-gray-700',
+  '8-14': 'text-amber-600',
+  '15-30': 'text-orange-600',
+  '30+': 'text-red-600',
+};
+
+function AgingCard({ title, subtitle, data, format }) {
+  const buckets = data?.buckets || {};
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-medium text-gray-700">{title}</h3>
+          <p className="text-[11px] text-gray-400">{subtitle}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm font-semibold text-gray-900">{format(data?.total || 0)}</p>
+          <p className="text-[11px] text-gray-400">{data?.count || 0} items</p>
+        </div>
+      </div>
+      <table className="w-full text-sm">
+        <thead><tr className="bg-gray-50">
+          <th className="px-4 py-2 text-left text-xs text-gray-500 font-medium">Age (days)</th>
+          <th className="px-4 py-2 text-right text-xs text-gray-500 font-medium">Items</th>
+          <th className="px-4 py-2 text-right text-xs text-gray-500 font-medium">Amount</th>
+        </tr></thead>
+        <tbody>
+          {['0-7','8-14','15-30','30+'].map(b => (
+            <tr key={b} className="border-t border-gray-50">
+              <td className={`px-4 py-2.5 font-medium ${BUCKET_COLOR[b]}`}>{b}</td>
+              <td className="px-4 py-2.5 text-right text-gray-600">{buckets[b]?.count || 0}</td>
+              <td className="px-4 py-2.5 text-right font-medium">{format(buckets[b]?.amount || 0)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
