@@ -106,22 +106,46 @@ function parseReceiptText(raw) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const lower = text.toLowerCase();
 
-  // --- Amount: prefer a line mentioning total/amount due; else the largest money value ---
-  const moneyRe = /(\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})|\d+\.\d{2})/g;
+  // --- Amount: prefer the value next to the strongest "total" keyword. ---
+  const moneyRe = /(\d{1,3}(?:[,]\d{3})+(?:\.\d{2})?|\d+\.\d{2}|\d+\.\d{1})/;
+  const moneyReG = new RegExp(moneyRe.source, 'g');
   let amount = null;
-  const totalLine = lines.find(l => /(grand\s*total|amount\s*due|total\s*amount|total)/i.test(l) && moneyRe.test(l));
-  const pick = (s) => {
-    const m = String(s).match(moneyRe);
-    if (!m) return null;
-    return m.map(v => parseFloat(v.replace(/[,\s]/g, ''))).filter(n => !isNaN(n));
+
+  const moneyIn = (s) => {
+    const m = String(s).match(moneyReG);
+    if (!m) return [];
+    return m.map(v => parseFloat(v.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
   };
-  if (totalLine) {
-    const vals = pick(totalLine);
-    if (vals && vals.length) amount = Math.max(...vals);
+
+  // Keyword priority (highest first). We scan lines for these labels.
+  const priorities = [
+    /grand\s*total/i,
+    /total\s*amount\s*due/i,
+    /amount\s*due/i,
+    /total\s*amount/i,
+    /total\s*payment/i,
+    /(?:net\s*)?total\s*sales?/i,
+    /\btotal\b/i,
+  ];
+  // Lines that look like totals but are NOT the final amount — never use these.
+  const exclude = /(sub\s*-?\s*total|vat(?:able)?|less|discount|change|tendered|cash|tax\b|exclusive|vat amount)/i;
+
+  for (const kw of priorities) {
+    if (amount != null) break;
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (!kw.test(l) || exclude.test(l)) continue;
+      // Amount may be on the same line, or on the next line (common on receipts).
+      let vals = moneyIn(l);
+      if (!vals.length && i + 1 < lines.length) vals = moneyIn(lines[i + 1]);
+      if (vals.length) { amount = Math.max(...vals); break; }
+    }
   }
+
+  // Last resort: largest money value anywhere (excluding obvious non-total lines).
   if (amount == null) {
-    const all = pick(text) || [];
-    if (all.length) amount = Math.max(...all); // best-effort: largest money figure
+    const candidates = lines.filter(l => !exclude.test(l)).flatMap(moneyIn);
+    if (candidates.length) amount = Math.max(...candidates);
   }
 
   // --- Currency ---

@@ -27,7 +27,7 @@ export default function AddExpensePage() {
   const [dupAcknowledged, setDupAcknowledged] = useState(false);
   const [form, setForm] = useState({
     title:'', orNumber:'', merchant:'', amount:'', currency:'PHP',
-    category: categories[0] || 'MEALS',
+    category: '',
     expenseType: expenseTypes[0] || 'REIMBURSEMENT',
     expenseDate: new Date().toISOString().split('T')[0],
   });
@@ -89,6 +89,7 @@ export default function AddExpensePage() {
   const handleSubmit = async (action) => {
     if (submitting) return; // guard against double-press / rapid clicks
     if (!form.merchant || !form.amount || !form.expenseDate) { setError('Merchant, amount, and date are required.'); return; }
+    if (!form.category) { setError('Please select a category.'); return; }
     if (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0) { setError('Enter a valid amount.'); return; }
 
     setSubmitting(true); setError('');
@@ -234,6 +235,7 @@ export default function AddExpensePage() {
             <label className="block text-xs text-gray-500 mb-1">Category *</label>
             <select value={form.category} onChange={e=>set('category',e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400">
+              <option value="">— Select category —</option>
               {categories.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
