@@ -19,6 +19,7 @@ export default function AddExpensePage() {
   const [submitting, setSubmitting] = useState(false);
   const [receiptId, setReceiptId] = useState('');
   const [receiptPreview, setReceiptPreview] = useState('');
+  const [receiptIsPdf, setReceiptIsPdf] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dupes, setDupes] = useState([]);
@@ -54,6 +55,7 @@ export default function AddExpensePage() {
     const file = e.target.files[0];
     if (!file) return;
     setReceiptPreview(URL.createObjectURL(file));
+    setReceiptIsPdf(file.type === 'application/pdf' || (file.name || '').toLowerCase().endsWith('.pdf'));
     setScanning(true); setError('');
     try {
       const fd = new FormData();
@@ -146,16 +148,24 @@ export default function AddExpensePage() {
         <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={handleScan} />
         {receiptPreview ? (
           <div className="flex items-start gap-3">
-            <img src={receiptPreview} alt="Receipt"
-              className="w-24 h-24 object-cover rounded-lg border border-gray-200 shrink-0 cursor-pointer"
-              onClick={() => window.open(receiptPreview,'_blank')}
-              onError={e => { e.target.style.display='none'; }} />
+            {receiptIsPdf ? (
+              <div onClick={() => window.open(receiptPreview,'_blank')}
+                className="w-24 h-24 rounded-lg border border-gray-200 shrink-0 cursor-pointer flex flex-col items-center justify-center bg-gray-50 text-gray-500">
+                <span className="text-2xl">📄</span>
+                <span className="text-[10px] mt-1 font-medium">PDF receipt</span>
+              </div>
+            ) : (
+              <img src={receiptPreview} alt="Receipt"
+                className="w-24 h-24 object-cover rounded-lg border border-gray-200 shrink-0 cursor-pointer"
+                onClick={() => window.open(receiptPreview,'_blank')}
+                onError={e => { e.target.style.display='none'; }} />
+            )}
             <div className="flex-1">
               <p className="text-sm font-medium text-green-700">{scanning ? '✨ AI reading receipt...' : '✓ Receipt attached'}</p>
               {scanning && <p className="text-xs text-gray-400 mt-0.5 animate-pulse">Extracting details...</p>}
               <div className="flex gap-3 mt-2">
                 <button onClick={() => fileRef.current.click()} className="text-xs text-gray-400 hover:text-gray-600">Replace</button>
-                <button onClick={() => { setReceiptId(''); setReceiptPreview(''); fileRef.current.value=''; }} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                <button onClick={() => { setReceiptId(''); setReceiptPreview(''); setReceiptIsPdf(false); fileRef.current.value=''; }} className="text-xs text-red-400 hover:text-red-600">Remove</button>
               </div>
             </div>
           </div>

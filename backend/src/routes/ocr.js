@@ -134,7 +134,10 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
     if (!parsed && ocrSpaceKey) {
       try {
         const body = new URLSearchParams();
-        body.append('base64Image', `data:${req.file.mimetype || 'image/jpeg'};base64,${req.file.buffer.toString('base64')}`);
+        const mime = req.file.mimetype || 'image/jpeg';
+        const isPdf = mime.includes('pdf') || (req.file.originalname || '').toLowerCase().endsWith('.pdf');
+        body.append('base64Image', `data:${mime};base64,${req.file.buffer.toString('base64')}`);
+        body.append('filetype', isPdf ? 'PDF' : 'Auto');
         body.append('OCREngine', '2');
         body.append('scale', 'true');
         body.append('isTable', 'true');
