@@ -9,6 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 export default function ReceiptImage({ receiptId, className = '', onClick }) {
   const [src, setSrc] = useState('');
   const [isPdf, setIsPdf] = useState(false);
+  const [mime, setMime] = useState('');
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [zoomOpen, setZoomOpen] = useState(false);
@@ -24,6 +25,7 @@ export default function ReceiptImage({ receiptId, className = '', onClick }) {
       .then(r => { if (!r.ok) throw new Error('load failed'); return r.blob(); })
       .then(blob => {
         setIsPdf(blob.type === 'application/pdf');
+        setMime(blob.type || '');
         const obj = URL.createObjectURL(blob);
         revoked = obj;
         setSrc(obj);
@@ -42,6 +44,21 @@ export default function ReceiptImage({ receiptId, className = '', onClick }) {
 
   const openZoom = () => { setZoomScale(1); setZoomOpen(true); };
 
+  const downloadReceipt = () => {
+    if (!src) return;
+    const ext = isPdf ? 'pdf'
+      : mime.includes('png') ? 'png'
+      : mime.includes('webp') ? 'webp'
+      : mime.includes('heic') ? 'heic'
+      : 'jpg';
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = `receipt-${receiptId}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   return (
     <div className="relative">
       {loading && <div className="bg-gray-50 rounded-lg h-32 animate-pulse" />}
@@ -54,9 +71,14 @@ export default function ReceiptImage({ receiptId, className = '', onClick }) {
             className={`rounded-lg border border-gray-100 w-full ${className}`}
             style={{ minHeight: '12rem' }}
           />
-          <button onClick={() => setPdfOpen(true)} className="mt-1 text-xs text-brand-400 hover:text-brand-600 flex items-center gap-1">
-            🔍 View larger
-          </button>
+          <div className="mt-1 flex items-center gap-3">
+            <button onClick={() => setPdfOpen(true)} className="text-xs text-brand-400 hover:text-brand-600 flex items-center gap-1">
+              🔍 View larger
+            </button>
+            <button onClick={downloadReceipt} className="text-xs text-brand-400 hover:text-brand-600 flex items-center gap-1">
+              ⬇ Download
+            </button>
+          </div>
         </>
       )}
 
@@ -68,9 +90,14 @@ export default function ReceiptImage({ receiptId, className = '', onClick }) {
             className={`rounded-lg border border-gray-100 cursor-zoom-in hover:opacity-90 transition-opacity ${className}`}
             onClick={onClick || openZoom}
           />
-          <button onClick={openZoom} className="mt-1 text-xs text-brand-400 hover:text-brand-600 flex items-center gap-1">
-            🔍 Tap to zoom
-          </button>
+          <div className="mt-1 flex items-center gap-3">
+            <button onClick={openZoom} className="text-xs text-brand-400 hover:text-brand-600 flex items-center gap-1">
+              🔍 Tap to zoom
+            </button>
+            <button onClick={downloadReceipt} className="text-xs text-brand-400 hover:text-brand-600 flex items-center gap-1">
+              ⬇ Download
+            </button>
+          </div>
         </>
       )}
 
