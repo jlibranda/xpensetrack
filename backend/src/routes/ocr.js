@@ -238,14 +238,62 @@ function parseReceiptText(raw) {
     }
   }
 
-  // --- Merchant: first meaningful non-numeric line near the top ---
+  // --- Merchant ---
+  // 1) Detect a known brand anywhere in the text (handles OCR misreads + headers
+  //    like "Saver Grab" on ride receipts). 2) Otherwise take the first meaningful
+  //    line and remove redundant/repeated words.
+  const brandHints = [
+    [/gr[a@o0]b/i, 'Grab'],
+    [/foodpanda/i, 'foodpanda'],
+    [/lalamove/i, 'Lalamove'],
+    [/angkas/i, 'Angkas'],
+    [/joyride/i, 'JoyRide'],
+    [/jollibee/i, 'Jollibee'],
+    [/mcdo|mcdonald/i, "McDonald's"],
+    [/chowking/i, 'Chowking'],
+    [/greenwich/i, 'Greenwich'],
+    [/mang\s*inasal/i, 'Mang Inasal'],
+    [/starbucks/i, 'Starbucks'],
+    [/dunkin/i, 'Dunkin'],
+    [/shell/i, 'Shell'],
+    [/petron/i, 'Petron'],
+    [/caltex/i, 'Caltex'],
+    [/seaoil/i, 'Seaoil'],
+    [/puregold/i, 'Puregold'],
+    [/\bsm\b|sm\s*(super)?market/i, 'SM'],
+    [/robinsons/i, 'Robinsons'],
+    [/national\s*book/i, 'National Book Store'],
+    [/ace\s*hardware/i, 'Ace Hardware'],
+    [/wilcon/i, 'Wilcon'],
+    [/cebu\s*pacific/i, 'Cebu Pacific'],
+    [/grabfood/i, 'GrabFood'],
+  ];
+  // Remove repeated words while preserving order: "Saver Grob Saver Grob" -> "Saver Grob".
+  const dedupeWords = (str) => {
+    const seen = new Set();
+    return str.split(/\s+/).filter(w => {
+      const k = w.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!k || seen.has(k)) return false;
+      seen.add(k); return true;
+    }).join(' ').trim();
+  };
+
   let merchant = '';
-  for (const l of lines.slice(0, 6)) {
-    if (l.length >= 3 && !/^\d/.test(l) && !/receipt|invoice|official/i.test(l)) { merchant = l; break; }
+  // Brand detection first (most reliable).
+  for (const [re, name] of brandHints) { if (re.test(text)) { merchant = name; break; } }
+
+  // Otherwise, first meaningful line, with redundant words removed.
+  if (!merchant) {
+    const noise = /receipt|invoice|official|hope you enjoyed|thank you|welcome|your ride|total|amount|booking|order summary|customer copy/i;
+    for (const l of lines.slice(0, 8)) {
+      if (l.length >= 3 && !/^\d/.test(l) && !noise.test(l)) {
+        merchant = dedupeWords(l);
+        if (merchant.length >= 3) break;
+      }
+    }
   }
 
-  // Category is resolved later against the system's configured list (via the
-  // merchant lookup), so we don't emit an invented category here.
+  // --- Category resolved later against the system list ---
   return {
     merchant: merchant || '',
     title: merchant || '',

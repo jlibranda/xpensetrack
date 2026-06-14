@@ -20,6 +20,8 @@ export default function AddExpensePage() {
   const [receiptId, setReceiptId] = useState('');
   const [receiptPreview, setReceiptPreview] = useState('');
   const [receiptIsPdf, setReceiptIsPdf] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dupes, setDupes] = useState([]);
@@ -70,7 +72,8 @@ export default function AddExpensePage() {
         setForm(f => ({
           ...f,
           merchant: res.parsed.merchant || res.parsed.title || f.merchant,
-          title: res.parsed.title || res.parsed.merchant || f.title,
+          // Leave Purpose/Notes (title) for the user — don't dump the merchant text into it.
+          title: f.title,
           orNumber: res.parsed.orNumber || f.orNumber,
           amount: res.parsed.amount?.toString() || f.amount,
           currency: res.parsed.currency || f.currency,
@@ -158,13 +161,14 @@ export default function AddExpensePage() {
               </div>
             ) : (
               <img src={receiptPreview} alt="Receipt"
-                className="w-24 h-24 object-cover rounded-lg border border-gray-200 shrink-0 cursor-pointer"
-                onClick={() => window.open(receiptPreview,'_blank')}
+                className="w-24 h-24 object-cover rounded-lg border border-gray-200 shrink-0 cursor-zoom-in"
+                onClick={() => { setZoomScale(1); setZoomOpen(true); }}
                 onError={e => { e.target.style.display='none'; }} />
             )}
             <div className="flex-1">
               <p className="text-sm font-medium text-green-700">{scanning ? '✨ AI reading receipt...' : '✓ Receipt attached'}</p>
               {scanning && <p className="text-xs text-gray-400 mt-0.5 animate-pulse">Extracting details...</p>}
+              {!scanning && !receiptIsPdf && <p className="text-[11px] text-gray-400 mt-0.5">Tap the image to zoom in</p>}
               <div className="flex gap-3 mt-2">
                 <button onClick={() => fileRef.current.click()} className="text-xs text-gray-400 hover:text-gray-600">Replace</button>
                 <button onClick={() => { setReceiptId(''); setReceiptPreview(''); setReceiptIsPdf(false); fileRef.current.value=''; }} className="text-xs text-red-400 hover:text-red-600">Remove</button>
@@ -297,6 +301,31 @@ export default function AddExpensePage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Receipt zoom modal */}
+      {zoomOpen && receiptPreview && !receiptIsPdf && (
+        <div className="fixed inset-0 z-[60] bg-black/80 flex flex-col"
+          onClick={() => setZoomOpen(false)}>
+          <div className="flex items-center justify-between p-3 text-white text-sm">
+            <span>Receipt</span>
+            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setZoomScale(s => Math.max(1, +(s - 0.5).toFixed(1)))}
+                className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-lg leading-none">−</button>
+              <span className="w-12 text-center">{Math.round(zoomScale * 100)}%</span>
+              <button onClick={() => setZoomScale(s => Math.min(5, +(s + 0.5).toFixed(1)))}
+                className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-lg leading-none">+</button>
+              <button onClick={() => setZoomOpen(false)}
+                className="ml-2 w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-lg leading-none">✕</button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto p-4" onClick={e => e.stopPropagation()}>
+            <img src={receiptPreview} alt="Receipt full"
+              onClick={() => setZoomScale(s => (s >= 3 ? 1 : +(s + 1).toFixed(1)))}
+              style={{ transform: `scale(${zoomScale})`, transformOrigin: 'top center', transition: 'transform 0.15s', cursor: zoomScale >= 3 ? 'zoom-out' : 'zoom-in' }}
+              className="mx-auto max-w-full rounded-lg" />
+          </div>
+          <p className="text-center text-white/60 text-xs pb-3">Tap image to zoom · tap outside to close</p>
         </div>
       )}
     </div>
