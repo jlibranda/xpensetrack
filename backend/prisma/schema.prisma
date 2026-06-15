@@ -37,6 +37,7 @@ model User {
   passwordResets PasswordReset[]
   ledgerDocs     LedgerDoc[]     @relation("LedgerCreatedBy")
   assignedLedgerDocs LedgerDoc[] @relation("LedgerAssignedTo")
+  editedLedgerDocs LedgerDoc[]   @relation("LedgerLastEditedBy")
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -121,12 +122,14 @@ model LedgerDoc {
   notes         String?
   remarks       String?
   archived      Boolean   @default(false)
-  status        String    @default("UNPAID") // UNPAID | PAID
+  status        String    @default("DRAFT") // DRAFT | FOR_VERIFICATION | FOR_APPROVAL | PAID
   paidAt        DateTime?
   receiptId     String?
   receipt       Receipt?  @relation(fields: [receiptId], references: [id])
   assignedToId  String?
   assignedTo    User?     @relation("LedgerAssignedTo", fields: [assignedToId], references: [id])
+  lastEditedById String?
+  lastEditedBy  User?     @relation("LedgerLastEditedBy", fields: [lastEditedById], references: [id])
   createdById   String?
   createdBy     User?     @relation("LedgerCreatedBy", fields: [createdById], references: [id])
   createdAt     DateTime  @default(now())

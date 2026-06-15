@@ -12,12 +12,20 @@ const TYPE_BADGE = {
   AP_RECEIPT: 'bg-indigo-50 text-indigo-700',
   AR_INVOICE: 'bg-teal-50 text-teal-700',
 };
-const STATUS_BADGE = { UNPAID: 'bg-amber-50 text-amber-700', PAID: 'bg-green-50 text-green-700' };
+const STAGES = ['DRAFT', 'FOR_VERIFICATION', 'FOR_APPROVAL', 'PAID'];
+const STATUS_LABEL = { DRAFT: 'Draft', FOR_VERIFICATION: 'For Verification', FOR_APPROVAL: 'For Approval', PAID: 'Paid' };
+const STATUS_BADGE = {
+  DRAFT: 'bg-gray-100 text-gray-600',
+  FOR_VERIFICATION: 'bg-blue-50 text-blue-700',
+  FOR_APPROVAL: 'bg-amber-50 text-amber-700',
+  PAID: 'bg-green-50 text-green-700',
+};
+const statusLabel = (s) => STATUS_LABEL[s] || s || '—';
 
 const emptyDoc = (defaults = {}) => ({
   docType: 'AP_INVOICE', clientId: '', vendorName: '', vendorTin: '', businessStyle: '',
   docNumber: '', poNumber: '', docDate: '', dueDate: '', amount: '', currency: 'PHP',
-  category: '', notes: '', remarks: '', assignedToId: '', status: 'UNPAID', receiptId: '', ...defaults,
+  category: '', notes: '', remarks: '', assignedToId: '', status: 'DRAFT', receiptId: '', ...defaults,
 });
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -42,9 +50,11 @@ export default function LedgerPage() {
 
   const [sel, setSel] = useState(new Set());
   const [editing, setEditing] = useState(null);
+  const [viewing, setViewing] = useState(null);
   const [bulk, setBulk] = useState(null);
   const [clientModal, setClientModal] = useState(null);
-  const [assignModal, setAssignModal] = useState(null); // { ids: [...] } for bulk assign
+  const [assignModal, setAssignModal] = useState(null);
+  const [statusModal, setStatusModal] = useState(null); // { ids:[...] } for bulk status change
   const [scanning, setScanning] = useState(false);
   const [dragging, setDragging] = useState(false);
 
@@ -159,11 +169,11 @@ export default function LedgerPage() {
   const allSelected = sel.size > 0 && allVisibleIds.every(id => sel.has(id));
   const toggleAll = () => setSel(allSelected ? new Set() : new Set(allVisibleIds));
   const toggleOne = (id) => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const bulkAction = async (action, assignedToId) => {
+  const bulkAction = async (action, assignedToId, status) => {
     const ids = [...sel];
     if (!ids.length) return;
     if (action === 'delete' && !confirm(`Delete ${ids.length} document(s)?`)) return;
-    try { await api.post('/ledger/bulk-action', { ids, action, assignedToId }); setAssignModal(null); load(); }
+    try { await api.post('/ledger/bulk-action', { ids, action, assignedToId, status }); setAssignModal(null); setStatusModal(null); load(); }
     catch (err) { alert(err.error || 'Failed'); }
   };
 
@@ -247,7 +257,8 @@ export default function LedgerPage() {
             </select>
             {!isArchived && (
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm">
-                <option value="">All statuses</option><option value="UNPAID">Unpaid</option><option value="PAID">Paid</option>
+                <option value="">All statuses</option>
+                {STAGES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
               </select>
             )}
             <button onClick={load} className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Search</button>
@@ -258,8 +269,7 @@ export default function LedgerPage() {
             <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-gray-900 text-white text-sm flex-wrap">
               <span className="font-medium">{sel.size} selected</span>
               <span className="opacity-40">|</span>
-              {!isArchived && <button onClick={() => bulkAction('paid')} className="hover:underline">Mark paid</button>}
-              {!isArchived && <button onClick={() => bulkAction('unpaid')} className="hover:underline">Mark unpaid</button>}
+              {!isArchived && <button onClick={() => setStatusModal({ ids: [...sel] })} className="hover:underline">Change status…</button>}
               <button onClick={() => setAssignModal({ ids: [...sel] })} className="hover:underline">Assign…</button>
               {isArchived
                 ? <button onClick={() => bulkAction('unarchive')} className="hover:underline">Unarchive</button>
@@ -291,6 +301,7 @@ export default function LedgerPage() {
                     <th className="px-3 py-3">Due</th>
                     <th className="px-3 py-3 text-right">Amount</th>
                     <th className="px-3 py-3">Status</th>
+                    <th className="px-3 py-3">Last edit</th>
                     <th className="px-3 py-3"></th>
                   </tr>
                 </thead>
@@ -312,20 +323,21 @@ export default function LedgerPage() {
                       </td>
                       <td className="px-3 py-3 text-gray-500">{fmtDate(d.dueDate)}</td>
                       <td className="px-3 py-3 text-right font-medium text-gray-800">{format(d.amountPhp || 0)}</td>
-                      <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_BADGE[d.status]}`}>{d.status === 'PAID' ? '✓ Paid' : 'Unpaid'}</span></td>
+                      <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_BADGE[d.status] || 'bg-gray-100 text-gray-600'}`}>{statusLabel(d.status)}</span></td>
+                      <td className="px-3 py-3 text-gray-500 text-xs">{d.lastEditedBy ? fullName(d.lastEditedBy) : '—'}</td>
                       <td className="px-3 py-3 text-right whitespace-nowrap">
-                        {!isArchived && <button onClick={() => markPaid(d)} className="text-xs hover:underline mr-2" style={{ color: BRAND }}>{d.status === 'PAID' ? 'Unpay' : 'Pay'}</button>}
+                        <button onClick={() => setViewing(d)} title="View" className="text-base mr-1.5 hover:opacity-70">👁</button>
                         <button onClick={() => setEditing({
                           id: d.id, docType: d.docType, clientId: d.clientId || '', vendorName: d.vendorName || '',
                           vendorTin: d.vendorTin || '', businessStyle: d.businessStyle || '', docNumber: d.docNumber || '',
                           poNumber: d.poNumber || '', docDate: d.docDate ? d.docDate.slice(0, 10) : '', dueDate: d.dueDate ? d.dueDate.slice(0, 10) : '',
                           amount: String(d.amount ?? ''), currency: d.currency || 'PHP', category: d.category || '', notes: d.notes || '',
                           remarks: d.remarks || '', assignedToId: d.assignedToId || '', status: d.status, receiptId: d.receiptId || '',
-                        })} className="text-xs text-gray-500 hover:underline mr-2">Edit</button>
+                        })} title="Edit" className="text-base mr-1.5 hover:opacity-70">✏️</button>
                         {isArchived
-                          ? <button onClick={() => archiveDoc(d, false)} className="text-xs text-gray-500 hover:underline mr-2">Unarchive</button>
-                          : <button onClick={() => archiveDoc(d, true)} className="text-xs text-gray-400 hover:underline mr-2">Archive</button>}
-                        <button onClick={() => removeDoc(d)} className="text-xs text-red-400 hover:underline">Delete</button>
+                          ? <button onClick={() => archiveDoc(d, false)} className="text-xs text-gray-500 hover:underline mr-1.5">Unarchive</button>
+                          : <button onClick={() => archiveDoc(d, true)} title="Archive" className="text-base mr-1.5 hover:opacity-70">🗄️</button>}
+                        <button onClick={() => removeDoc(d)} title="Delete" className="text-base hover:opacity-70">🗑️</button>
                       </td>
                     </tr>
                   ))}
@@ -371,7 +383,7 @@ export default function LedgerPage() {
               <select value={editing.currency} onChange={(e) => setEditing({ ...editing, currency: e.target.value })} className="inp w-20"><option>PHP</option><option>USD</option></select>
             </div></Field>
             <Field label="Status"><select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className="inp">
-              <option value="UNPAID">Unpaid</option><option value="PAID">Paid</option>
+              {STAGES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
             </select></Field>
             <div className="col-span-2"><Field label="Remarks"><input className="inp" value={editing.remarks} onChange={(e) => setEditing({ ...editing, remarks: e.target.value })} placeholder="Notes visible in the list" /></Field></div>
           </div>
@@ -428,6 +440,62 @@ export default function LedgerPage() {
         </Modal>
       )}
 
+      {/* View (read-only) modal */}
+      {viewing && (
+        <Modal title="Document details" onClose={() => setViewing(null)} wide>
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`px-2 py-0.5 rounded-full text-xs ${TYPE_BADGE[viewing.docType]}`}>{TYPE_LABEL[viewing.docType]}</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_BADGE[viewing.status] || 'bg-gray-100 text-gray-600'}`}>{statusLabel(viewing.status)}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <ViewRow label="Vendor / Payee" value={viewing.vendorName} />
+            <ViewRow label="Client" value={viewing.client?.name} />
+            <ViewRow label="Vendor TIN" value={viewing.vendorTin} />
+            <ViewRow label="Business style" value={viewing.businessStyle} />
+            <ViewRow label="Doc / OR number" value={viewing.docNumber} />
+            <ViewRow label="PO number" value={viewing.poNumber} />
+            <ViewRow label="Document date" value={fmtDate(viewing.docDate)} />
+            <ViewRow label="Due date" value={fmtDate(viewing.dueDate)} />
+            <ViewRow label="Amount" value={format(viewing.amountPhp || 0)} />
+            <ViewRow label="VATable / VAT" value={`${format(viewing.vatableAmount || 0)} / ${format(viewing.vatAmount || 0)}`} />
+            <ViewRow label="Category" value={viewing.category} />
+            <ViewRow label="Assigned to" value={fullName(viewing.assignedTo)} />
+            <ViewRow label="Created by" value={fullName(viewing.createdBy)} />
+            <ViewRow label="Last edited by" value={fullName(viewing.lastEditedBy)} />
+            <div className="col-span-2"><ViewRow label="Remarks" value={viewing.remarks} /></div>
+            <div className="col-span-2"><ViewRow label="Notes" value={viewing.notes} /></div>
+          </div>
+          {viewing.receiptId && (
+            <a href={`${API_BASE}/ocr/receipt/${viewing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline mt-3 inline-block" style={{ color: BRAND }}>📎 View attached file</a>
+          )}
+          <div className="flex justify-end gap-2 mt-4">
+            <button onClick={() => { const d = viewing; setViewing(null); setEditing({
+              id: d.id, docType: d.docType, clientId: d.clientId || '', vendorName: d.vendorName || '', vendorTin: d.vendorTin || '',
+              businessStyle: d.businessStyle || '', docNumber: d.docNumber || '', poNumber: d.poNumber || '',
+              docDate: d.docDate ? d.docDate.slice(0, 10) : '', dueDate: d.dueDate ? d.dueDate.slice(0, 10) : '', amount: String(d.amount ?? ''),
+              currency: d.currency || 'PHP', category: d.category || '', notes: d.notes || '', remarks: d.remarks || '',
+              assignedToId: d.assignedToId || '', status: d.status, receiptId: d.receiptId || '',
+            }); }} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Edit</button>
+            <button onClick={() => setViewing(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Close</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk change-status modal */}
+      {statusModal && (
+        <Modal title={`Change status · ${statusModal.ids.length} document(s)`} onClose={() => setStatusModal(null)}>
+          <Field label="Set status to">
+            <select id="bulk-status" className="inp" defaultValue="FOR_APPROVAL">
+              {STAGES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+            </select>
+          </Field>
+          <div className="flex justify-end gap-2 mt-4">
+            <button onClick={() => setStatusModal(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button onClick={() => bulkAction('status', null, document.getElementById('bulk-status').value)} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Apply</button>
+          </div>
+        </Modal>
+      )}
+
       {/* Bulk assign modal */}
       {assignModal && (
         <Modal title={`Assign ${assignModal.ids.length} document(s)`} onClose={() => setAssignModal(null)}>
@@ -470,6 +538,7 @@ function SummaryCard({ label, value, sub, accent }) {
   );
 }
 function Field({ label, children }) { return (<div><label className="text-xs text-gray-500 block mb-1">{label}</label>{children}</div>); }
+function ViewRow({ label, value }) { return (<div><p className="text-xs text-gray-400">{label}</p><p className="text-gray-800">{value || '—'}</p></div>); }
 function Modal({ title, children, onClose, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 z-[9999] flex items-center justify-center p-4" onClick={onClose}>

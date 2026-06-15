@@ -10,6 +10,8 @@ const prisma = new PrismaClient();
 const PERM = 'manage_ap_ar';
 const FALLBACK = ['FINANCE', 'ADMIN'];
 const DOC_TYPES = ['AP_INVOICE', 'AP_RECEIPT', 'AR_INVOICE'];
+const STAGES = ['DRAFT', 'FOR_VERIFICATION', 'FOR_APPROVAL', 'PAID'];
+const normStatus = (s) => STAGES.includes(String(s || '').toUpperCase()) ? String(s).toUpperCase() : 'DRAFT';
 const VAT_RATE = 0.12;
 
 const toPhp = async (amt, cur) => {
@@ -24,6 +26,7 @@ const include = {
   receipt: { select: { id: true, mimeType: true, filename: true } },
   createdBy: { select: { id: true, firstName: true, lastName: true } },
   assignedTo: { select: { id: true, firstName: true, lastName: true } },
+  lastEditedBy: { select: { id: true, firstName: true, lastName: true } },
 };
 
 // Compute VATable / VAT from a VAT-inclusive total when not provided.
@@ -80,8 +83,8 @@ router.get('/summary', authenticate, requirePermission(PERM, FALLBACK), async (r
     const all = await prisma.ledgerDoc.findMany({ where: base, select: { docType: true, status: true, amountPhp: true } });
     const isAP = (t) => t === 'AP_INVOICE' || t === 'AP_RECEIPT';
     const sum = (rows) => +rows.reduce((s, r) => s + (r.amountPhp || 0), 0).toFixed(2);
-    const apUnpaid = all.filter(d => isAP(d.docType) && d.status === 'UNPAID');
-    const arUnpaid = all.filter(d => d.docType === 'AR_INVOICE' && d.status === 'UNPAID');
+    const apUnpaid = all.filter(d => isAP(d.docType) && d.status !== 'PAID');
+    const arUnpaid = all.filter(d => d.docType === 'AR_INVOICE' && d.status !== 'PAID');
     const apPaid = all.filter(d => isAP(d.docType) && d.status === 'PAID');
     const arPaid = all.filter(d => d.docType === 'AR_INVOICE' && d.status === 'PAID');
     res.json({
@@ -107,6 +110,7 @@ async function buildData(body) {
   const amount = Number(body.amount) || 0;
   const currency = body.currency || 'PHP';
   const { vatableAmount, vatAmount } = fillVat(amount, body.vatableAmount, body.vatAmount);
+  const status = normStatus(body.status);
   return {
     docType: normalizeType(body.docType),
     clientId: body.clientId || null,
@@ -126,8 +130,8 @@ async function buildData(body) {
     notes: body.notes || null,
     remarks: body.remarks || null,
     assignedToId: body.assignedToId || null,
-    status: String(body.status || 'UNPAID').toUpperCase() === 'PAID' ? 'PAID' : 'UNPAID',
-    paidAt: String(body.status || '').toUpperCase() === 'PAID' ? (body.paidAt ? new Date(body.paidAt) : new Date()) : null,
+    status,
+    paidAt: status === 'PAID' ? (body.paidAt ? new Date(body.paidAt) : new Date()) : null,
     receiptId: body.receiptId || null,
   };
 }
@@ -136,6 +140,7 @@ router.post('/', authenticate, requirePermission(PERM, FALLBACK), async (req, re
   try {
     const data = await buildData(req.body);
     data.createdById = req.user.id;
+    data.lastEditedById = req.user.id;
     const doc = await prisma.ledgerDoc.create({ data, include });
     res.status(201).json(doc);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -150,6 +155,7 @@ router.post('/bulk', authenticate, requirePermission(PERM, FALLBACK), async (req
     for (const d of docs) {
       const data = await buildData(d);
       data.createdById = req.user.id;
+      data.lastEditedById = req.user.id;
       created.push(await prisma.ledgerDoc.create({ data }));
     }
     res.status(201).json({ created: created.length });
@@ -164,7 +170,7 @@ router.patch('/:id', authenticate, requirePermission(PERM, FALLBACK), async (req
     const amount = b.amount !== undefined ? Number(b.amount) : existing.amount;
     const currency = b.currency || existing.currency;
     const { vatableAmount, vatAmount } = fillVat(amount, b.vatableAmount, b.vatAmount);
-    const statusUp = b.status !== undefined ? String(b.status).toUpperCase() : existing.status;
+    const statusUp = b.status !== undefined ? normStatus(b.status) : existing.status;
     const doc = await prisma.ledgerDoc.update({
       where: { id: req.params.id },
       data: {
@@ -187,9 +193,10 @@ router.patch('/:id', authenticate, requirePermission(PERM, FALLBACK), async (req
         remarks: b.remarks !== undefined ? (b.remarks || null) : undefined,
         assignedToId: b.assignedToId !== undefined ? (b.assignedToId || null) : undefined,
         archived: b.archived !== undefined ? !!b.archived : undefined,
-        status: b.status !== undefined ? (statusUp === 'PAID' ? 'PAID' : 'UNPAID') : undefined,
+        status: b.status !== undefined ? statusUp : undefined,
         paidAt: b.status !== undefined ? (statusUp === 'PAID' ? (existing.paidAt || new Date()) : null) : undefined,
         receiptId: b.receiptId !== undefined ? (b.receiptId || null) : undefined,
+        lastEditedById: req.user.id,
       },
       include,
     });
@@ -201,13 +208,16 @@ router.patch('/:id', authenticate, requirePermission(PERM, FALLBACK), async (req
 // body: { ids:[], action:'paid'|'unpaid'|'archive'|'unarchive'|'assign'|'delete', assignedToId? }
 router.post('/bulk-action', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
-    const { ids, action, assignedToId } = req.body;
+    const { ids, action, assignedToId, status } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'No rows selected' });
     const where = { id: { in: ids } };
     let data;
     switch (action) {
-      case 'paid': data = { status: 'PAID', paidAt: new Date() }; break;
-      case 'unpaid': data = { status: 'UNPAID', paidAt: null }; break;
+      case 'status': {
+        const s = normStatus(status);
+        data = { status: s, paidAt: s === 'PAID' ? new Date() : null };
+        break;
+      }
       case 'archive': data = { archived: true }; break;
       case 'unarchive': data = { archived: false }; break;
       case 'assign': data = { assignedToId: assignedToId || null }; break;
@@ -216,22 +226,36 @@ router.post('/bulk-action', authenticate, requirePermission(PERM, FALLBACK), asy
         return res.json({ deleted: ids.length });
       default: return res.status(400).json({ error: 'Unknown action' });
     }
+    data.lastEditedById = req.user.id;
     const r = await prisma.ledgerDoc.updateMany({ where, data });
     res.json({ updated: r.count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Single-document status change.
+router.post('/:id/status', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+  try {
+    const s = normStatus(req.body?.status);
+    const doc = await prisma.ledgerDoc.update({
+      where: { id: req.params.id },
+      data: { status: s, paidAt: s === 'PAID' ? new Date() : null, lastEditedById: req.user.id },
+      include,
+    });
+    res.json(doc);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.post('/:id/mark-paid', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
     const when = req.body?.paidAt ? new Date(req.body.paidAt) : new Date();
-    const doc = await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'PAID', paidAt: when }, include });
+    const doc = await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'PAID', paidAt: when, lastEditedById: req.user.id }, include });
     res.json(doc);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.post('/:id/mark-unpaid', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
-    const doc = await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'UNPAID', paidAt: null }, include });
+    const doc = await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'FOR_APPROVAL', paidAt: null, lastEditedById: req.user.id }, include });
     res.json(doc);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
