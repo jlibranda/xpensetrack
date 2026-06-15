@@ -1,8 +1,29 @@
 // src/lib/email.js — uses Resend (MailerSend fallback)
-const appName = process.env.EMAIL_BRAND || 'Cashalo';
-const brandColor = process.env.EMAIL_BRAND_COLOR || '#1D9E75';
+// Branding (name, color, logo) is read from OrgSettings so emails match the app's
+// current branding. EMAIL_BRAND / EMAIL_BRAND_COLOR env vars override if set.
+const ENV_APP_NAME = process.env.EMAIL_BRAND || null;
+const ENV_BRAND_COLOR = process.env.EMAIL_BRAND_COLOR || null;
+const FALLBACK_APP_NAME = 'Cashalo';
+const FALLBACK_COLOR = '#1D9E75';
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+
+async function getBranding() {
+  let companyName = FALLBACK_APP_NAME, primaryColor = FALLBACK_COLOR, logoUrl = null;
+  try {
+    const s = await prisma.orgSettings.findFirst();
+    if (s) {
+      companyName = s.companyName || companyName;
+      primaryColor = s.primaryColor || primaryColor;
+      logoUrl = s.logoUrl || null;
+    }
+  } catch (e) { /* use fallbacks */ }
+  return {
+    appName: ENV_APP_NAME || companyName,
+    brandColor: ENV_BRAND_COLOR || primaryColor,
+    logoUrl,
+  };
+}
 
 // Default subject + intro message for each notification. Admins can override the
 // subject and message text in Settings → Email Templates; the structured details
@@ -60,37 +81,48 @@ async function employeeVars(emp) {
   };
 }
 
-function html(title, body) {
+function html(title, body, brand) {
+  const b = brand || {};
+  const name = b.appName || FALLBACK_APP_NAME;
+  const color = b.brandColor || FALLBACK_COLOR;
+  // Use a hosted logo if available; data-URI logos are unreliable in email clients,
+  // so fall back to the company name text in that case.
+  const useLogo = b.logoUrl && /^https?:\/\//i.test(b.logoUrl);
+  const header = useLogo
+    ? `<img src="${b.logoUrl}" alt="${name}" style="max-height:36px;display:block" />`
+    : `<h1 style="margin:0;color:#fff;font-size:20px;font-weight:600">${name}</h1>`;
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
-    <div style="background:${brandColor};padding:24px 32px">
-      <h1 style="margin:0;color:#fff;font-size:20px;font-weight:600">${appName}</h1>
+    <div style="background:${color};padding:24px 32px">
+      ${header}
     </div>
     <div style="padding:32px">
       <h2 style="margin:0 0 16px;color:#111;font-size:18px;font-weight:600">${title}</h2>
       ${body}
     </div>
     <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #f3f4f6">
-      <p style="margin:0;color:#9ca3af;font-size:12px">Sent by ${appName}. Do not reply.</p>
+      <p style="margin:0;color:#9ca3af;font-size:12px">Sent by ${name}. Do not reply.</p>
     </div>
   </div>
 </body></html>`;
 }
 
-function btn(url, label) {
-  return `<a href="${url}" style="display:inline-block;background:${brandColor};color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px;margin:16px 0">${label}</a>`;
+function btn(url, label, brand) {
+  const color = (brand && brand.brandColor) || FALLBACK_COLOR;
+  return `<a href="${url}" style="display:inline-block;background:${color};color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px;margin:16px 0">${label}</a>`;
 }
 
 function row(label, value) {
   return `<tr><td style="padding:8px 0;color:#6b7280;font-size:14px;width:40%">${label}</td><td style="padding:8px 0;color:#111;font-size:14px;font-weight:500">${value}</td></tr>`;
 }
 
-async function sendMail(to, subject, htmlBody) {
+async function sendMail(to, subject, htmlBody, fromName) {
   // Build the From header. RESEND_FROM may be either a bare address
-  // ("noreply@yourdomain.com") or a full header ("XpenseTrack <noreply@yourdomain.com>").
-  const buildFrom = (val) => (val && val.includes('<')) ? val : `${appName} <${val}>`;
+  // ("noreply@yourdomain.com") or a full header ("Cashalo <noreply@yourdomain.com>").
+  const name = fromName || FALLBACK_APP_NAME;
+  const buildFrom = (val) => (val && val.includes('<')) ? val : `${name} <${val}>`;
 
   // 1) Resend (preferred).
   const resendKey = process.env.RESEND_API_KEY;
@@ -117,7 +149,7 @@ async function sendMail(to, subject, htmlBody) {
       const res = await fetch('https://api.mailersend.com/v1/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ from: { email: fromEmail, name: appName }, to: [{ email: to }], subject, html: htmlBody }),
+        body: JSON.stringify({ from: { email: fromEmail, name }, to: [{ email: to }], subject, html: htmlBody }),
       });
       if (res.ok || res.status === 202) { console.log(`Email sent via MailerSend to ${to}: ${subject}`); return true; }
       const data = await res.json().catch(() => ({}));
@@ -137,6 +169,8 @@ async function sendApprovalRequestEmail(toEmail, toName, expense, employee) {
   const date = new Date(expense.expenseDate).toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
   const cat = expense.category ? (expense.category.charAt(0) + expense.category.slice(1).toLowerCase()) : '';
+  const brand = await getBranding();
+  const appName = brand.appName;
   const custom = await getTemplates();
   const emp = await employeeVars(employee || expense.submittedBy || expense.submittedById);
   const vars = { name: toName, title: expense.title, amount: amt, category: cat, date, appName, ...emp };
@@ -153,8 +187,8 @@ async function sendApprovalRequestEmail(toEmail, toName, expense, employee) {
        ${row('Date', date)}
        ${expense.description ? row('Notes', expense.description) : ''}
      </table>
-     ${btn(`${frontendUrl}/approvals`, 'Review & approve →')}`
-  ));
+     ${btn(`${frontendUrl}/approvals`, 'Review & approve →', brand)}`
+  , brand), appName);
 }
 
 async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee) {
@@ -165,7 +199,9 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee)
     APPROVED: 'Expense approved', REJECTED: 'Expense rejected', RETURNED: 'Expense returned for revision',
     MANAGER_APPROVED: 'Approved by manager', PROCESSED: 'Expense processed',
   };
-  const colors = { APPROVED:'#16a34a', REJECTED:'#dc2626', RETURNED:'#d97706', MANAGER_APPROVED:'#2563eb', PROCESSED: brandColor };
+  const brand = await getBranding();
+  const appName = brand.appName;
+  const colors = { APPROVED:'#16a34a', REJECTED:'#dc2626', RETURNED:'#d97706', MANAGER_APPROVED:'#2563eb', PROCESSED: brand.brandColor };
   const custom = await getTemplates();
   const emp = await employeeVars(employee || expense.submittedBy || expense.submittedById);
   const vars = { name: toName, title: expense.title, amount: amt, appName, ...emp };
@@ -182,11 +218,13 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee)
        <p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#111">${expense.title}</p>
        <p style="margin:0;font-size:14px;color:#6b7280">${amt}</p>
      </div>
-     ${btn(`${frontendUrl}/expenses`, 'View my expenses →')}`
-  ));
+     ${btn(`${frontendUrl}/expenses`, 'View my expenses →', brand)}`
+  , brand), appName);
 }
 
 async function sendPasswordResetEmail(toEmail, toName, resetUrl, employee) {
+  const brand = await getBranding();
+  const appName = brand.appName;
   const custom = await getTemplates();
   const emp = await employeeVars(employee || { firstName: (toName||'').split(' ')[0], lastName: (toName||'').split(' ').slice(1).join(' '), email: toEmail });
   const vars = { name: toName, appName, ...emp };
@@ -196,13 +234,15 @@ async function sendPasswordResetEmail(toEmail, toName, resetUrl, employee) {
     'Reset your password',
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
      <p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
-     ${btn(resetUrl, 'Reset my password →')}
+     ${btn(resetUrl, 'Reset my password →', brand)}
      <p style="color:#9ca3af;font-size:12px;margin:20px 0 0">If you didn't request this, ignore this email.</p>`
-  ));
+  , brand), appName);
 }
 
 async function sendWelcomeEmail(toEmail, toName, tempPassword, employee) {
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+  const brand = await getBranding();
+  const appName = brand.appName;
   const custom = await getTemplates();
   const emp = await employeeVars(employee || { firstName: (toName||'').split(' ')[0], lastName: (toName||'').split(' ').slice(1).join(' '), email: toEmail });
   const vars = { name: toName, email: toEmail, password: tempPassword, appName, ...emp };
@@ -218,17 +258,18 @@ async function sendWelcomeEmail(toEmail, toName, tempPassword, employee) {
        </table>
      </div>
      <p style="color:#374151;font-size:14px;margin:0 0 20px">Please log in and change your password from your profile settings.</p>
-     ${btn(`${frontendUrl}/login`, `Log in to ${appName} →`)}`
-  ));
+     ${btn(`${frontendUrl}/login`, `Log in to ${appName} →`, brand)}`
+  , brand), appName);
 }
 
 async function sendTestEmail(toEmail, toName) {
-  return sendMail(toEmail, `${appName} — test email`, html(
+  const brand = await getBranding();
+  return sendMail(toEmail, `${brand.appName} — test email`, html(
     'Test email',
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName || 'there'},</p>
      <p style="color:#374151;font-size:14px;margin:0 0 20px">If you're reading this, email delivery is working. 🎉</p>
      <p style="color:#9ca3af;font-size:12px;margin:20px 0 0">Sent as a configuration test.</p>`
-  ));
+  , brand), brand.appName);
 }
 
 module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail };
