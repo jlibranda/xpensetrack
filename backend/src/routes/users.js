@@ -202,7 +202,7 @@ router.post('/:id/reset-password', authenticate, requirePermission('reset_passwo
       return res.status(403).json({ error: 'Only an admin can reset an admin password' });
     }
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
+    await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null } });
     await logAudit(req.user, 'USER_PASSWORD_RESET', { targetType: 'USER', targetId: req.params.id, details: `Reset password for ${target.firstName||''} ${target.lastName||''}`.trim() });
     res.json({ message: 'Password reset successfully' });
   } catch(err) { res.status(500).json({ error: err.message }); }

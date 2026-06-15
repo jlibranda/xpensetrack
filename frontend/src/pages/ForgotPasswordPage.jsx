@@ -13,7 +13,7 @@ const readCachedBranding = () => {
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [result, setResult] = useState(null); // { exists: bool }
   const [error, setError] = useState('');
   const [dark, setDark] = useState(readDark());
   const [branding, setBranding] = useState(readCachedBranding());
@@ -53,13 +53,10 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      // The server always returns a generic message and never reveals whether
-      // the account exists or includes the reset link in the response.
-      await api.post('/auth/forgot-password', { email });
-      setSent(true);
+      const res = await api.post('/auth/forgot-password', { email });
+      setResult({ exists: !!res.exists, message: res.message });
     } catch (err) {
-      // Even on error we show the same neutral confirmation, to avoid leaking info.
-      setSent(true);
+      setError(err.error || 'Something went wrong. Please try again.');
     } finally { setLoading(false); }
   };
 
@@ -88,18 +85,32 @@ export default function ForgotPasswordPage() {
           <p className="text-sm mt-1" style={{ color: headSub }}>Enter your email and we'll send you a reset link</p>
         </div>
 
-        {sent ? (
-          <div className="rounded-2xl p-6 text-center" style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}>
-            <p className="text-3xl mb-3">📧</p>
-            <p className="text-sm font-medium mb-2" style={{ color: textMain }}>Check your email</p>
-            <p className="text-sm" style={{ color: textSub }}>
-              If an account exists for <b>{email}</b>, a password reset link has been sent. The link expires in 1 hour.
-            </p>
-            <p className="text-xs mt-3" style={{ color: textSub }}>Don't see it? Check your spam folder.</p>
-            <div className="mt-4">
-              <Link to="/login" className="text-sm hover:underline" style={{ color: bg }}>← Back to sign in</Link>
+        {result ? (
+          result.exists ? (
+            <div className="rounded-2xl p-6 text-center" style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}>
+              <p className="text-3xl mb-3">📧</p>
+              <p className="text-sm font-medium mb-2" style={{ color: textMain }}>Check your email</p>
+              <p className="text-sm" style={{ color: textSub }}>
+                A password reset link has been sent to <b>{email}</b>. The link expires in 1 hour.
+              </p>
+              <p className="text-xs mt-3" style={{ color: textSub }}>Don't see it? Check your spam folder.</p>
+              <div className="mt-4">
+                <Link to="/login" className="text-sm hover:underline" style={{ color: bg }}>← Back to sign in</Link>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl p-6 text-center" style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}>
+              <p className="text-3xl mb-3">🔍</p>
+              <p className="text-sm font-medium mb-2" style={{ color: textMain }}>No account found</p>
+              <p className="text-sm" style={{ color: textSub }}>
+                We couldn't find an account for <b>{email}</b>. Please request an account from your <b>Finance Department</b>.
+              </p>
+              <div className="mt-4">
+                <button onClick={() => { setResult(null); }} className="text-sm mr-4 hover:underline" style={{ color: bg }}>Try another email</button>
+                <Link to="/login" className="text-sm hover:underline" style={{ color: textSub }}>← Back to sign in</Link>
+              </div>
+            </div>
+          )
         ) : (
           <form onSubmit={handleSubmit} className="rounded-2xl p-6 space-y-4" style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}>
             {error && (

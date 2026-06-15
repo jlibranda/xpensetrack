@@ -55,7 +55,8 @@ router.patch('/', authenticate, async (req, res) => {
   try {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
-            wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates } = req.body;
+            wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates,
+            loginMaxAttempts, loginLockoutMinutes } = req.body;
     const s = await getOrCreate();
     // Field-level permission: apply each group only if the user is allowed.
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
@@ -64,6 +65,7 @@ router.patch('/', authenticate, async (req, res) => {
     const canExpTypes = await hasPermission(req.user, 'manage_expense_types', ['FINANCE', 'ADMIN']);
     const canPassword = await hasPermission(req.user, 'manage_password', ['ADMIN']);
     const canAccessCtrl = await hasPermission(req.user, 'manage_access_control', ['ADMIN']);
+    const canSecurity = await hasPermission(req.user, 'manage_security', ['ADMIN']);
 
     // Access-control write: Admin sets anything; a non-admin manager may edit the
     // matrix EXCEPT the 4 sensitive permissions, which are preserved from current.
@@ -99,6 +101,8 @@ router.patch('/', authenticate, async (req, res) => {
         defaultPassword: canPassword ? (defaultPassword || undefined) : undefined,
         accessControlJson,
         emailTemplatesJson: canManage && emailTemplates !== undefined ? JSON.stringify(emailTemplates) : undefined,
+        loginMaxAttempts: canSecurity && loginMaxAttempts !== undefined ? Math.max(0, parseInt(loginMaxAttempts, 10) || 0) : undefined,
+        loginLockoutMinutes: canSecurity && loginLockoutMinutes !== undefined ? Math.max(1, parseInt(loginLockoutMinutes, 10) || 1) : undefined,
       },
     });
     res.json(parseSettings(updated));

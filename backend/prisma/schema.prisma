@@ -21,6 +21,8 @@ model User {
   position       String?
   payrollAccount String?
   isActive       Boolean         @default(true)
+  failedLoginAttempts Int        @default(0)
+  lockedUntil    DateTime?
   managerId      String?
   manager        User?           @relation("Reports", fields: [managerId], references: [id])
   reports        User[]          @relation("Reports")
@@ -204,6 +206,8 @@ model OrgSettings {
   defaultPassword      String   @default("Welcome123")
   accessControlJson    String   @default("{}")
   emailTemplatesJson   String   @default("{}")
+  loginMaxAttempts     Int      @default(5)
+  loginLockoutMinutes  Int      @default(15)
   updatedAt            DateTime @updatedAt
 }
 

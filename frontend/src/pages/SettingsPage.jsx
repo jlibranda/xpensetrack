@@ -25,6 +25,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     manage_expense_types: ['FINANCE','ADMIN'],
     manage_ap_ar: ['FINANCE','ADMIN'],
     manage_settings: ['FINANCE','ADMIN'],
+    manage_security: ['ADMIN'],
     manage_password: ['ADMIN'],
     manage_access_control: ['ADMIN'],
     manage_users: ['ADMIN'],
@@ -45,6 +46,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     manage_expense_types: 'Manage expense types',
     manage_ap_ar: 'Manage payables & receivables',
     manage_settings: 'Manage app settings',
+    manage_security: 'Manage security (login lockout)',
     manage_password: 'View / set default password',
     manage_access_control: 'Manage access control',
     manage_users: 'Manage users',
@@ -264,6 +266,7 @@ export default function SettingsPage() {
   const canExpenseTypes = can('manage_expense_types', ['FINANCE','ADMIN']);
   const canPassword = can('manage_password', ['ADMIN']);
   const canAccessControl = can('manage_access_control', ['ADMIN']);
+  const canSecurity = can('manage_security', ['ADMIN']);
 
   // Exchange rate (USD -> PHP) — separate from the main settings form.
   const [fx, setFx] = useState(null);          // { usdPhpRate, auto, updatedAt }
@@ -325,6 +328,8 @@ export default function SettingsPage() {
         defaultPassword: s.defaultPassword,
         wallpaperStyle: s.wallpaperStyle ?? settings?.wallpaperStyle,
         autoReapplyApprovalFlow: s.autoReapplyApprovalFlow ?? settings?.autoReapplyApprovalFlow,
+        loginMaxAttempts: s.loginMaxAttempts ?? settings?.loginMaxAttempts,
+        loginLockoutMinutes: s.loginLockoutMinutes ?? settings?.loginLockoutMinutes,
       };
       const updated = await api.patch('/settings', payload);
       applyTheme(updated);
@@ -494,6 +499,26 @@ export default function SettingsPage() {
             </div>
           </div>
           </fieldset>
+          {canSecurity && (
+            <div className="mt-6 p-4 rounded-xl border border-gray-100 bg-gray-50">
+              <h2 className="text-sm font-medium text-gray-700 mb-1">Login security</h2>
+              <p className="text-xs text-gray-500 mb-3">Lock an account after too many failed sign-in attempts. A locked user can wait out the timer, reset via "Forgot password", or be reset by Finance/Admin.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Max failed attempts (0 = no lockout)</label>
+                  <input type="number" min="0" value={s?.loginMaxAttempts ?? 5}
+                    onChange={e => set('loginMaxAttempts', e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Lockout duration (minutes)</label>
+                  <input type="number" min="1" value={s?.loginLockoutMinutes ?? 15}
+                    onChange={e => set('loginLockoutMinutes', e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                </div>
+              </div>
+            </div>
+          )}
           {isAdmin && <EmailTestCard defaultTo={user?.email} />}
         </>)}
 

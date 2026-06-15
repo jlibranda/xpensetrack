@@ -31,12 +31,16 @@ function BrandedLoader() {
   return (
     <div className="flex items-center justify-center h-screen">
       <div className="text-center">
-        {b.logoUrl ? (
-          <img src={b.logoUrl} alt={b.companyName} className="w-14 h-14 rounded-2xl object-cover mx-auto mb-3 shadow-sm" />
-        ) : (
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3"
-            style={{ backgroundColor: b.primaryColor || '#1D9E75' }}>{(b.companyName || 'C')[0]}</div>
-        )}
+        <div className="relative w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full animate-spin"
+            style={{ border: '3px solid rgba(0,0,0,0.08)', borderTopColor: b.primaryColor || '#1D9E75' }} />
+          {b.logoUrl ? (
+            <img src={b.logoUrl} alt={b.companyName} className="w-11 h-11 rounded-xl object-cover" />
+          ) : (
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg font-bold"
+              style={{ backgroundColor: b.primaryColor || '#1D9E75' }}>{(b.companyName || 'C')[0]}</div>
+          )}
+        </div>
         <p className="text-sm text-gray-500">Loading...</p>
       </div>
     </div>

@@ -14,6 +14,7 @@ const DEFAULT_PERMS = {
   manage_expense_types: ['FINANCE', 'ADMIN'],
   manage_ap_ar: ['FINANCE', 'ADMIN'],
   manage_settings: ['FINANCE', 'ADMIN'],
+  manage_security: ['ADMIN'],
   manage_password: ['ADMIN'],
   manage_access_control: ['ADMIN'],
   manage_users: ['ADMIN'],
