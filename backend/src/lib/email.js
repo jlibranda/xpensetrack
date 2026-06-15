@@ -1,6 +1,6 @@
-// src/lib/email.js — uses MailerSend API
-const appName = 'XpenseTrack';
-const brandColor = '#1D9E75';
+// src/lib/email.js — uses Resend (MailerSend fallback)
+const appName = process.env.EMAIL_BRAND || 'Cashalo';
+const brandColor = process.env.EMAIL_BRAND_COLOR || '#1D9E75';
 
 function html(title, body) {
   return `<!DOCTYPE html>
@@ -118,7 +118,7 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status) {
 }
 
 async function sendPasswordResetEmail(toEmail, toName, resetUrl) {
-  return sendMail(toEmail, 'Reset your XpenseTrack password', html(
+  return sendMail(toEmail, `Reset your ${appName} password`, html(
     'Reset your password',
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
      <p style="color:#374151;font-size:14px;margin:0 0 20px">Click below to reset your password. This link expires in <strong>1 hour</strong>.</p>
@@ -131,7 +131,7 @@ async function sendWelcomeEmail(toEmail, toName, tempPassword) {
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
   return sendMail(toEmail, `Welcome to ${appName}!`, html(
     `Welcome, ${toName}!`,
-    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Your XpenseTrack account has been created. Here are your login details:</p>
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Your ${appName} account has been created. Here are your login details:</p>
      <div style="background:#f9fafb;border-radius:8px;padding:16px;margin:0 0 20px">
        <table style="width:100%;border-collapse:collapse">
          ${row('Email', toEmail)}
@@ -139,7 +139,7 @@ async function sendWelcomeEmail(toEmail, toName, tempPassword) {
        </table>
      </div>
      <p style="color:#374151;font-size:14px;margin:0 0 20px">Please log in and change your password from your profile settings.</p>
-     ${btn(`${frontendUrl}/login`, 'Log in to XpenseTrack →')}`
+     ${btn(`${frontendUrl}/login`, 'Log in to ${appName} →')}`
   ));
 }
 
