@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import toast from '../lib/toast';
 
-const TABS = ['General','Branding','Categories','Expense Types','Password','Access Control'];
+const TABS = ['General','Branding','Categories','Expense Types','Password','Email Templates','Access Control'];
 
 
 // Separate component for Access Control tab
@@ -390,6 +390,7 @@ export default function SettingsPage() {
           if (t === 'Expense Types') return canExpenseTypes;
           if (t === 'Password') return canPassword;
           if (t === 'Access Control') return canAccessControl;
+          if (t === 'Email Templates') return canManageSettings;
           return true; // General, Categories
         }).map(t => (
           <button key={t} onClick={()=>setTab(t)}
@@ -646,10 +647,11 @@ export default function SettingsPage() {
         )}
 
         {tab === 'Access Control' && canAccessControl && <AccessControlTab settings={settings} navigate={navigate} refresh={refresh} />}
+        {tab === 'Email Templates' && canManageSettings && <EmailTemplatesTab settings={settings} refresh={refresh} brand={settings?.primaryColor||'#1D9E75'} />}
 
         {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
 
-        {tab !== 'Access Control' && (
+        {tab !== 'Access Control' && tab !== 'Email Templates' && (
           <button onClick={save} disabled={saving}
             className="mt-5 w-full py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
             style={{backgroundColor:settings?.primaryColor||'#1D9E75'}}>
@@ -693,6 +695,119 @@ function EmailTestCard({ defaultTo }) {
           {result.ok ? '✓ ' : '✕ '}{result.msg}
         </p>
       )}
+    </div>
+  );
+}
+
+const EMP_VARS = ['{employeeName}','{employeeDept}','{employeePosition}','{employeeNumber}','{employeeEmail}'];
+const EMAIL_TEMPLATE_DEFS = [
+  { key: 'approval_request', label: 'Approval request', desc: 'Sent to an approver when an expense needs their approval. Employee tags refer to the submitter.',
+    subject: 'Action required: Approve "{title}"', message: 'An expense from {employeeName} has been submitted and is waiting for your approval:',
+    vars: ['{name}','{title}','{amount}','{category}','{date}', ...EMP_VARS] },
+  { key: 'status_APPROVED', label: 'Status: Approved', desc: 'Sent to the submitter when their expense is fully approved.',
+    subject: '✅ Expense approved — {title}', message: 'Hi {employeeName}, your expense has been fully approved and will be processed for reimbursement.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'status_REJECTED', label: 'Status: Rejected', desc: 'Sent when an expense is rejected.',
+    subject: '❌ Expense rejected — {title}', message: 'Your expense was not approved. Please check the notes and resubmit if needed.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'status_RETURNED', label: 'Status: Returned', desc: 'Sent when an expense is returned for revision.',
+    subject: '↩ Expense returned — {title}', message: 'Your approver returned this expense. Please review their comments and resubmit.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'status_MANAGER_APPROVED', label: 'Status: Manager approved', desc: 'Sent when a manager approves and it moves to finance.',
+    subject: '✓ Manager approved — {title}', message: 'Your expense was approved by your manager and is now pending finance review.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'status_PROCESSED', label: 'Status: Processed', desc: 'Sent when an expense is processed for payout.',
+    subject: '💰 Expense processed — {title}', message: 'Your expense has been processed for payout.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'welcome', label: 'Welcome (new user)', desc: 'Sent to a new employee with their login details.',
+    subject: 'Welcome to {appName}!', message: 'Your {appName} account has been created. Here are your login details:',
+    vars: ['{name}','{email}','{password}','{appName}', ...EMP_VARS] },
+  { key: 'password_reset', label: 'Password reset', desc: 'Sent when a user requests a password reset.',
+    subject: 'Reset your {appName} password', message: 'Click below to reset your password. This link expires in 1 hour.',
+    vars: ['{name}','{appName}', ...EMP_VARS] },
+];
+
+function EmailTemplatesTab({ settings, refresh, brand }) {
+  // Pre-fill each field with the current custom value, or the default draft if none.
+  // This gives the admin an editable starting draft rather than a blank box.
+  const saved = settings?.emailTemplates || {};
+  const initial = {};
+  for (const d of EMAIL_TEMPLATE_DEFS) {
+    initial[d.key] = {
+      subject: (saved[d.key]?.subject != null && saved[d.key].subject !== '') ? saved[d.key].subject : d.subject,
+      message: (saved[d.key]?.message != null && saved[d.key].message !== '') ? saved[d.key].message : d.message,
+    };
+  }
+  const [tpls, setTpls] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const defFor = (key) => EMAIL_TEMPLATE_DEFS.find(d => d.key === key) || {};
+  const get = (key, field) => tpls[key]?.[field] ?? '';
+  const set = (key, field, val) => setTpls(t => ({ ...t, [key]: { ...(t[key] || {}), [field]: val } }));
+  const isCustom = (key) => { const d = defFor(key); return (tpls[key]?.subject ?? '') !== d.subject || (tpls[key]?.message ?? '') !== d.message; };
+  const resetOne = (key) => { const d = defFor(key); setTpls(t => ({ ...t, [key]: { subject: d.subject, message: d.message } })); };
+
+  const save = async () => {
+    setSaving(true); setMsg('');
+    try {
+      // Only persist entries that differ from the default draft, so unchanged
+      // templates keep following the defaults.
+      const clean = {};
+      for (const d of EMAIL_TEMPLATE_DEFS) {
+        const subj = (tpls[d.key]?.subject ?? '').trim();
+        const message = (tpls[d.key]?.message ?? '').trim();
+        const entry = {};
+        if (subj && subj !== d.subject) entry.subject = subj;
+        if (message && message !== d.message) entry.message = message;
+        if (Object.keys(entry).length) clean[d.key] = entry;
+      }
+      await api.patch('/settings', { emailTemplates: clean });
+      if (refresh) refresh();
+      setMsg('✅ Email templates saved.');
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) {
+      setMsg('✕ ' + (err.error || 'Could not save.'));
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div>
+      <h2 className="text-sm font-medium text-gray-700 mb-1">Email templates</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        Each notification starts from an editable draft below. Edit the subject or message, or click "Reset to default" to restore it.
+        Tags like <code className="bg-gray-100 px-1 rounded">{'{employeeName}'}</code> are replaced with the employee's real details when the email is sent.
+        The branded header, details, and buttons stay consistent.
+      </p>
+
+      <div className="space-y-4">
+        {EMAIL_TEMPLATE_DEFS.map(def => (
+          <div key={def.key} className="rounded-xl border border-gray-100 p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-medium text-gray-800">{def.label} {isCustom(def.key) && <span className="text-[10px] text-emerald-600 ml-1">customized</span>}</p>
+              <button onClick={() => resetOne(def.key)} className="text-xs text-gray-400 hover:text-gray-600 hover:underline">Reset to default</button>
+            </div>
+            <p className="text-xs text-gray-400 mb-2">{def.desc}</p>
+            <label className="block text-[11px] text-gray-500 mb-1">Subject</label>
+            <input value={get(def.key,'subject')} onChange={e => set(def.key,'subject',e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-2" />
+            <label className="block text-[11px] text-gray-500 mb-1">Message</label>
+            <textarea value={get(def.key,'message')} onChange={e => set(def.key,'message',e.target.value)}
+              rows={2} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+            <p className="text-[11px] text-gray-400 mt-1.5">Tags: {def.vars.map(v => (
+              <code key={v} className="bg-gray-100 px-1 rounded mr-1 cursor-default" title="Replaced automatically when sent">{v}</code>
+            ))}</p>
+          </div>
+        ))}
+      </div>
+
+      {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
+
+      <button onClick={save} disabled={saving}
+        className="mt-5 w-full py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
+        style={{ backgroundColor: brand }}>
+        {saving ? 'Saving...' : 'Save email templates'}
+      </button>
     </div>
   );
 }

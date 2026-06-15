@@ -227,7 +227,7 @@ router.post('/bulk', authenticate, requirePermission('manage_users'), async (req
       });
       results.created.push(created);
       const { sendWelcomeEmail } = require('../lib/email');
-      await sendWelcomeEmail(created.email, `${created.firstName} ${created.lastName}`, password).catch(()=>{});
+      await sendWelcomeEmail(created.email, `${created.firstName} ${created.lastName}`, password, created).catch(()=>{});
     } catch(err) { results.errors.push({ email: u.email, reason: err.message }); }
   }
   res.json(results);

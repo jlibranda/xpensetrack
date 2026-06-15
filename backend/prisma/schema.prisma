@@ -203,6 +203,7 @@ model OrgSettings {
   expenseTypes         String   @default("REIMBURSEMENT,CASH_ADVANCE")
   defaultPassword      String   @default("Welcome123")
   accessControlJson    String   @default("{}")
+  emailTemplatesJson   String   @default("{}")
   updatedAt            DateTime @updatedAt
 }
 

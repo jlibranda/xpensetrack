@@ -69,9 +69,34 @@ router.patch('/change-password', authenticate, async (req, res) => {
 });
 
 router.post('/forgot-password', async (req, res) => {
-  // Self-service password reset is disabled. Password resets are handled by the
-  // Finance/Admin team via the Users screen (reset_passwords permission).
-  return res.status(404).json({ error: 'Self-service password reset is disabled. Please contact your Finance Department.' });
+  const { email } = req.body || {};
+  // Always respond the same way regardless of whether the account exists,
+  // so this endpoint can't be used to discover which emails are registered.
+  const generic = { message: 'If an account exists for that email, a reset link has been sent.' };
+  try {
+    if (!email || !email.trim()) return res.json(generic);
+    const target = email.trim().toLowerCase();
+    const users = await prisma.user.findMany();
+    const user = users.find(u => (u.email || '').toLowerCase() === target);
+    if (user && user.isActive !== false) {
+      // Invalidate any prior unused tokens for this user, then issue a fresh one.
+      await prisma.passwordReset.updateMany({ where: { userId: user.id, used: false }, data: { used: true } });
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await prisma.passwordReset.create({ data: { userId: user.id, token, expiresAt } });
+      const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+      const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+      try {
+        const { sendPasswordResetEmail } = require('../lib/email');
+        await sendPasswordResetEmail(user.email, `${user.firstName} ${user.lastName}`.trim(), resetUrl);
+      } catch (e) { console.error('Password reset email failed:', e.message); }
+    }
+    // Never return the token or whether the user existed.
+    return res.json(generic);
+  } catch (err) {
+    console.error('forgot-password error:', err.message);
+    return res.json(generic);
+  }
 });
 
 router.post('/reset-password', async (req, res) => {

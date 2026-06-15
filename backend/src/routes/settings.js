@@ -34,12 +34,15 @@ function parseSettings(s) {
   try { glCodes = JSON.parse(s.categoryGlCodes || '{}'); } catch(e) {}
   let accessControl = {};
   try { accessControl = JSON.parse(s.accessControlJson || '{}'); } catch(e) {}
+  let emailTemplates = {};
+  try { emailTemplates = JSON.parse(s.emailTemplatesJson || '{}'); } catch(e) {}
   return {
     ...s,
     categories: s.categories.split(',').map(c => c.trim()).filter(Boolean),
     expenseTypes: s.expenseTypes.split(',').map(t => t.trim()).filter(Boolean),
     categoryGlCodes: glCodes,
     accessControl,
+    emailTemplates,
   };
 }
 
@@ -52,7 +55,7 @@ router.patch('/', authenticate, async (req, res) => {
   try {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
-            wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl } = req.body;
+            wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates } = req.body;
     const s = await getOrCreate();
     // Field-level permission: apply each group only if the user is allowed.
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
@@ -95,6 +98,7 @@ router.patch('/', authenticate, async (req, res) => {
         categoryGlCodes: canCats ? (categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined) : undefined,
         defaultPassword: canPassword ? (defaultPassword || undefined) : undefined,
         accessControlJson,
+        emailTemplatesJson: canManage && emailTemplates !== undefined ? JSON.stringify(emailTemplates) : undefined,
       },
     });
     res.json(parseSettings(updated));

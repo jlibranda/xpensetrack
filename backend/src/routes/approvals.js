@@ -149,7 +149,7 @@ router.post('/:id/approve', authenticate, requirePermission('view_approvals', ['
 
     if (allSatisfied) {
       await prisma.expense.update({ where: { id: approval.expenseId }, data: { status: 'APPROVED' } });
-      await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'APPROVED').catch(() => {});
+      await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'APPROVED', approval.expense.submittedBy).catch(() => {});
       await createNotification(approval.expense.submittedById, 'EXPENSE_APPROVED',
         'Expense fully approved!', `"${approval.expense.title}" has been fully approved`, '/expenses');
       await logAudit(req.user, 'EXPENSE_APPROVED', { targetType: 'EXPENSE', targetId: approval.expenseId, details: `Fully approved "${approval.expense.title}"` });
@@ -193,7 +193,7 @@ router.post('/:id/reject', authenticate, requirePermission('view_approvals', ['M
       prisma.approval.updateMany({ where: { expenseId: approval.expenseId, status: 'PENDING', id: { not: approval.id } }, data: { status: 'REJECTED', notes: '[auto] expense rejected' } }),
       prisma.expense.update({ where: { id: approval.expenseId }, data: { status: 'REJECTED' } }),
     ]);
-    await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'REJECTED').catch(() => {});
+    await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'REJECTED', approval.expense.submittedBy).catch(() => {});
     await createNotification(approval.expense.submittedById, 'EXPENSE_REJECTED',
       'Expense rejected', `"${approval.expense.title}" was rejected${notes ? `: ${notes}` : ''}. This decision is final.`, '/expenses');
     await logAudit(req.user, 'EXPENSE_REJECTED', { targetType: 'EXPENSE', targetId: approval.expenseId, details: `Rejected "${approval.expense.title}"${notes?`: ${notes}`:''}` });
@@ -218,7 +218,7 @@ router.post('/:id/return', authenticate, requirePermission('view_approvals', ['M
       prisma.approval.updateMany({ where: { expenseId: approval.expenseId, status: 'PENDING', id: { not: approval.id } }, data: { status: 'REJECTED', notes: '[auto] expense returned to submitter' } }),
       prisma.expense.update({ where: { id: approval.expenseId }, data: { status: 'RETURNED' } }),
     ]);
-    await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'RETURNED').catch(() => {});
+    await sendStatusUpdateEmail(approval.expense.submittedBy.email, `${approval.expense.submittedBy.firstName} ${approval.expense.submittedBy.lastName}`, approval.expense, 'RETURNED', approval.expense.submittedBy).catch(() => {});
     await createNotification(approval.expense.submittedById, 'EXPENSE_RETURNED',
       'Expense returned for revision', `"${approval.expense.title}" was returned: ${notes}`, '/expenses');
     await logAudit(req.user, 'EXPENSE_RETURNED', { targetType: 'EXPENSE', targetId: approval.expenseId, details: `Returned "${approval.expense.title}": ${notes}` });
@@ -232,7 +232,7 @@ router.post('/:id/reimburse', authenticate, requireRole('FINANCE', 'ADMIN'), asy
     if (!expense) return res.status(404).json({ error: 'Not found' });
     if (expense.status !== 'APPROVED') return res.status(400).json({ error: 'Must be approved first' });
     await prisma.expense.update({ where: { id: req.params.id }, data: { status: 'REIMBURSED' } });
-    await sendStatusUpdateEmail(expense.submittedBy.email, `${expense.submittedBy.firstName} ${expense.submittedBy.lastName}`, expense, 'REIMBURSED').catch(() => {});
+    await sendStatusUpdateEmail(expense.submittedBy.email, `${expense.submittedBy.firstName} ${expense.submittedBy.lastName}`, expense, 'REIMBURSED', expense.submittedBy).catch(() => {});
     await createNotification(expense.submittedById, 'EXPENSE_REIMBURSED',
       '\u{1F4B0} Expense reimbursed!', `"${expense.title}" has been reimbursed`, '/expenses');
     res.json({ message: 'Reimbursed' });

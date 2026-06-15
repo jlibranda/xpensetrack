@@ -319,7 +319,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     for (const approverId of notifiedIds) {
       const approver = await prisma.user.findUnique({ where: { id: approverId } });
       if (approver) {
-        await sendApprovalRequestEmail(approver.email, `${approver.firstName||''} ${approver.lastName||''}`.trim(), expense).catch(()=>{});
+        await sendApprovalRequestEmail(approver.email, `${approver.firstName||''} ${approver.lastName||''}`.trim(), expense, submitter).catch(()=>{});
         await createNotification(approverId, 'APPROVAL_REQUEST',
           'New expense to approve',
           `${submitter.firstName} ${submitter.lastName} submitted "${expense.title}" for approval`,

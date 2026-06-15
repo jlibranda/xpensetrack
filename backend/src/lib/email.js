@@ -1,6 +1,64 @@
 // src/lib/email.js — uses Resend (MailerSend fallback)
 const appName = process.env.EMAIL_BRAND || 'Cashalo';
 const brandColor = process.env.EMAIL_BRAND_COLOR || '#1D9E75';
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+// Default subject + intro message for each notification. Admins can override the
+// subject and message text in Settings → Email Templates; the structured details
+// (tables, buttons, branding) stay consistent. Supported placeholders are noted
+// per template in the frontend editor.
+const DEFAULT_TEMPLATES = {
+  approval_request:        { subject: 'Action required: Approve "{title}"', message: 'An expense from {employeeName} has been submitted and is waiting for your approval:' },
+  status_APPROVED:         { subject: '✅ Expense approved — {title}',       message: 'Your expense has been fully approved and will be processed for reimbursement.' },
+  status_REJECTED:         { subject: '❌ Expense rejected — {title}',       message: 'Your expense was not approved. Please check the notes and resubmit if needed.' },
+  status_RETURNED:         { subject: '↩ Expense returned — {title}',        message: 'Your approver returned this expense. Please review their comments and resubmit.' },
+  status_MANAGER_APPROVED: { subject: '✓ Manager approved — {title}',        message: 'Your expense was approved by your manager and is now pending finance review.' },
+  status_PROCESSED:        { subject: '💰 Expense processed — {title}',      message: 'Your expense has been processed for payout.' },
+  welcome:                 { subject: 'Welcome to {appName}!',               message: 'Your {appName} account has been created. Here are your login details:' },
+  password_reset:          { subject: 'Reset your {appName} password',       message: 'Click below to reset your password. This link expires in 1 hour.' },
+};
+
+async function getTemplates() {
+  try {
+    const s = await prisma.orgSettings.findFirst();
+    if (s && s.emailTemplatesJson) return JSON.parse(s.emailTemplatesJson);
+  } catch (e) { /* fall back to defaults */ }
+  return {};
+}
+
+function subst(str, vars) {
+  return String(str || '').replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? vars[k] : m));
+}
+
+// Pick the custom value if the admin set a non-empty one, else the default.
+function tpl(custom, key, field, vars) {
+  const def = (DEFAULT_TEMPLATES[key] || {})[field] || '';
+  const c = custom[key] && custom[key][field];
+  const raw = (c != null && String(c).trim() !== '') ? c : def;
+  return subst(raw, vars);
+}
+
+// Build employee-info placeholders from a user object or id. Looks up the full
+// record by id so tags like {employeeDept} resolve regardless of what the caller
+// included. Falls back to whatever object was passed, then to empty strings.
+async function employeeVars(emp) {
+  let u = null;
+  const id = emp && (typeof emp === 'string' ? emp : emp.id);
+  if (id) { try { u = await prisma.user.findUnique({ where: { id } }); } catch (e) { /* ignore */ } }
+  if (!u && emp && typeof emp === 'object') u = emp;
+  u = u || {};
+  return {
+    employeeName: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
+    employeeFirstName: u.firstName || '',
+    employeeLastName: u.lastName || '',
+    employeeEmail: u.email || '',
+    employeeDept: u.department || '',
+    employeePosition: u.position || '',
+    employeeNumber: u.employeeNumber || '',
+    employeeCostCenter: u.costCenter || '',
+  };
+}
 
 function html(title, body) {
   return `<!DOCTYPE html>
@@ -73,19 +131,25 @@ async function sendMail(to, subject, htmlBody) {
   return false;
 }
 
-async function sendApprovalRequestEmail(toEmail, toName, expense) {
+async function sendApprovalRequestEmail(toEmail, toName, expense, employee) {
   const sym = expense.currency === 'PHP' ? '₱' : '$';
   const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
   const date = new Date(expense.expenseDate).toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
-  return sendMail(toEmail, `Action required: Approve "${expense.title}"`, html(
+  const cat = expense.category ? (expense.category.charAt(0) + expense.category.slice(1).toLowerCase()) : '';
+  const custom = await getTemplates();
+  const emp = await employeeVars(employee || expense.submittedBy || expense.submittedById);
+  const vars = { name: toName, title: expense.title, amount: amt, category: cat, date, appName, ...emp };
+  const subject = tpl(custom, 'approval_request', 'subject', vars);
+  const message = tpl(custom, 'approval_request', 'message', vars);
+  return sendMail(toEmail, subject, html(
     'New expense needs your approval',
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
-     <p style="color:#374151;font-size:14px;margin:0 0 20px">An expense has been submitted and is waiting for your approval:</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
      <table style="width:100%;border-collapse:collapse;margin:0 0 20px">
        ${row('Description', expense.title)}
        ${row('Amount', amt)}
-       ${row('Category', expense.category.charAt(0) + expense.category.slice(1).toLowerCase())}
+       ${row('Category', cat)}
        ${row('Date', date)}
        ${expense.description ? row('Notes', expense.description) : ''}
      </table>
@@ -93,23 +157,28 @@ async function sendApprovalRequestEmail(toEmail, toName, expense) {
   ));
 }
 
-async function sendStatusUpdateEmail(toEmail, toName, expense, status) {
+async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee) {
   const sym = expense.currency === 'PHP' ? '₱' : '$';
   const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
-  const configs = {
-    APPROVED:         { subject:`✅ Expense approved — ${expense.title}`,  title:'Expense approved',              msg:'Your expense has been fully approved and will be processed for reimbursement.', color:'#16a34a' },
-    REJECTED:         { subject:`❌ Expense rejected — ${expense.title}`,  title:'Expense rejected',              msg:'Your expense was not approved. Please check the notes and resubmit if needed.',  color:'#dc2626' },
-    RETURNED:         { subject:`↩ Expense returned — ${expense.title}`,   title:'Expense returned for revision', msg:'Your approver returned this expense. Please review their comments and resubmit.', color:'#d97706' },
-    MANAGER_APPROVED: { subject:`✓ Manager approved — ${expense.title}`,   title:'Approved by manager',           msg:'Your expense was approved by your manager and is now pending finance review.',    color:'#2563eb' },
-    PROCESSED:        { subject:`💰 Expense processed — ${expense.title}`,  title:'Expense processed',            msg:'Your expense has been processed for payout.',                                   color: brandColor },
+  const titles = {
+    APPROVED: 'Expense approved', REJECTED: 'Expense rejected', RETURNED: 'Expense returned for revision',
+    MANAGER_APPROVED: 'Approved by manager', PROCESSED: 'Expense processed',
   };
-  const cfg = configs[status] || { subject:`Expense update — ${expense.title}`, title:'Expense update', msg:'', color:'#374151' };
-  return sendMail(toEmail, cfg.subject, html(
-    cfg.title,
+  const colors = { APPROVED:'#16a34a', REJECTED:'#dc2626', RETURNED:'#d97706', MANAGER_APPROVED:'#2563eb', PROCESSED: brandColor };
+  const custom = await getTemplates();
+  const emp = await employeeVars(employee || expense.submittedBy || expense.submittedById);
+  const vars = { name: toName, title: expense.title, amount: amt, appName, ...emp };
+  const key = `status_${status}`;
+  const subject = DEFAULT_TEMPLATES[key] ? tpl(custom, key, 'subject', vars) : subst(`Expense update — {title}`, vars);
+  const message = DEFAULT_TEMPLATES[key] ? tpl(custom, key, 'message', vars) : '';
+  const title = titles[status] || 'Expense update';
+  const color = colors[status] || '#374151';
+  return sendMail(toEmail, subject, html(
+    title,
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
-     <p style="color:#374151;font-size:14px;margin:0 0 20px">${cfg.msg}</p>
-     <div style="background:#f9fafb;border-left:4px solid ${cfg.color};border-radius:4px;padding:16px;margin:0 0 20px">
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
+     <div style="background:#f9fafb;border-left:4px solid ${color};border-radius:4px;padding:16px;margin:0 0 20px">
        <p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#111">${expense.title}</p>
        <p style="margin:0;font-size:14px;color:#6b7280">${amt}</p>
      </div>
@@ -117,21 +186,31 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status) {
   ));
 }
 
-async function sendPasswordResetEmail(toEmail, toName, resetUrl) {
-  return sendMail(toEmail, `Reset your ${appName} password`, html(
+async function sendPasswordResetEmail(toEmail, toName, resetUrl, employee) {
+  const custom = await getTemplates();
+  const emp = await employeeVars(employee || { firstName: (toName||'').split(' ')[0], lastName: (toName||'').split(' ').slice(1).join(' '), email: toEmail });
+  const vars = { name: toName, appName, ...emp };
+  const subject = tpl(custom, 'password_reset', 'subject', vars);
+  const message = tpl(custom, 'password_reset', 'message', vars);
+  return sendMail(toEmail, subject, html(
     'Reset your password',
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
-     <p style="color:#374151;font-size:14px;margin:0 0 20px">Click below to reset your password. This link expires in <strong>1 hour</strong>.</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
      ${btn(resetUrl, 'Reset my password →')}
      <p style="color:#9ca3af;font-size:12px;margin:20px 0 0">If you didn't request this, ignore this email.</p>`
   ));
 }
 
-async function sendWelcomeEmail(toEmail, toName, tempPassword) {
+async function sendWelcomeEmail(toEmail, toName, tempPassword, employee) {
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
-  return sendMail(toEmail, `Welcome to ${appName}!`, html(
+  const custom = await getTemplates();
+  const emp = await employeeVars(employee || { firstName: (toName||'').split(' ')[0], lastName: (toName||'').split(' ').slice(1).join(' '), email: toEmail });
+  const vars = { name: toName, email: toEmail, password: tempPassword, appName, ...emp };
+  const subject = tpl(custom, 'welcome', 'subject', vars);
+  const message = tpl(custom, 'welcome', 'message', vars);
+  return sendMail(toEmail, subject, html(
     `Welcome, ${toName}!`,
-    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Your ${appName} account has been created. Here are your login details:</p>
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
      <div style="background:#f9fafb;border-radius:8px;padding:16px;margin:0 0 20px">
        <table style="width:100%;border-collapse:collapse">
          ${row('Email', toEmail)}
@@ -139,7 +218,7 @@ async function sendWelcomeEmail(toEmail, toName, tempPassword) {
        </table>
      </div>
      <p style="color:#374151;font-size:14px;margin:0 0 20px">Please log in and change your password from your profile settings.</p>
-     ${btn(`${frontendUrl}/login`, 'Log in to ${appName} →')}`
+     ${btn(`${frontendUrl}/login`, `Log in to ${appName} →`)}`
   ));
 }
 

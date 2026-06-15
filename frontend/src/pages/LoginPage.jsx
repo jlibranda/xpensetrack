@@ -164,7 +164,7 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="text-center text-xs mt-4" style={{ color: footText }}>
-          Forgot your password? Please contact your Finance Department to reset it.
+          <Link to="/forgot-password" className="hover:underline" style={{ color: bg }}>Forgot your password?</Link>
         </p>
         <p className="text-center text-xs mt-1.5" style={{ color: footText }}>
           Contact your admin to create an account.
