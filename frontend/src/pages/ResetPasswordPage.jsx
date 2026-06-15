@@ -15,6 +15,7 @@ export default function ResetPasswordPage() {
   const token = params.get('token');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -93,17 +94,31 @@ export default function ResetPasswordPage() {
         )}
         <div>
           <label className="block text-xs mb-1.5" style={{ color: labelColor }}>New password</label>
-          <input type="password" required value={password} onChange={e=>setPassword(e.target.value)}
-            placeholder="At least 6 characters"
-            className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-            style={{ backgroundColor: inputBg, border: `1px solid ${inputBorder}`, color: textMain }} />
+          <div className="relative">
+            <input type={show ? 'text' : 'password'} required value={password} onChange={e=>setPassword(e.target.value)}
+              placeholder="At least 6 characters"
+              className="w-full px-3 py-2 pr-10 rounded-lg text-sm focus:outline-none"
+              style={{ backgroundColor: inputBg, border: `1px solid ${inputBorder}`, color: textMain }} />
+            <button type="button" onClick={() => setShow(s => !s)}
+              aria-label={show ? 'Hide password' : 'Show password'} title={show ? 'Hide password' : 'Show password'}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1" style={{ color: textSub }}>
+              {show ? '🙈' : '👁️'}
+            </button>
+          </div>
         </div>
         <div>
           <label className="block text-xs mb-1.5" style={{ color: labelColor }}>Confirm new password</label>
-          <input type="password" required value={confirm} onChange={e=>setConfirm(e.target.value)}
-            placeholder="Repeat password"
-            className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-            style={{ backgroundColor: inputBg, border: `1px solid ${inputBorder}`, color: textMain }} />
+          <div className="relative">
+            <input type={show ? 'text' : 'password'} required value={confirm} onChange={e=>setConfirm(e.target.value)}
+              placeholder="Repeat password"
+              className="w-full px-3 py-2 pr-10 rounded-lg text-sm focus:outline-none"
+              style={{ backgroundColor: inputBg, border: `1px solid ${inputBorder}`, color: textMain }} />
+            <button type="button" onClick={() => setShow(s => !s)}
+              aria-label={show ? 'Hide password' : 'Show password'} title={show ? 'Hide password' : 'Show password'}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1" style={{ color: textSub }}>
+              {show ? '🙈' : '👁️'}
+            </button>
+          </div>
         </div>
         <button type="submit" disabled={loading}
           className="w-full py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"

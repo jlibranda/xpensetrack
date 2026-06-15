@@ -519,7 +519,6 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-          {isAdmin && <EmailTestCard defaultTo={user?.email} />}
         </>)}
 
         {tab === 'Branding' && canSeeBranding && (
@@ -688,41 +687,7 @@ export default function SettingsPage() {
   );
 }
 
-function EmailTestCard({ defaultTo }) {
-  const [to, setTo] = useState(defaultTo || '');
-  const [sending, setSending] = useState(false);
-  const [result, setResult] = useState(null); // {ok, msg}
-  const send = async () => {
-    if (!to.trim()) { setResult({ ok: false, msg: 'Enter a recipient email.' }); return; }
-    setSending(true); setResult(null);
-    try {
-      const res = await api.post('/notifications/test-email', { to: to.trim() });
-      setResult({ ok: !!res.sent, msg: res.sent ? `Sent to ${res.to}. Check the inbox and Resend dashboard.` : (res.error || 'Could not send.') });
-    } catch (err) {
-      setResult({ ok: false, msg: err.error || err.message || 'Could not send. Check email settings.' });
-    } finally { setSending(false); }
-  };
-  return (
-    <div className="mt-6 p-4 rounded-xl border border-gray-100 bg-gray-50">
-      <h2 className="text-sm font-medium text-gray-700 mb-1">Email delivery</h2>
-      <p className="text-xs text-gray-500 mb-3">Send a test email to confirm notifications are working.</p>
-      <div className="flex gap-2 flex-wrap">
-        <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="recipient@email.com"
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm flex-1 min-w-[220px]" />
-        <button onClick={send} disabled={sending}
-          className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
-          {sending ? 'Sending…' : 'Send test email'}
-        </button>
-      </div>
-      {result && (
-        <p className={`text-xs mt-2 ${result.ok ? 'text-green-600' : 'text-red-500'}`}>
-          {result.ok ? '✓ ' : '✕ '}{result.msg}
-        </p>
-      )}
-    </div>
-  );
-}
+function EmailTestCard_REMOVED() { return null; }
 
 const EMP_VARS = ['{employeeName}','{employeeDept}','{employeePosition}','{employeeNumber}','{employeeEmail}'];
 const EMAIL_TEMPLATE_DEFS = [

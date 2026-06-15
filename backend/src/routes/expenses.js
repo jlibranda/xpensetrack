@@ -166,12 +166,15 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   try {
     const { title, description, amount, currency='PHP', category='OTHER',
-            expenseType='REIMBURSEMENT', receiptId, costCenter, expenseDate } = req.body;
+            expenseType='REIMBURSEMENT', receiptId, costCenter, expenseDate,
+            merchant, orNumber } = req.body;
     if(!title||!amount||!expenseDate) return res.status(400).json({error:'title, amount, expenseDate required'});
     const amountPhp = await toPhp(Number(amount), currency);
     const expense = await prisma.expense.create({
       data: {
         title, description: description||null,
+        merchant: merchant || null,
+        orNumber: orNumber || null,
         amount: Number(amount), currency,
         amountPhp,
         category, expenseType,

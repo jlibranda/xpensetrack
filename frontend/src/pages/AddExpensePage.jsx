@@ -39,7 +39,9 @@ export default function AddExpensePage() {
     if (id) {
       api.get(`/expenses/${id}`).then(e => {
         setForm({
-          title: e.title, orNumber: e.orNumber||'', merchant: e.merchant||'',
+          // Legacy expenses (created before merchant was persisted) only have the
+          // name in `title`; fall back to it so the required Merchant field isn't blank.
+          title: e.title, orNumber: e.orNumber||'', merchant: e.merchant || e.title || '',
           amount: e.amount, currency: e.currency, category: e.category,
           expenseType: e.expenseType, expenseDate: e.expenseDate.split('T')[0],
         });
