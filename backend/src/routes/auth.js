@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requirePermission } = require('../middleware/auth');
 const prisma = new PrismaClient();
 
 const safeUser = (u) => {
@@ -13,12 +13,18 @@ const safeUser = (u) => {
   return safe;
 };
 
-router.post('/register', async (req, res) => {
+router.post('/register', authenticate, requirePermission('manage_users'), async (req, res) => {
   const { email, name, firstName, lastName, password, department, role, employeeNumber } = req.body;
   if (!email || !password || password.length < 6) return res.status(400).json({ error: 'Email and password (min 6) required' });
 
   let fName = firstName || name?.split(' ')[0] || '';
   let lName = lastName || name?.split(' ').slice(1).join(' ') || '';
+
+  const wantedRole = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'].includes(role?.toUpperCase()) ? role.toUpperCase() : 'EMPLOYEE';
+  // Only an admin may create another admin.
+  if (wantedRole === 'ADMIN' && req.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only an admin can create an admin account' });
+  }
 
   try {
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
@@ -27,10 +33,9 @@ router.post('/register', async (req, res) => {
     const user = await prisma.user.create({
       data: { firstName: fName, lastName: lName, email: email.toLowerCase(),
         passwordHash, department, employeeNumber: employeeNumber||null,
-        role: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'].includes(role?.toUpperCase()) ? role.toUpperCase() : 'EMPLOYEE' },
+        role: wantedRole },
     });
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ user: safeUser(user), token });
+    res.status(201).json({ user: safeUser(user) });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 

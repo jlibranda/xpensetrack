@@ -149,6 +149,16 @@ router.get('/:id', authenticate, async (req, res) => {
   try {
     const e = await prisma.expense.findUnique({ where:{id:req.params.id}, include:expenseInclude });
     if(!e) return res.status(404).json({error:'Not found'});
+    const u = req.user;
+    const isOwner = e.submittedById === u.id;
+    const isPriv = ['ADMIN','FINANCE'].includes(u.role);
+    const isApprover = (e.approvals || []).some(a => a.approverId === u.id);
+    let isMgr = false;
+    if (!isOwner && !isPriv && !isApprover && u.role === 'MANAGER') {
+      const team = await teamMemberIds(u.id);
+      isMgr = team.includes(e.submittedById);
+    }
+    if (!(isOwner || isPriv || isApprover || isMgr)) return res.status(403).json({ error: 'Forbidden' });
     res.json(e);
   } catch(err){ res.status(500).json({error:err.message}); }
 });

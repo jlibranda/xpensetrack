@@ -31,15 +31,9 @@ async function teamMemberIds(userId) {
 
 async function teamScopeFilter(reqUser) {
   if (reqUser.role !== 'MANAGER') return null; // FINANCE/ADMIN: unrestricted
-
-  const everyone = await prisma.user.findMany({ select: { id: true, managerId: true, approverIds: true } });
-  const ids = new Set();
-  for (const u of everyone) {
-    if (u.managerId === reqUser.id) { ids.add(u.id); continue; }
-    const additional = (u.approverIds || '').split(',').map(s => s.trim()).filter(Boolean);
-    if (additional.includes(reqUser.id)) ids.add(u.id);
-  }
-  // Always allow a manager to see their own expenses too.
+  // Reuse teamMemberIds (covers managerId, approverIds AND structured
+  // approvalFlowJson), and always include the manager's own expenses.
+  const ids = new Set(await teamMemberIds(reqUser.id));
   ids.add(reqUser.id);
   return [...ids];
 }

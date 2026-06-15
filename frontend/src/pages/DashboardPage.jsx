@@ -13,6 +13,8 @@ const STATUS_BADGE = {
   REJECTED: 'bg-red-600 text-white',
   RETURNED: 'bg-orange-500 text-white',
   PROCESSED: 'bg-blue-600 text-white',
+  REIMBURSED: 'bg-blue-600 text-white',
+  CANCELLED: 'bg-gray-400 text-white',
 };
 
 export default function DashboardPage() {

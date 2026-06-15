@@ -13,6 +13,7 @@ const STATUS_BADGE = {
   REJECTED: 'bg-red-50 text-red-700',
   RETURNED: 'bg-amber-50 text-amber-700',
   PROCESSED: 'bg-blue-50 text-blue-700',
+  REIMBURSED: 'bg-blue-50 text-blue-700',
   CANCELLED: 'bg-gray-100 text-gray-400',
 };
 
@@ -23,6 +24,7 @@ const STATUS_LABEL = {
   REJECTED: '❌ Rejected',
   RETURNED: '↩ Returned',
   PROCESSED: '💰 Processed',
+  REIMBURSED: '💰 Reimbursed',
   CANCELLED: '🚫 Cancelled',
 };
 
@@ -116,7 +118,7 @@ export default function ExpensesPage() {
 
       {/* Filter tabs */}
       <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">
-        {[['','All'],['DRAFT','Drafts'],['PENDING','Pending'],['APPROVED','Approved'],['RETURNED','Returned'],['REJECTED','Rejected'],['PROCESSED','Processed'],['CANCELLED','Cancelled']].map(([val, label]) => (
+        {[['','All'],['DRAFT','Drafts'],['PENDING','Pending'],['APPROVED','Approved'],['RETURNED','Returned'],['REJECTED','Rejected'],['PROCESSED','Processed'],['REIMBURSED','Reimbursed'],['CANCELLED','Cancelled']].map(([val, label]) => (
           <button key={val} onClick={() => setFilter(val)}
             className={`px-3 py-1.5 rounded-md text-xs transition-colors ${filter === val ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
             {label}
