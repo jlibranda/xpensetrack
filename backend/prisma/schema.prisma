@@ -35,7 +35,8 @@ model User {
   expenses       Expense[]       @relation("SubmittedBy")
   approvals      Approval[]
   passwordResets PasswordReset[]
-  ledgerDocs     LedgerDoc[]
+  ledgerDocs     LedgerDoc[]     @relation("LedgerCreatedBy")
+  assignedLedgerDocs LedgerDoc[] @relation("LedgerAssignedTo")
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -118,17 +119,22 @@ model LedgerDoc {
   vatAmount     Float?
   category      String?
   notes         String?
+  remarks       String?
+  archived      Boolean   @default(false)
   status        String    @default("UNPAID") // UNPAID | PAID
   paidAt        DateTime?
   receiptId     String?
   receipt       Receipt?  @relation(fields: [receiptId], references: [id])
+  assignedToId  String?
+  assignedTo    User?     @relation("LedgerAssignedTo", fields: [assignedToId], references: [id])
   createdById   String?
-  createdBy     User?     @relation(fields: [createdById], references: [id])
+  createdBy     User?     @relation("LedgerCreatedBy", fields: [createdById], references: [id])
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   @@index([docType, status])
   @@index([clientId])
+  @@index([archived])
 }
 
 model Approval {

@@ -23,6 +23,7 @@ const include = {
   client: { select: { id: true, name: true } },
   receipt: { select: { id: true, mimeType: true, filename: true } },
   createdBy: { select: { id: true, firstName: true, lastName: true } },
+  assignedTo: { select: { id: true, firstName: true, lastName: true } },
 };
 
 // Compute VATable / VAT from a VAT-inclusive total when not provided.
@@ -42,8 +43,9 @@ function normalizeType(t) {
 
 router.get('/', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
-    const { docType, status, clientId, q, from, to } = req.query;
+    const { docType, status, clientId, q, from, to, archived, assignedToId } = req.query;
     const where = {};
+    where.archived = archived === '1' || archived === 'true';
     if (docType) {
       if (docType === 'AP') where.docType = { in: ['AP_INVOICE', 'AP_RECEIPT'] };
       else if (docType === 'AR') where.docType = 'AR_INVOICE';
@@ -51,6 +53,7 @@ router.get('/', authenticate, requirePermission(PERM, FALLBACK), async (req, res
     }
     if (status) where.status = String(status).toUpperCase();
     if (clientId) where.clientId = clientId;
+    if (assignedToId) where.assignedToId = assignedToId;
     if (from || to) {
       where.docDate = {};
       if (from) where.docDate.gte = new Date(String(from).split('T')[0]);
@@ -73,7 +76,7 @@ router.get('/', authenticate, requirePermission(PERM, FALLBACK), async (req, res
 router.get('/summary', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
     const { clientId } = req.query;
-    const base = clientId ? { clientId } : {};
+    const base = clientId ? { clientId, archived: false } : { archived: false };
     const all = await prisma.ledgerDoc.findMany({ where: base, select: { docType: true, status: true, amountPhp: true } });
     const isAP = (t) => t === 'AP_INVOICE' || t === 'AP_RECEIPT';
     const sum = (rows) => +rows.reduce((s, r) => s + (r.amountPhp || 0), 0).toFixed(2);
@@ -121,6 +124,8 @@ async function buildData(body) {
     vatAmount,
     category: body.category || null,
     notes: body.notes || null,
+    remarks: body.remarks || null,
+    assignedToId: body.assignedToId || null,
     status: String(body.status || 'UNPAID').toUpperCase() === 'PAID' ? 'PAID' : 'UNPAID',
     paidAt: String(body.status || '').toUpperCase() === 'PAID' ? (body.paidAt ? new Date(body.paidAt) : new Date()) : null,
     receiptId: body.receiptId || null,
@@ -179,6 +184,9 @@ router.patch('/:id', authenticate, requirePermission(PERM, FALLBACK), async (req
         vatAmount: (b.amount !== undefined || b.vatAmount !== undefined) ? vatAmount : undefined,
         category: b.category !== undefined ? (b.category || null) : undefined,
         notes: b.notes !== undefined ? (b.notes || null) : undefined,
+        remarks: b.remarks !== undefined ? (b.remarks || null) : undefined,
+        assignedToId: b.assignedToId !== undefined ? (b.assignedToId || null) : undefined,
+        archived: b.archived !== undefined ? !!b.archived : undefined,
         status: b.status !== undefined ? (statusUp === 'PAID' ? 'PAID' : 'UNPAID') : undefined,
         paidAt: b.status !== undefined ? (statusUp === 'PAID' ? (existing.paidAt || new Date()) : null) : undefined,
         receiptId: b.receiptId !== undefined ? (b.receiptId || null) : undefined,
@@ -186,6 +194,30 @@ router.patch('/:id', authenticate, requirePermission(PERM, FALLBACK), async (req
       include,
     });
     res.json(doc);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Multi-select bulk operations on selected document ids.
+// body: { ids:[], action:'paid'|'unpaid'|'archive'|'unarchive'|'assign'|'delete', assignedToId? }
+router.post('/bulk-action', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+  try {
+    const { ids, action, assignedToId } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'No rows selected' });
+    const where = { id: { in: ids } };
+    let data;
+    switch (action) {
+      case 'paid': data = { status: 'PAID', paidAt: new Date() }; break;
+      case 'unpaid': data = { status: 'UNPAID', paidAt: null }; break;
+      case 'archive': data = { archived: true }; break;
+      case 'unarchive': data = { archived: false }; break;
+      case 'assign': data = { assignedToId: assignedToId || null }; break;
+      case 'delete':
+        await prisma.ledgerDoc.deleteMany({ where });
+        return res.json({ deleted: ids.length });
+      default: return res.status(400).json({ error: 'Unknown action' });
+    }
+    const r = await prisma.ledgerDoc.updateMany({ where, data });
+    res.json({ updated: r.count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
