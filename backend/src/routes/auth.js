@@ -69,21 +69,9 @@ router.patch('/change-password', authenticate, async (req, res) => {
 });
 
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email required' });
-  try {
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
-    if (!user) return res.json({ message: 'If that email exists, a reset link has been sent.', emailSent: false });
-    await prisma.passwordReset.deleteMany({ where: { userId: user.id } });
-    const token = crypto.randomBytes(32).toString('hex');
-    await prisma.passwordReset.create({ data: { userId: user.id, token, expiresAt: new Date(Date.now() + 3600000) } });
-    const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
-    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-    const { sendPasswordResetEmail } = require('../lib/email');
-    let emailSent = false;
-    try { await sendPasswordResetEmail(user.email, `${user.firstName} ${user.lastName}`, resetUrl); emailSent = true; } catch(e) {}
-    res.json({ message: emailSent ? 'Reset link sent to your email.' : 'Copy the reset link below and share it with the user.', emailSent, resetUrl });
-  } catch(err) { res.status(500).json({ error: err.message }); }
+  // Self-service password reset is disabled. Password resets are handled by the
+  // Finance/Admin team via the Users screen (reset_passwords permission).
+  return res.status(404).json({ error: 'Self-service password reset is disabled. Please contact your Finance Department.' });
 });
 
 router.post('/reset-password', async (req, res) => {

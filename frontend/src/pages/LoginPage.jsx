@@ -142,9 +142,6 @@ export default function LoginPage() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs" style={{ color: labelColor }}>Password</label>
-              <Link to="/forgot-password" className="text-xs hover:underline" style={{ color: bg }}>
-                Forgot password?
-              </Link>
             </div>
             <div className="relative">
               <input type={showPassword ? 'text' : 'password'} required value={password} onChange={handlePasswordChange}
@@ -167,6 +164,9 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="text-center text-xs mt-4" style={{ color: footText }}>
+          Forgot your password? Please contact your Finance Department to reset it.
+        </p>
+        <p className="text-center text-xs mt-1.5" style={{ color: footText }}>
           Contact your admin to create an account.
         </p>
       </div>
