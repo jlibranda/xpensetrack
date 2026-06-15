@@ -71,7 +71,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // PATCH update user
 router.patch('/:id', authenticate, requirePermission('manage_users'), async (req, res) => {
   try {
-    const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName, newPassword,
+    const { role, department, managerId, costCenter, position, payrollAccount, isActive, employeeNumber, firstName, lastName, email, newPassword,
             approverIds, approvalMode, approvalRule, approvalFlow } = req.body;
 
     // Look up the target so we can apply ADMIN guards
@@ -87,10 +87,25 @@ router.patch('/:id', authenticate, requirePermission('manage_users'), async (req
       return res.status(403).json({ error: 'Only an admin can assign the admin role' });
     }
 
+    // Email change (login identity) — validate format + uniqueness.
+    let emailUpdate;
+    if (email !== undefined && email !== null) {
+      const e = String(email).trim().toLowerCase();
+      if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return res.status(400).json({ error: 'A valid email is required' });
+      if (e !== (target.email || '').toLowerCase()) {
+        const all = await prisma.user.findMany({ select: { id: true, email: true } });
+        if (all.some(u => u.id !== req.params.id && (u.email || '').toLowerCase() === e)) {
+          return res.status(409).json({ error: 'That email is already in use by another user' });
+        }
+      }
+      emailUpdate = e;
+    }
+
     const updateData = {
       role, department, managerId: managerId||null, costCenter: costCenter||null,
       position: position||null, payrollAccount: payrollAccount||null, isActive,
       employeeNumber: employeeNumber||null, firstName, lastName,
+      ...(emailUpdate !== undefined ? { email: emailUpdate } : {}),
     };
     if (approverIds !== undefined) {
       const ids = Array.isArray(approverIds)

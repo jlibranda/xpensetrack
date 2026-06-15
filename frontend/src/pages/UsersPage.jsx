@@ -364,7 +364,7 @@ export default function UsersPage() {
           <div className="grid grid-cols-2 gap-3">
             {[
               ['employeeNumber','Employee #','e.g. EMP-001',false],
-              ['email','Email *','email@company.com', !!editUser],
+              ['email','Email *','email@company.com', false],
               ['lastName','Last name *','e.g. Dela Cruz',false],
               ['firstName','First name *','e.g. Juan',false],
             ].map(([k,label,ph,disabled]) => (

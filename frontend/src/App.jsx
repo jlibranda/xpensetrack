@@ -23,18 +23,30 @@ import AuditLogPage from './pages/AuditLogPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 
-function PrivateRoute({ children, roles, permission, anyPermission, feature }) {
-  const { user, loading } = useAuth();
-  const { settings } = useOrg();
-  if (loading) return (
+// Branded loading screen — shows the org logo + primary color from cached branding
+// (saved by the login/settings pages) instead of a hardcoded placeholder.
+function BrandedLoader() {
+  let b = { companyName: 'Cashalo', primaryColor: '#1D9E75', logoUrl: null };
+  try { const v = localStorage.getItem('cached_branding'); if (v) b = { ...b, ...JSON.parse(v) }; } catch {}
+  return (
     <div className="flex items-center justify-center h-screen">
       <div className="text-center">
-        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3"
-          style={{ backgroundColor: 'var(--brand-color, #1D9E75)' }}>X</div>
+        {b.logoUrl ? (
+          <img src={b.logoUrl} alt={b.companyName} className="w-14 h-14 rounded-2xl object-cover mx-auto mb-3 shadow-sm" />
+        ) : (
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3"
+            style={{ backgroundColor: b.primaryColor || '#1D9E75' }}>{(b.companyName || 'C')[0]}</div>
+        )}
         <p className="text-sm text-gray-500">Loading...</p>
       </div>
     </div>
   );
+}
+
+function PrivateRoute({ children, roles, permission, anyPermission, feature }) {
+  const { user, loading } = useAuth();
+  const { settings } = useOrg();
+  if (loading) return <BrandedLoader />;
   if (!user) return <Navigate to="/login" replace />;
   // ADMIN always allowed. A single `permission` checks the access-control list
   // for that key (falling back to `roles`). `anyPermission` grants access if the
@@ -65,15 +77,7 @@ function PrivateRoute({ children, roles, permission, anyPermission, feature }) {
 
 function AppRoutes() {
   const { loading } = useAuth();
-  if (loading) return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-center">
-        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3"
-          style={{ backgroundColor: 'var(--brand-color, #1D9E75)' }}>X</div>
-        <p className="text-sm text-gray-500">Loading...</p>
-      </div>
-    </div>
-  );
+  if (loading) return <BrandedLoader />;
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
