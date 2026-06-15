@@ -1,8 +1,19 @@
 // src/routes/notifications.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
 const prisma = new PrismaClient();
+
+// Admin-only: send a test email to verify the email provider is configured.
+router.post('/test-email', authenticate, requireRole('ADMIN'), async (req, res) => {
+  try {
+    const { sendTestEmail } = require('../lib/email');
+    const to = (req.body && req.body.to) || req.user.email;
+    const ok = await sendTestEmail(to, `${req.user.firstName || ''}`.trim());
+    if (ok) return res.json({ sent: true, to });
+    return res.status(400).json({ sent: false, to, error: 'Email not configured or provider rejected the message. Check server logs and RESEND_API_KEY / RESEND_FROM.' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 router.get('/', authenticate, async (req, res) => {
   try {

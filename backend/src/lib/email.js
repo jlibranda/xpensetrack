@@ -30,41 +30,47 @@ function row(label, value) {
 }
 
 async function sendMail(to, subject, htmlBody) {
-  const apiKey = process.env.MAILERSEND_API_KEY;
-  const fromEmail = process.env.MAILERSEND_FROM;
+  // Build the From header. RESEND_FROM may be either a bare address
+  // ("noreply@yourdomain.com") or a full header ("XpenseTrack <noreply@yourdomain.com>").
+  const buildFrom = (val) => (val && val.includes('<')) ? val : `${appName} <${val}>`;
 
-  if (!apiKey || !fromEmail) {
-    console.log(`[Email not configured]\nTo: ${to}\nSubject: ${subject}`);
-    return false;
+  // 1) Resend (preferred).
+  const resendKey = process.env.RESEND_API_KEY;
+  const resendFrom = process.env.RESEND_FROM || process.env.EMAIL_FROM;
+  if (resendKey && resendFrom) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendKey}` },
+        body: JSON.stringify({ from: buildFrom(resendFrom), to: [to], subject, html: htmlBody }),
+      });
+      if (res.ok) { console.log(`Email sent via Resend to ${to}: ${subject}`); return true; }
+      const data = await res.json().catch(() => ({}));
+      console.error('Resend error:', res.status, JSON.stringify(data));
+      return false;
+    } catch (err) { console.error('Resend failed:', err.message); return false; }
   }
 
-  try {
-    const res = await fetch('https://api.mailersend.com/v1/email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        from: { email: fromEmail, name: appName },
-        to: [{ email: to }],
-        subject,
-        html: htmlBody,
-      }),
-    });
-
-    if (res.ok || res.status === 202) {
-      console.log(`Email sent via MailerSend to ${to}: ${subject}`);
-      return true;
-    } else {
+  // 2) MailerSend (legacy fallback, if still configured).
+  const apiKey = process.env.MAILERSEND_API_KEY;
+  const fromEmail = process.env.MAILERSEND_FROM;
+  if (apiKey && fromEmail) {
+    try {
+      const res = await fetch('https://api.mailersend.com/v1/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ from: { email: fromEmail, name: appName }, to: [{ email: to }], subject, html: htmlBody }),
+      });
+      if (res.ok || res.status === 202) { console.log(`Email sent via MailerSend to ${to}: ${subject}`); return true; }
       const data = await res.json().catch(() => ({}));
       console.error('MailerSend error:', res.status, JSON.stringify(data));
       return false;
-    }
-  } catch(err) {
-    console.error('MailerSend failed:', err.message);
-    return false;
+    } catch (err) { console.error('MailerSend failed:', err.message); return false; }
   }
+
+  // 3) Nothing configured.
+  console.log(`[Email not configured]\nTo: ${to}\nSubject: ${subject}`);
+  return false;
 }
 
 async function sendApprovalRequestEmail(toEmail, toName, expense) {
@@ -137,4 +143,13 @@ async function sendWelcomeEmail(toEmail, toName, tempPassword) {
   ));
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail };
+async function sendTestEmail(toEmail, toName) {
+  return sendMail(toEmail, `${appName} — test email`, html(
+    'Test email',
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName || 'there'},</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">If you're reading this, email delivery is working. 🎉</p>
+     <p style="color:#9ca3af;font-size:12px;margin:20px 0 0">Sent as a configuration test.</p>`
+  ));
+}
+
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail };
