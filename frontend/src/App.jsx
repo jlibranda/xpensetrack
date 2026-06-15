@@ -13,6 +13,7 @@ import ExpensesPage from './pages/ExpensesPage';
 import AddExpensePage from './pages/AddExpensePage';
 import ApprovalsPage from './pages/ApprovalsPage';
 import ReportsPage from './pages/ReportsPage';
+import LedgerPage from './pages/LedgerPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import UsersPage from './pages/UsersPage';
@@ -21,7 +22,7 @@ import AuditLogPage from './pages/AuditLogPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 
-function PrivateRoute({ children, roles, permission, anyPermission }) {
+function PrivateRoute({ children, roles, permission, anyPermission, feature }) {
   const { user, loading } = useAuth();
   const { settings } = useOrg();
   if (loading) return (
@@ -38,6 +39,10 @@ function PrivateRoute({ children, roles, permission, anyPermission }) {
   // for that key (falling back to `roles`). `anyPermission` grants access if the
   // role is in the base `roles` floor OR has been granted ANY of those perms.
   if (user.role !== 'ADMIN') {
+    // In-development feature gate: if the feature is off, non-admins can't enter.
+    if (feature && !(settings?.accessControl?.__features__ || {})[feature]) {
+      return <Navigate to="/" replace />;
+    }
     let blocked = false;
     if (permission) {
       const allowed = settings?.accessControl?.[permission] || roles || ['ADMIN'];
@@ -79,6 +84,7 @@ function AppRoutes() {
         <Route path="expenses/:id/edit" element={<AddExpensePage />} />
         <Route path="approvals" element={<PrivateRoute permission="view_approvals" roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
         <Route path="reports" element={<PrivateRoute permission="view_reports" roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
+        <Route path="payables" element={<PrivateRoute permission="manage_ap_ar" feature="apAr" roles={['FINANCE','ADMIN']}><LedgerPage /></PrivateRoute>} />
         <Route path="transactions" element={<PrivateRoute roles={['FINANCE','ADMIN']}><TransactionsPage /></PrivateRoute>} />
         <Route path="analytics" element={<PrivateRoute permission="view_analytics" roles={['FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
         <Route path="users" element={<PrivateRoute permission="manage_users"><UsersPage /></PrivateRoute>} />

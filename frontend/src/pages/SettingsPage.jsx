@@ -23,6 +23,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     view_audit_log: ['ADMIN'],
     edit_categories: ['FINANCE','ADMIN'],
     manage_expense_types: ['FINANCE','ADMIN'],
+    manage_ap_ar: ['FINANCE','ADMIN'],
     manage_settings: ['FINANCE','ADMIN'],
     manage_password: ['ADMIN'],
     manage_access_control: ['ADMIN'],
@@ -42,6 +43,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     view_audit_log: 'View audit log',
     edit_categories: 'Edit categories & GL codes',
     manage_expense_types: 'Manage expense types',
+    manage_ap_ar: 'Manage payables & receivables',
     manage_settings: 'Manage app settings',
     manage_password: 'View / set default password',
     manage_access_control: 'Manage access control',
@@ -63,6 +65,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     const saved = settings?.accessControl?.__roles__;
     return (Array.isArray(saved) && saved.length) ? saved : ['EMPLOYEE','MANAGER','FINANCE','ADMIN'];
   });
+  const [features, setFeatures] = useState(() => settings?.accessControl?.__features__ || {});
   const ROLES = roles;
   // Non-admins never see or edit the ADMIN column.
   const visibleRoles = acIsAdmin ? ROLES : ROLES.filter(r => r !== 'ADMIN');
@@ -87,7 +90,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   const savePerms = async () => {
     setSaving2(true);
     try {
-      await api.patch('/settings', { accessControl: { ...perms, __roles__: roles } });
+      await api.patch('/settings', { accessControl: { ...perms, __roles__: roles, __features__: features } });
       if (refresh) refresh();
       setSaved2(true);
       setTimeout(() => setSaved2(false), 2000);
@@ -102,7 +105,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     setPerms(DEFAULT_PERMS);
     setRoles(['EMPLOYEE','MANAGER','FINANCE','ADMIN']);
     try {
-      await api.patch('/settings', { accessControl: { ...DEFAULT_PERMS, __roles__: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'] } });
+      await api.patch('/settings', { accessControl: { ...DEFAULT_PERMS, __roles__: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'], __features__: features } });
       if (refresh) refresh();
     } catch(e) {}
   };
@@ -157,6 +160,18 @@ function AccessControlTab({ settings, navigate, refresh }) {
           + Add role
         </button>
       </div>
+
+      {acIsAdmin && (
+        <div className="mb-4 p-3 rounded-xl border border-amber-200 bg-amber-50">
+          <p className="text-xs font-semibold text-amber-800 mb-1">In-development modules</p>
+          <p className="text-[11px] text-amber-700 mb-2">When off, the module is visible to Admins only (for development). Turn on to release it to roles granted its permission.</p>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={!!features.apAr}
+              onChange={(e) => setFeatures(f => ({ ...f, apAr: e.target.checked }))} />
+            Payables &amp; Receivables {features.apAr ? <span className="text-green-600 text-xs">(live)</span> : <span className="text-gray-400 text-xs">(admin-only)</span>}
+          </label>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-xl border border-gray-100">
         <table className="w-full text-xs">

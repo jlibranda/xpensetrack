@@ -12,6 +12,7 @@ const DEFAULT_PERMS = {
   export_reports: ['MANAGER', 'FINANCE', 'ADMIN'],
   edit_categories: ['FINANCE', 'ADMIN'],
   manage_expense_types: ['FINANCE', 'ADMIN'],
+  manage_ap_ar: ['FINANCE', 'ADMIN'],
   manage_settings: ['FINANCE', 'ADMIN'],
   manage_password: ['ADMIN'],
   manage_access_control: ['ADMIN'],

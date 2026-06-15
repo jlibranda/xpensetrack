@@ -15,6 +15,7 @@ const NAV = [
 const MANAGER_NAV = [
   { to:'/approvals', label:'My Approvals', icon:'✓', perm:'view_approvals' },
   { to:'/reports', label:'Reports', icon:'📊', perm:'view_reports' },
+  { to:'/payables', label:'Payables & Receivables', icon:'🧾', perm:'manage_ap_ar', feature:'apAr' },
   { to:'/analytics', label:'Analytics', icon:'📈', perm:'view_analytics' },
 ];
 const ADMIN_NAV = [
@@ -38,6 +39,7 @@ export default function Layout() {
   const DEFAULT_NAV_PERMS = {
     view_approvals: ['MANAGER','FINANCE','ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],
+    manage_ap_ar: ['FINANCE','ADMIN'],
     view_analytics: ['FINANCE','ADMIN'],
   };
   const can = (perm) => {
@@ -48,6 +50,14 @@ export default function Layout() {
   // The Management section shows if the user can see any item in it (incl. an
   // Employee granted approvals access), or Transactions (Finance/Admin).
   const showManagement = MANAGER_NAV.some(item => can(item.perm)) || ['FINANCE','ADMIN'].includes(user?.role);
+  // A nav item tagged with an in-development `feature` is visible to Admin always,
+  // and to permitted roles only once the feature is switched on in Access Control.
+  const navVisible = (item) => {
+    if (item.feature && !(settings?.accessControl?.__features__ || {})[item.feature]) {
+      return user?.role === 'ADMIN';
+    }
+    return can(item.perm);
+  };
   // Settings/Users are reachable by their base roles OR any role granted the
   // relevant permission via Access Control.
   const SETTINGS_PERMS = ['manage_settings','edit_categories','manage_expense_types','manage_password','manage_access_control','upload_branding','change_branding'];
@@ -167,7 +177,7 @@ export default function Layout() {
                 </NavLink>
               )}
               <p className="pt-3 pb-1 px-3 text-xs text-gray-400 uppercase tracking-wider font-medium">Management</p>
-              {MANAGER_NAV.filter(item => can(item.perm)).map(item => (
+              {MANAGER_NAV.filter(navVisible).map(item => (
                 <NavLink key={item.to} to={item.to} className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
                   <span className="w-4 text-center text-sm">{item.icon}</span>
