@@ -296,6 +296,7 @@ export default function SettingsPage() {
   const canPassword = can('manage_password', ['ADMIN']);
   const canAccessControl = can('manage_access_control', ['ADMIN']);
   const canSecurity = can('manage_security', ['ADMIN']);
+  const canSettingsManage = can('manage_settings', ['FINANCE', 'ADMIN']);
   const canReceiptStorage = can('manage_receipt_storage', ['ADMIN']);
 
   // Exchange rate (USD -> PHP) — separate from the main settings form.
@@ -549,6 +550,7 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+          {canSettingsManage && <EmailNotificationsCard settings={settings} />}
           {canSecurity && <PayoutReversalCard settings={settings} />}
           {canReceiptStorage && <ReceiptStorageCard />}
         </>)}
@@ -715,6 +717,38 @@ export default function SettingsPage() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function EmailNotificationsCard({ settings }) {
+  const [on, setOn] = useState(settings?.emailNotificationsEnabled !== false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const apply = async (next) => {
+    setOn(next); setSaving(true); setMsg(null);
+    try {
+      await api.patch('/settings', { emailNotificationsEnabled: next });
+      setMsg({ ok: true, text: next ? 'Notifications ON' : 'Notifications OFF' });
+    } catch (e) { setOn(!next); setMsg({ ok: false, text: e.error || 'Failed' }); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="mt-6 p-4 rounded-xl border border-gray-100 bg-gray-50">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-medium text-gray-700 mb-1">Email notifications</h2>
+          <p className="text-xs text-gray-500">Master switch for automated emails (approval requests + status updates like approved/returned/processed/reprocessing). Turn OFF during testing so staff don't get real emails. Password resets and credential emails are not affected.</p>
+        </div>
+        <button onClick={() => apply(!on)} disabled={saving} role="switch" aria-checked={on}
+          className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors ${on ? '' : 'bg-gray-300'}`}
+          style={on ? { backgroundColor: 'var(--brand-color,#1D9E75)' } : {}}>
+          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform mt-0.5 ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        </button>
+      </div>
+      {msg && <p className={`text-xs mt-2 ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.ok ? '✓ ' : '✕ '}{msg.text}{msg.ok ? ' — saved.' : ''}</p>}
     </div>
   );
 }

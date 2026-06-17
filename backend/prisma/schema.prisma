@@ -214,6 +214,7 @@ model OrgSettings {
   loginMaxAttempts     Int      @default(5)
   loginLockoutMinutes  Int      @default(15)
   payoutReversalUserIds String  @default("[]")
+  emailNotificationsEnabled Boolean @default(true)
   updatedAt            DateTime @updatedAt
 }
 

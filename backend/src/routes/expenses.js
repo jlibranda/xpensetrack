@@ -450,10 +450,18 @@ router.post('/:id/unmark-processed', authenticate, async (req, res) => {
       allowed = Array.isArray(list) && list.includes(req.user.id);
     }
     if (!allowed) return res.status(403).json({ error: 'You are not authorized to undo processed payouts. Ask an admin.' });
+    const before = await prisma.expense.findUnique({ where: { id: req.params.id }, include: { submittedBy: true } });
     const updated = await prisma.expense.update({
       where: { id: req.params.id },
       data: { processedAt: null, payoutDate: null, payPeriod: null, status: 'APPROVED' },
     });
+    // Tell the submitter their expense is back for reprocessing.
+    if (before?.submittedBy?.email) {
+      try {
+        const { sendStatusUpdateEmail } = require('../lib/email');
+        sendStatusUpdateEmail(before.submittedBy.email, `${before.submittedBy.firstName || ''} ${before.submittedBy.lastName || ''}`.trim(), { ...updated, submittedBy: before.submittedBy }, 'REPROCESSING', before.submittedBy).catch(() => {});
+      } catch (mailErr) { /* ignore */ }
+    }
     res.json({ message: 'Unmarked', processedAt: updated.processedAt });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

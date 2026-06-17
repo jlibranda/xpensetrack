@@ -59,7 +59,7 @@ router.patch('/', authenticate, async (req, res) => {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
             wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates,
-            loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds } = req.body;
+            loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds, emailNotificationsEnabled } = req.body;
     const s = await getOrCreate();
     // Field-level permission: apply each group only if the user is allowed.
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
@@ -107,6 +107,7 @@ router.patch('/', authenticate, async (req, res) => {
         loginMaxAttempts: canSecurity && loginMaxAttempts !== undefined ? Math.max(0, parseInt(loginMaxAttempts, 10) || 0) : undefined,
         loginLockoutMinutes: canSecurity && loginLockoutMinutes !== undefined ? Math.max(1, parseInt(loginLockoutMinutes, 10) || 1) : undefined,
         payoutReversalUserIds: canSecurity && payoutReversalUserIds !== undefined ? JSON.stringify(Array.isArray(payoutReversalUserIds) ? payoutReversalUserIds : []) : undefined,
+        emailNotificationsEnabled: canManage && typeof emailNotificationsEnabled === 'boolean' ? emailNotificationsEnabled : undefined,
       },
     });
     res.json(parseSettings(updated));
@@ -141,6 +142,23 @@ router.delete('/wallpaper', authenticate, requirePermission('upload_branding', [
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+
+// GET /api/settings/logo — public, serves the org logo as a real image so it can
+// be embedded in emails (data-URI logos are blocked by most email clients).
+router.get('/logo', async (req, res) => {
+  try {
+    const s = await prisma.orgSettings.findFirst();
+    const logo = s?.logoUrl;
+    if (!logo) return res.status(404).end();
+    if (/^https?:\/\//i.test(logo)) return res.redirect(logo);
+    const m = /^data:([^;]+);base64,(.*)$/i.exec(logo);
+    if (!m) return res.status(404).end();
+    const buf = Buffer.from(m[2], 'base64');
+    res.setHeader('Content-Type', m[1] || 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.end(buf);
+  } catch (err) { return res.status(404).end(); }
+});
 
 // GET /api/settings/public — no auth required, returns branding only
 router.get('/public', async (req, res) => {

@@ -18,11 +18,29 @@ async function getBranding() {
       logoUrl = s.logoUrl || null;
     }
   } catch (e) { /* use fallbacks */ }
+  // Email clients block data-URI images, so serve the logo from a public URL.
+  let emailLogoUrl = null;
+  if (logoUrl) {
+    if (/^https?:\/\//i.test(logoUrl)) emailLogoUrl = logoUrl;
+    else if (/^data:image\//i.test(logoUrl)) {
+      const apiBase = process.env.PUBLIC_API_URL || 'https://xpensetrack-production.up.railway.app/api';
+      emailLogoUrl = `${apiBase.replace(/\/$/, '')}/settings/logo`;
+    }
+  }
   return {
     appName: ENV_APP_NAME || companyName,
     brandColor: ENV_BRAND_COLOR || primaryColor,
-    logoUrl,
+    logoUrl: emailLogoUrl,
   };
+}
+
+// Whether automated notification emails (approval requests, status updates) are on.
+// Lets the team silence notifications during testing without touching credentials/resets.
+async function notificationsEnabled() {
+  try {
+    const s = await prisma.orgSettings.findFirst();
+    return s ? s.emailNotificationsEnabled !== false : true;
+  } catch (e) { return true; }
 }
 
 // Default subject + intro message for each notification. Admins can override the
@@ -164,6 +182,7 @@ async function sendMail(to, subject, htmlBody, fromName) {
 }
 
 async function sendApprovalRequestEmail(toEmail, toName, expense, employee) {
+  if (!(await notificationsEnabled())) return { skipped: true, reason: 'notifications_disabled' };
   const sym = expense.currency === 'PHP' ? '₱' : '$';
   const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
   const date = new Date(expense.expenseDate).toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
@@ -192,22 +211,27 @@ async function sendApprovalRequestEmail(toEmail, toName, expense, employee) {
 }
 
 async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee) {
+  if (!(await notificationsEnabled())) return { skipped: true, reason: 'notifications_disabled' };
   const sym = expense.currency === 'PHP' ? '₱' : '$';
   const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
   const titles = {
     APPROVED: 'Expense approved', REJECTED: 'Expense rejected', RETURNED: 'Expense returned for revision',
     MANAGER_APPROVED: 'Approved by manager', PROCESSED: 'Expense processed',
+    REPROCESSING: 'Expense back for reprocessing',
   };
   const brand = await getBranding();
   const appName = brand.appName;
-  const colors = { APPROVED:'#16a34a', REJECTED:'#dc2626', RETURNED:'#d97706', MANAGER_APPROVED:'#2563eb', PROCESSED: brand.brandColor };
+  const colors = { APPROVED:'#16a34a', REJECTED:'#dc2626', RETURNED:'#d97706', MANAGER_APPROVED:'#2563eb', PROCESSED: brand.brandColor, REPROCESSING: '#d97706' };
   const custom = await getTemplates();
   const emp = await employeeVars(employee || expense.submittedBy || expense.submittedById);
   const vars = { name: toName, title: expense.title, amount: amt, appName, ...emp };
   const key = `status_${status}`;
+  const fallbackMsgs = {
+    REPROCESSING: 'A previously processed expense has been reverted and is now back for reprocessing. You will receive an updated notification once it has been processed again.',
+  };
   const subject = DEFAULT_TEMPLATES[key] ? tpl(custom, key, 'subject', vars) : subst(`Expense update — {title}`, vars);
-  const message = DEFAULT_TEMPLATES[key] ? tpl(custom, key, 'message', vars) : '';
+  const message = DEFAULT_TEMPLATES[key] ? tpl(custom, key, 'message', vars) : (fallbackMsgs[status] || '');
   const title = titles[status] || 'Expense update';
   const color = colors[status] || '#374151';
   // For processed payouts, show pay out date + remarks (and pay period if set).
@@ -216,7 +240,6 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee)
   let extra = '';
   if (status === 'PROCESSED') {
     const lines = [];
-    if (expense.payPeriod) lines.push(`Pay period: ${esc(expense.payPeriod)}`);
     const payout = fmtD(expense.payoutDate || expense.processedAt);
     if (payout) lines.push(`Pay out date: ${esc(payout)}`);
     if (expense.remarks) lines.push(`Remarks: ${esc(expense.remarks)}`);
