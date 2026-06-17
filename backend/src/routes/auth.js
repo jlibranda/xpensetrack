@@ -93,7 +93,7 @@ router.patch('/change-password', authenticate, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!await bcrypt.compare(currentPassword, user.passwordHash)) return res.status(400).json({ error: 'Current password incorrect' });
-    await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 12) } });
+    await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 12), mustChangePassword: false } });
     res.json({ message: 'Password changed successfully' });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -136,7 +136,7 @@ router.post('/reset-password', async (req, res) => {
     const reset = await prisma.passwordReset.findUnique({ where: { token }, include: { user: true } });
     if (!reset || reset.used || reset.expiresAt < new Date()) return res.status(400).json({ error: 'Reset link is invalid or expired' });
     await prisma.$transaction([
-      prisma.user.update({ where: { id: reset.userId }, data: { passwordHash: await bcrypt.hash(newPassword, 12), failedLoginAttempts: 0, lockedUntil: null } }),
+      prisma.user.update({ where: { id: reset.userId }, data: { passwordHash: await bcrypt.hash(newPassword, 12), failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: false } }),
       prisma.passwordReset.update({ where: { id: reset.id }, data: { used: true } }),
     ]);
     res.json({ message: 'Password reset successfully. You can now log in.' });

@@ -18,6 +18,7 @@ const STATUS_BADGE = {
 export default function ApprovalsPage() {
   const [approvals, setApprovals] = useState([]);
   const [history, setHistory] = useState([]);
+  const [historyDetail, setHistoryDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
   const [notes, setNotes] = useState({});
@@ -268,7 +269,7 @@ export default function ApprovalsPage() {
                   const decision = isReturnedRow ? 'RETURNED' : (a.expense?.status || a.status);
                   const cleanNote = (a.notes||'').startsWith('[auto]') ? '' : (a.notes||'').replace(/^\[RETURNED\]\s*/, '');
                   return (
-                  <tr key={a.id} className="border-t border-gray-50 hover:bg-gray-50">
+                  <tr key={a.id} onClick={() => setHistoryDetail(a)} className="border-t border-gray-50 hover:bg-gray-50 cursor-pointer">
                     <td className="px-4 py-3">
                       <p className="text-gray-900 font-medium text-sm">{a.expense.title}</p>
                       {cleanNote && <p className="text-xs text-gray-600 mt-0.5 max-w-xs">"{cleanNote}"</p>}
@@ -288,6 +289,59 @@ export default function ApprovalsPage() {
           )}
         </div>
       )}
+
+      {/* History detail modal — read-only expense details incl. who submitted it */}
+      {historyDetail && (() => {
+        const a = historyDetail;
+        const e = a.expense || {};
+        const isReturnedRow = a.status === 'REJECTED' && (a.notes || '').startsWith('[RETURNED]');
+        const decision = isReturnedRow ? 'RETURNED' : (e.status || a.status);
+        const note = (a.notes || '').startsWith('[auto]') ? '' : (a.notes || '').replace(/^\[RETURNED\]\s*/, '');
+        const row = (label, val) => val ? (
+          <div className="flex justify-between py-1.5 border-b border-gray-50">
+            <span className="text-gray-500">{label}</span>
+            <span className="text-gray-800 text-right max-w-[60%]">{val}</span>
+          </div>
+        ) : null;
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setHistoryDetail(null)}>
+            <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5" onClick={ev => ev.stopPropagation()}>
+              <div className="flex justify-between items-center mb-3">
+                <p className="text-sm font-medium text-gray-900">Expense details</p>
+                <button onClick={() => setHistoryDetail(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+              </div>
+
+              {hasReceipt(e) ? (
+                <div className="mb-4"><ReceiptImage receiptId={e.receipt.id} className="w-full max-h-56 object-contain rounded-lg" /></div>
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-6 text-center mb-4">
+                  <p className="text-2xl mb-1">🧾</p>
+                  <p className="text-xs text-gray-400">No receipt attached</p>
+                </div>
+              )}
+
+              <div className="mb-3">
+                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[decision] || 'bg-gray-100 text-gray-600'}`}>{decision}</span>
+              </div>
+
+              <div className="space-y-0.5 text-xs">
+                {row('Submitted by', personName(e.submittedBy))}
+                {row('Merchant', e.merchant)}
+                {row('Description', e.title)}
+                {row('Amount', format(e.amountPhp))}
+                {row('OR / Invoice no.', e.orNumber)}
+                {row('Type', e.expenseType ? e.expenseType.toLowerCase().replace('_', ' ') : '')}
+                {row('Category', e.category)}
+                {row('Cost center', e.costCenter)}
+                {row('Date', e.expenseDate ? new Date(e.expenseDate).toLocaleDateString() : '')}
+                {row('Processed on', e.processedAt ? new Date(e.processedAt).toLocaleDateString() : '')}
+                {e.description && e.description !== e.title ? row('Notes', e.description) : null}
+                {note ? row('Decision note', `"${note}"`) : null}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

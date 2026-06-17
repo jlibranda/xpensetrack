@@ -22,6 +22,7 @@ import TransactionsPage from './pages/TransactionsPage';
 import AuditLogPage from './pages/AuditLogPage';
 import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 
 // Branded loading screen — shows the org logo + primary color from cached branding
 // (saved by the login/settings pages) instead of a hardcoded placeholder.
@@ -52,6 +53,8 @@ function PrivateRoute({ children, roles, permission, anyPermission, feature }) {
   const { settings } = useOrg();
   if (loading) return <BrandedLoader />;
   if (!user) return <Navigate to="/login" replace />;
+  // Force a password change after logging in with a temporary password.
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />;
   // ADMIN always allowed. A single `permission` checks the access-control list
   // for that key (falling back to `roles`). `anyPermission` grants access if the
   // role is in the base `roles` floor OR has been granted ANY of those perms.
@@ -87,6 +90,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/change-password" element={<ChangePasswordPage />} />
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<DashboardPage />} />
         <Route path="expenses" element={<ExpensesPage />} />

@@ -232,7 +232,7 @@ router.post('/:id/send-credentials', authenticate, requirePermission('send_crede
     }
     const tempPassword = genTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
-    await prisma.user.update({ where: { id: target.id }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null } });
+    await prisma.user.update({ where: { id: target.id }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: true } });
     const { sendCredentialsEmail } = require('../lib/email');
     const ok = await sendCredentialsEmail(target.email, `${target.firstName||''} ${target.lastName||''}`.trim(), tempPassword, target);
     await logAudit(req.user, 'USER_CREDENTIALS_SENT', { targetType: 'USER', targetId: target.id, details: `Sent login credentials to ${target.email}` });

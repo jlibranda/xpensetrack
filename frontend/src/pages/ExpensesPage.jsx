@@ -118,7 +118,7 @@ export default function ExpensesPage() {
 
       {/* Filter tabs */}
       <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">
-        {[['','All'],['DRAFT','Drafts'],['PENDING','Pending'],['APPROVED','Approved'],['RETURNED','Returned'],['REJECTED','Rejected'],['PROCESSED','Processed'],['REIMBURSED','Reimbursed'],['CANCELLED','Cancelled']].map(([val, label]) => (
+        {[['','All'],['DRAFT','Drafts'],['PENDING','Pending'],['APPROVED','Approved'],['RETURNED','Returned'],['REJECTED','Rejected'],['PROCESSED','Processed'],['CANCELLED','Cancelled']].map(([val, label]) => (
           <button key={val} onClick={() => setFilter(val)}
             className={`px-3 py-1.5 rounded-md text-xs transition-colors ${filter === val ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
             {label}

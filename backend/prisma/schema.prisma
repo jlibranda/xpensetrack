@@ -23,6 +23,7 @@ model User {
   isActive       Boolean         @default(true)
   failedLoginAttempts Int        @default(0)
   lockedUntil    DateTime?
+  mustChangePassword Boolean     @default(false)
   managerId      String?
   manager        User?           @relation("Reports", fields: [managerId], references: [id])
   reports        User[]          @relation("Reports")

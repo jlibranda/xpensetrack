@@ -738,6 +738,18 @@ function ReceiptStorageCard() {
     finally { setPurging(false); }
   };
 
+  const [cleaningOrphans, setCleaningOrphans] = useState(false);
+  const purgeOrphans = async () => {
+    if (!confirm('Delete all orphan receipts (uploads that were never attached to an expense)? This is safe — it does not touch receipts linked to expenses.')) return;
+    setCleaningOrphans(true); setMsg(null);
+    try {
+      const res = await api.post('/receipts/purge-orphans', {});
+      setMsg({ ok: true, text: res.message || 'Orphans deleted.' });
+      loadStats();
+    } catch (e) { setMsg({ ok: false, text: e.error || 'Cleanup failed.' }); }
+    finally { setCleaningOrphans(false); }
+  };
+
   return (
     <div className="mt-6 p-4 rounded-xl border border-gray-100 bg-gray-50">
       <h2 className="text-sm font-medium text-gray-700 mb-1">Receipt storage</h2>
@@ -747,7 +759,8 @@ function ReceiptStorageCard() {
       </p>
       {stats && (
         <p className="text-xs text-gray-500 mb-3">
-          {stats.total} receipt(s) · {stats.withBytes} stored in database · {stats.inStorage} in object storage.
+          {stats.total} receipt(s) · {stats.withBytes} stored in database · {stats.inStorage} in object storage
+          {typeof stats.orphans === 'number' ? <> · <b>{stats.orphans} orphan(s)</b> (not attached to any expense)</> : null}.
         </p>
       )}
       <div className="flex gap-2 flex-wrap items-center">
@@ -755,6 +768,11 @@ function ReceiptStorageCard() {
           className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
           style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
           {downloading ? 'Preparing…' : '⬇ Download all receipts (ZIP)'}
+        </button>
+        <button onClick={purgeOrphans} disabled={cleaningOrphans || (stats && stats.orphans === 0)}
+          className="px-4 py-2 rounded-lg text-sm font-medium border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+          title="Delete uploads that were never attached to an expense">
+          {cleaningOrphans ? 'Cleaning…' : `🧹 Delete orphan receipts${stats && typeof stats.orphans === 'number' ? ` (${stats.orphans})` : ''}`}
         </button>
       </div>
       <div className="mt-4 pt-3 border-t border-gray-200">

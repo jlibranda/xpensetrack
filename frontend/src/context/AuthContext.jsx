@@ -48,6 +48,10 @@ export function AuthProvider({ children }) {
     return user;
   };
 
+  const refreshUser = async () => {
+    try { const u = await api.get('/auth/me'); setUser(u); return u; } catch { return null; }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('xpense_theme');
@@ -60,7 +64,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

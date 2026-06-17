@@ -77,7 +77,8 @@ router.get('/storage-stats', authenticate, requirePermission('manage_receipt_sto
     const total = await prisma.receipt.count();
     const withBytes = await prisma.receipt.count({ where: { NOT: { data: null } } });
     const inStorage = await prisma.receipt.count({ where: { NOT: { storageKey: null } } });
-    res.json({ total, withBytes, inStorage });
+    const orphans = await prisma.receipt.count({ where: { expenses: { none: {} }, ledgerDocs: { none: {} } } });
+    res.json({ total, withBytes, inStorage, orphans });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -108,6 +109,44 @@ router.post('/purge', authenticate, requirePermission('manage_receipt_storage'),
       message: `Removed image data for ${count} receipt(s). To reclaim disk space on PostgreSQL, run VACUUM (FULL) — ask if you need help.`,
       count,
     });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/receipts/:id — delete a single receipt, but ONLY if it's an orphan
+// (not attached to any expense or ledger doc). Used by the "Remove" button so a
+// just-uploaded image that the user removes doesn't linger in storage. Safe for
+// any authenticated user since orphans belong to no one.
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const r = await prisma.receipt.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, storageKey: true, expenses: { select: { id: true } }, ledgerDocs: { select: { id: true } } },
+    });
+    if (!r) return res.json({ deleted: false, reason: 'not_found' });
+    if ((r.expenses?.length || 0) > 0 || (r.ledgerDocs?.length || 0) > 0) {
+      return res.status(409).json({ deleted: false, reason: 'linked' });
+    }
+    if (r.storageKey) { try { require('../lib/storage').deleteObject(r.storageKey); } catch (e) {} }
+    await prisma.receipt.delete({ where: { id: r.id } });
+    res.json({ deleted: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/receipts/purge-orphans — delete ALL orphan receipts (uploads never
+// attached to an expense). Fully removes the row + bytes + object. Permission-gated.
+router.post('/purge-orphans', authenticate, requirePermission('manage_receipt_storage'), async (req, res) => {
+  try {
+    const storage = require('../lib/storage');
+    const orphans = await prisma.receipt.findMany({
+      where: { expenses: { none: {} }, ledgerDocs: { none: {} } },
+      select: { id: true, storageKey: true },
+    });
+    let count = 0;
+    for (const r of orphans) {
+      if (r.storageKey) await storage.deleteObject(r.storageKey).catch(() => {});
+      try { await prisma.receipt.delete({ where: { id: r.id } }); count++; } catch (e) { /* skip */ }
+    }
+    res.json({ message: `Deleted ${count} orphan receipt(s) (uploads not attached to any expense).`, count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

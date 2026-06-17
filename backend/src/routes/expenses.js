@@ -415,17 +415,25 @@ router.post('/bulk-delete', authenticate, requireRole('ADMIN'), async (req, res)
 router.post('/:id/mark-processed', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
     const { processedDate } = req.body;
-    const e = await prisma.expense.findUnique({ where: { id: req.params.id } });
+    const e = await prisma.expense.findUnique({ where: { id: req.params.id }, include: { submittedBy: true } });
     if (!e) return res.status(404).json({ error: 'Not found' });
     if (!['APPROVED', 'PROCESSED'].includes(e.status)) {
       return res.status(400).json({ error: 'Only approved expenses can be marked processed' });
     }
+    const wasAlreadyProcessed = e.status === 'PROCESSED';
     const when = processedDate ? new Date(processedDate) : new Date();
     const updated = await prisma.expense.update({
       where: { id: req.params.id },
       data: { processedAt: when, status: 'PROCESSED' },
     });
     await logAudit(req.user, 'EXPENSE_MARKED_PROCESSED', { targetType: 'EXPENSE', targetId: req.params.id, details: `Marked "${e.title}" processed on ${when.toISOString().split('T')[0]}` });
+    // Email the submitter the first time it's processed (skip re-marks / date edits).
+    if (!wasAlreadyProcessed && e.submittedBy?.email) {
+      try {
+        const { sendStatusUpdateEmail } = require('../lib/email');
+        sendStatusUpdateEmail(e.submittedBy.email, `${e.submittedBy.firstName || ''} ${e.submittedBy.lastName || ''}`.trim(), e, 'PROCESSED', e.submittedBy).catch(() => {});
+      } catch (mailErr) { console.error('processed email failed:', mailErr.message); }
+    }
     res.json({ message: 'Marked processed', processedAt: updated.processedAt });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

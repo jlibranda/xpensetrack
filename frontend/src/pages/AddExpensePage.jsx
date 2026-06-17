@@ -56,7 +56,8 @@ export default function AddExpensePage() {
 
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
 
-  const removeReceipt = () => {
+  const removeReceipt = async () => {
+    const idToDelete = receiptId;
     setReceiptId(''); setReceiptPreview(''); setReceiptIsPdf(false);
     if (fileRef.current) fileRef.current.value = '';
     // Clear the details that were auto-filled from the receipt.
@@ -67,6 +68,10 @@ export default function AddExpensePage() {
       expenseDate: new Date().toISOString().split('T')[0],
     }));
     setError('');
+    // Best-effort: actually delete the uploaded image if it's not yet attached to
+    // a saved expense (the backend only deletes orphans), so removed uploads don't
+    // pile up in storage.
+    if (idToDelete) { try { await api.delete(`/receipts/${idToDelete}`); } catch (e) { /* ignore */ } }
   };
 
   const handleScan = async (e) => {
