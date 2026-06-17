@@ -98,7 +98,8 @@ export default function AddExpensePage() {
           expenseDate: res.parsed.date || f.expenseDate,
         }));
         if (res.aiUsed) setError('✨ AI filled in details from your receipt (merchant, OR number, amount, date). Please review and adjust if needed.');
-        else setError('Receipt saved. AI parsing not available — please fill in details manually.');
+        else if (res.ocrConfigured === false) setError('Receipt saved. Automatic receipt reading isn\u2019t set up yet — please enter the details manually. (Ask your admin to enable it.)');
+        else setError('Receipt saved, but the details couldn\u2019t be read automatically — please enter them manually.');
       }
     } catch(err) {
       setError('Receipt saved. Please fill in details manually.');

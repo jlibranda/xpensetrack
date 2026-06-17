@@ -61,6 +61,7 @@ export default function UsersPage() {
 
   const hasImpersonateAccess = getRolePerm('impersonate_user', ['ADMIN']);
   const hasResetPasswordAccess = getRolePerm('reset_passwords', ['ADMIN']);
+  const hasSendCredentialsAccess = getRolePerm('send_credentials', ['ADMIN']);
 
   const load = async () => {
     setLoading(true);
@@ -147,6 +148,17 @@ export default function UsersPage() {
       await api.post(`/users/${u.id}/reset-password`, { newPassword: pwd });
       alert('Password reset successfully!');
     } catch(err) { alert(err.error||'Failed'); }
+  };
+
+  const [sendingCredsId, setSendingCredsId] = useState(null);
+  const sendCredentials = async (u) => {
+    if (!confirm(`Send login credentials to ${u.firstName} ${u.lastName} (${u.email})?\n\nThis sets a NEW temporary password and emails it to them with a link to the app. Their current password will stop working.`)) return;
+    setSendingCredsId(u.id);
+    try {
+      const res = await api.post(`/users/${u.id}/send-credentials`);
+      alert(res.message || `Credentials sent to ${u.email}.`);
+    } catch(err) { alert(err.error||'Failed to send credentials.'); }
+    finally { setSendingCredsId(null); }
   };
 
   const impersonateUser = async (u) => {
@@ -676,6 +688,13 @@ export default function UsersPage() {
                             </button>
                             {hasResetPasswordAccess && (
                               <button onClick={() => resetPassword(u)} className="text-xs px-2 py-1 border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-50 font-medium">Reset pwd</button>
+                            )}
+                            {hasSendCredentialsAccess && (
+                              <button onClick={() => sendCredentials(u)} disabled={sendingCredsId === u.id}
+                                className="text-xs px-2 py-1 border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-50 font-medium disabled:opacity-50"
+                                title="Set a new temporary password and email it to this user with a link to the app">
+                                {sendingCredsId === u.id ? 'Sending…' : '✉ Send credentials'}
+                              </button>
                             )}
                           </div>
                         </td>

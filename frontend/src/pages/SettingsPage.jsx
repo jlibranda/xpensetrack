@@ -14,7 +14,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   const { user: acUser } = useAuth();
   const acIsAdmin = acUser?.role === 'ADMIN';
   // A non-admin managing access control must never see/grant these.
-  const SENSITIVE_PERMS = ['manage_password', 'reset_passwords', 'upload_branding', 'change_branding', 'impersonate_user'];
+  const SENSITIVE_PERMS = ['manage_password', 'reset_passwords', 'send_credentials', 'upload_branding', 'change_branding', 'impersonate_user'];
   const DEFAULT_PERMS = {
     view_approvals: ['MANAGER','FINANCE','ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],
@@ -31,6 +31,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     manage_users: ['ADMIN'],
     toggle_access: ['ADMIN'],
     reset_passwords: ['ADMIN'],
+    send_credentials: ['ADMIN'],
     upload_branding: ['ADMIN'],
     change_branding: ['ADMIN'],
     impersonate_user: ['ADMIN'],
@@ -52,6 +53,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     manage_users: 'Manage users',
     toggle_access: 'Activate / deactivate user access',
     reset_passwords: 'Reset any user password',
+    send_credentials: 'Send login credentials to a user',
     upload_branding: 'Upload logo & wallpaper',
     change_branding: 'Change colors & branding',
     impersonate_user: 'Login as / access user account',

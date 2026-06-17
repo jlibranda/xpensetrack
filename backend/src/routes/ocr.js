@@ -345,6 +345,12 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
     if (anthropicKey) {
       try {
         const base64 = req.file.buffer.toString('base64');
+        const mime = req.file.mimetype || 'image/jpeg';
+        const isPdf = mime.includes('pdf') || (req.file.originalname || '').toLowerCase().endsWith('.pdf');
+        // PDFs must use a "document" block; only raster images use an "image" block.
+        const mediaBlock = isPdf
+          ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+          : { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } };
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
@@ -352,7 +358,7 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
             model: 'claude-haiku-4-5-20251001',
             max_tokens: 500,
             messages: [{ role: 'user', content: [
-              { type: 'image', source: { type: 'base64', media_type: req.file.mimetype, data: base64 } },
+              mediaBlock,
               { type: 'text', text: `You are a receipt parser. Return ONLY a JSON object: {"merchant":"","title":"","orNumber":"","amount":123.45,"currency":"PHP","date":"YYYY-MM-DD","category":""}. The category MUST be exactly one of these (copy verbatim): ${systemCats.join(' | ')}. If unsure, leave category as "". Use null for missing date/orNumber. No markdown, JSON only.` },
             ] }],
           }),
@@ -423,6 +429,7 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
       receiptId: receipt.id,
       parsed: parsed || { merchant:'', title:'', orNumber:'', amount:null, currency:'PHP', date:null, category:'' },
       aiUsed,
+      ocrConfigured: !!(anthropicKey || ocrSpaceKey),
     });
   } catch (err) {
     console.error('OCR error:', err);

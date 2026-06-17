@@ -272,4 +272,23 @@ async function sendTestEmail(toEmail, toName) {
   , brand), brand.appName);
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail };
+async function sendCredentialsEmail(toEmail, toName, password, employee) {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+  const brand = await getBranding();
+  const appName = brand.appName;
+  return sendMail(toEmail, `Your ${appName} login details`, html(
+    `Your ${appName} login details`,
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName || 'there'},</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">Here are your login details for ${appName}. Use the button below to open the app and sign in.</p>
+     <div style="background:#f9fafb;border-radius:8px;padding:16px;margin:0 0 20px">
+       <table style="width:100%;border-collapse:collapse">
+         ${row('Username (email)', toEmail)}
+         ${row('Password', `<code style="background:#e5e7eb;padding:2px 6px;border-radius:4px">${password}</code>`)}
+       </table>
+     </div>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">For your security, please sign in and change your password from your profile settings.</p>
+     ${btn(`${frontendUrl}/login`, `Open ${appName} →`, brand)}`
+  , brand), appName);
+}
+
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail };

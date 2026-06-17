@@ -208,6 +208,41 @@ router.post('/:id/reset-password', authenticate, requirePermission('reset_passwo
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// Generate a readable temporary password (no ambiguous chars like O/0/I/l/1).
+function genTempPassword(len = 10) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = require('crypto').randomBytes(len);
+  let p = '';
+  for (let i = 0; i < len; i++) p += chars[bytes[i] % chars.length];
+  return p;
+}
+
+// POST send credentials — emails the user their username + a fresh temporary
+// password + a link to the app. NOTE: existing passwords are stored hashed and
+// cannot be retrieved, so this sets a new temporary password and sends that.
+router.post('/:id/send-credentials', authenticate, requirePermission('send_credentials'), async (req, res) => {
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'Not found' });
+    if (target.role === 'ADMIN' && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only an admin can send credentials for an admin account' });
+    }
+    if (target.isActive === false) {
+      return res.status(400).json({ error: 'This account is deactivated. Reactivate it before sending credentials.' });
+    }
+    const tempPassword = genTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
+    await prisma.user.update({ where: { id: target.id }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null } });
+    const { sendCredentialsEmail } = require('../lib/email');
+    const ok = await sendCredentialsEmail(target.email, `${target.firstName||''} ${target.lastName||''}`.trim(), tempPassword, target);
+    await logAudit(req.user, 'USER_CREDENTIALS_SENT', { targetType: 'USER', targetId: target.id, details: `Sent login credentials to ${target.email}` });
+    if (ok === false) {
+      return res.status(400).json({ error: 'A new password was set, but the email could not be sent. Check email settings (RESEND_API_KEY / RESEND_FROM).' });
+    }
+    res.json({ message: `Login credentials sent to ${target.email}.` });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // POST bulk create
 router.post('/bulk', authenticate, requirePermission('manage_users'), async (req, res) => {
   const { users } = req.body;
