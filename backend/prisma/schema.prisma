@@ -87,7 +87,8 @@ enum ExpenseStatus {
 
 model Receipt {
   id        String    @id @default(cuid())
-  data      Bytes
+  data      Bytes?
+  storageKey String?
   mimeType  String    @default("image/jpeg")
   filename  String?
   expenses  Expense[]

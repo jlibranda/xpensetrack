@@ -100,6 +100,29 @@ async function preprocessImage(buffer) {
   }
 }
 
+// Compress an image for STORAGE (keeps color, just shrinks size). Returns
+// { buffer, mime }. PDFs and non-images are returned unchanged.
+async function compressForStorage(buffer, mime, filename) {
+  const isPdf = (mime || '').includes('pdf') || (filename || '').toLowerCase().endsWith('.pdf');
+  if (isPdf) return { buffer, mime: mime || 'application/pdf' };
+  try {
+    const Jimp = require('jimp');
+    const image = await Jimp.read(buffer);
+    const maxDim = 1600; // plenty for reading a receipt; big size cut vs originals
+    if (image.bitmap.width > maxDim || image.bitmap.height > maxDim) image.scaleToFit(maxDim, maxDim);
+    let quality = 72;
+    let out = await image.clone().quality(quality).getBufferAsync(Jimp.MIME_JPEG);
+    while (out.length > 400000 && quality > 35) { // aim for <~400KB
+      quality -= 12;
+      out = await image.clone().quality(quality).getBufferAsync(Jimp.MIME_JPEG);
+    }
+    return { buffer: out, mime: 'image/jpeg' };
+  } catch (e) {
+    console.error('Storage compression failed, storing original:', e.message);
+    return { buffer, mime: mime || 'image/jpeg' };
+  }
+}
+
 // Parse raw OCR text (from OCR.space) into structured receipt fields.
 function parseReceiptText(raw) {
   const text = raw.replace(/\r/g, '');
@@ -325,9 +348,32 @@ function parseReceiptText(raw) {
 router.post('/scan', authenticate, upload.single('receipt'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
-    const receipt = await prisma.receipt.create({
-      data: { data: req.file.buffer, mimeType: req.file.mimetype || 'image/jpeg', filename: req.file.originalname || 'receipt' },
-    });
+    const storage = require('../lib/storage');
+    // Compress for storage (color kept). The ORIGINAL buffer is still used for AI
+    // parsing below for best accuracy; only the stored copy is compressed.
+    const { buffer: storeBuf, mime: storeMime } = await compressForStorage(
+      req.file.buffer, req.file.mimetype, req.file.originalname
+    );
+
+    // If object storage is configured, upload there and keep only a reference in
+    // the DB. Otherwise store the compressed bytes in the DB (still much smaller).
+    let receiptData = { mimeType: storeMime, filename: req.file.originalname || 'receipt' };
+    if (storage.storageConfigured()) {
+      try {
+        const ext = storeMime.includes('pdf') ? 'pdf' : 'jpg';
+        const key = `receipts/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+        await storage.putObject(key, storeBuf, storeMime);
+        receiptData.storageKey = key;
+        receiptData.data = null;
+      } catch (e) {
+        console.error('Object storage upload failed, falling back to DB:', e.message);
+        receiptData.data = storeBuf; // graceful fallback so uploads never break
+      }
+    } else {
+      receiptData.data = storeBuf;
+    }
+
+    const receipt = await prisma.receipt.create({ data: receiptData });
 
     // The org's configured category list — OCR must only ever pick from these.
     let systemCats = [];
@@ -445,8 +491,19 @@ router.get('/receipt/:id', async (req, res) => {
     jwt.verify(token, process.env.JWT_SECRET);
     const receipt = await prisma.receipt.findUnique({ where: { id: req.params.id } });
     if (!receipt) return res.status(404).send('Not found');
-    res.setHeader('Content-Type', receipt.mimeType);
     res.setHeader('Cache-Control', 'private, max-age=3600');
+    if (receipt.storageKey) {
+      try {
+        const storage = require('../lib/storage');
+        const { buffer, contentType } = await storage.getObject(receipt.storageKey);
+        res.setHeader('Content-Type', contentType || receipt.mimeType);
+        return res.send(buffer);
+      } catch (e) {
+        console.error('Object storage fetch failed:', e.message);
+        return res.status(502).send('Could not load receipt from storage');
+      }
+    }
+    res.setHeader('Content-Type', receipt.mimeType);
     res.send(receipt.data);
   } catch (err) {
     res.status(500).send('Error');
