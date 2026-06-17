@@ -54,8 +54,13 @@ router.get('/summary', authenticate, async (req, res) => {
     //  self  -> only the user's own expenses
     //  team  -> people who report to / are approved by the user
     //  all   -> company-wide (FINANCE/ADMIN only)
-    // ADMIN defaults to ALL (full visibility, no tabs).
-    let requested = scope || (role === 'ADMIN' ? 'all' : 'self');
+    // Default scope by role when the client doesn't request one explicitly:
+    //   FINANCE / ADMIN -> all (company-wide), MANAGER -> team, EMPLOYEE -> self.
+    let requested = scope || (
+      ['FINANCE', 'ADMIN'].includes(role) ? 'all'
+      : role === 'MANAGER' ? 'team'
+      : 'self'
+    );
 
     // Enforce permissions: only FINANCE/ADMIN may use 'all'.
     if (requested === 'all' && !['FINANCE', 'ADMIN'].includes(role)) requested = 'team';
