@@ -479,6 +479,12 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
     });
   } catch (err) {
     console.error('OCR error:', err);
+    // If the database disk is full, alert admins so they can download + purge.
+    const msg = `${err?.message || ''} ${err?.meta?.message || ''}`;
+    if (/no space left on device|could not extend file|53100/i.test(msg)) {
+      try { require('../lib/email').sendStorageFullAlert(); } catch (e) {}
+      return res.status(507).json({ error: 'Storage is full. Please ask an admin to free up space (download & purge receipts).' });
+    }
     res.status(500).json({ error: 'Receipt upload failed', message: err.message });
   }
 });

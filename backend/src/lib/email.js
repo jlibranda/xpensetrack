@@ -291,4 +291,31 @@ async function sendCredentialsEmail(toEmail, toName, password, employee) {
   , brand), appName);
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail };
+// Alerts all active admins that storage is full, so they can download + purge
+// receipts. Throttled to at most once per hour (in-memory). Reads only (works
+// even when the DB disk is full, since reads don't extend files).
+let _lastDiskAlert = 0;
+async function sendStorageFullAlert() {
+  const now = Date.now();
+  if (now - _lastDiskAlert < 60 * 60 * 1000) return false; // at most 1/hour
+  _lastDiskAlert = now;
+  try {
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true } });
+    if (!admins.length) return false;
+    const brand = await getBranding();
+    const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+    for (const a of admins) {
+      if (!a.email) continue;
+      await sendMail(a.email, `[${brand.appName}] Storage is full — action needed`, html(
+        'Storage is full',
+        `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${a.firstName || 'there'},</p>
+         <p style="color:#374151;font-size:14px;margin:0 0 20px">The ${brand.appName} database storage is full. Receipt uploads and some other actions may be failing right now.</p>
+         <p style="color:#374151;font-size:14px;margin:0 0 20px">To free up space, open Settings and use <b>Receipt storage</b> to download a backup of all receipts, then purge them.</p>
+         ${btn(`${frontendUrl}/settings`, 'Open settings →', brand)}`
+      , brand), brand.appName).catch(() => {});
+    }
+    return true;
+  } catch (e) { console.error('storage-full alert failed:', e.message); return false; }
+}
+
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert };

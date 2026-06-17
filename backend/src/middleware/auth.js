@@ -21,6 +21,7 @@ const DEFAULT_PERMS = {
   toggle_access: ['ADMIN'],
   reset_passwords: ['ADMIN'],
   send_credentials: ['ADMIN'],
+  manage_receipt_storage: ['ADMIN'],
   upload_branding: ['ADMIN'],
   change_branding: ['ADMIN'],
   impersonate_user: ['ADMIN'],

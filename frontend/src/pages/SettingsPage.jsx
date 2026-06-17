@@ -14,7 +14,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   const { user: acUser } = useAuth();
   const acIsAdmin = acUser?.role === 'ADMIN';
   // A non-admin managing access control must never see/grant these.
-  const SENSITIVE_PERMS = ['manage_password', 'reset_passwords', 'send_credentials', 'upload_branding', 'change_branding', 'impersonate_user'];
+  const SENSITIVE_PERMS = ['manage_password', 'reset_passwords', 'send_credentials', 'manage_receipt_storage', 'upload_branding', 'change_branding', 'impersonate_user'];
   const DEFAULT_PERMS = {
     view_approvals: ['MANAGER','FINANCE','ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],
@@ -32,6 +32,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     toggle_access: ['ADMIN'],
     reset_passwords: ['ADMIN'],
     send_credentials: ['ADMIN'],
+    manage_receipt_storage: ['ADMIN'],
     upload_branding: ['ADMIN'],
     change_branding: ['ADMIN'],
     impersonate_user: ['ADMIN'],
@@ -54,6 +55,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
     toggle_access: 'Activate / deactivate user access',
     reset_passwords: 'Reset any user password',
     send_credentials: 'Send login credentials to a user',
+    manage_receipt_storage: 'Download / purge receipt storage',
     upload_branding: 'Upload logo & wallpaper',
     change_branding: 'Change colors & branding',
     impersonate_user: 'Login as / access user account',
@@ -269,6 +271,7 @@ export default function SettingsPage() {
   const canPassword = can('manage_password', ['ADMIN']);
   const canAccessControl = can('manage_access_control', ['ADMIN']);
   const canSecurity = can('manage_security', ['ADMIN']);
+  const canReceiptStorage = can('manage_receipt_storage', ['ADMIN']);
 
   // Exchange rate (USD -> PHP) — separate from the main settings form.
   const [fx, setFx] = useState(null);          // { usdPhpRate, auto, updatedAt }
@@ -521,6 +524,7 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+          {canReceiptStorage && <ReceiptStorageCard />}
         </>)}
 
         {tab === 'Branding' && canSeeBranding && (
@@ -690,6 +694,84 @@ export default function SettingsPage() {
 }
 
 function EmailTestCard_REMOVED() { return null; }
+
+const RS_API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
+function ReceiptStorageCard() {
+  const [stats, setStats] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [purging, setPurging] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [msg, setMsg] = useState(null);
+
+  const loadStats = async () => {
+    try { setStats(await api.get('/receipts/storage-stats')); } catch { setStats(null); }
+  };
+  useEffect(() => { loadStats(); }, []);
+
+  const download = async () => {
+    setDownloading(true); setMsg(null);
+    try {
+      const token = localStorage.getItem('token');
+      const resp = await fetch(`${RS_API_BASE}/receipts/archive`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!resp.ok) throw new Error('Download failed (' + resp.status + ')');
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `receipts-${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      setMsg({ ok: true, text: 'Download started. Keep this backup safe before purging.' });
+    } catch (e) { setMsg({ ok: false, text: e.message || 'Download failed.' }); }
+    finally { setDownloading(false); }
+  };
+
+  const purge = async () => {
+    if (confirmText !== 'PURGE') { setMsg({ ok: false, text: 'Type PURGE to confirm.' }); return; }
+    if (!confirm('This permanently removes the stored receipt images (you should have downloaded the backup first). Continue?')) return;
+    setPurging(true); setMsg(null);
+    try {
+      const res = await api.post('/receipts/purge', { confirm: 'PURGE' });
+      setMsg({ ok: true, text: res.message || 'Purged.' });
+      setConfirmText('');
+      loadStats();
+    } catch (e) { setMsg({ ok: false, text: e.error || 'Purge failed.' }); }
+    finally { setPurging(false); }
+  };
+
+  return (
+    <div className="mt-6 p-4 rounded-xl border border-gray-100 bg-gray-50">
+      <h2 className="text-sm font-medium text-gray-700 mb-1">Receipt storage</h2>
+      <p className="text-xs text-gray-500 mb-3">
+        Download a backup of all receipt images, then purge them to free database space.
+        Files are named <code>FullName_DateSubmitted_Status_StatusDate</code>.
+      </p>
+      {stats && (
+        <p className="text-xs text-gray-500 mb-3">
+          {stats.total} receipt(s) · {stats.withBytes} stored in database · {stats.inStorage} in object storage.
+        </p>
+      )}
+      <div className="flex gap-2 flex-wrap items-center">
+        <button onClick={download} disabled={downloading}
+          className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+          {downloading ? 'Preparing…' : '⬇ Download all receipts (ZIP)'}
+        </button>
+      </div>
+      <div className="mt-4 pt-3 border-t border-gray-200">
+        <p className="text-xs text-gray-500 mb-2">Danger zone — purge removes the stored images permanently.</p>
+        <div className="flex gap-2 flex-wrap items-center">
+          <input value={confirmText} onChange={e => setConfirmText(e.target.value)} placeholder="Type PURGE"
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm w-32" />
+          <button onClick={purge} disabled={purging || confirmText !== 'PURGE'}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50">
+            {purging ? 'Purging…' : '🗑 Purge receipt images'}
+          </button>
+        </div>
+      </div>
+      {msg && <p className={`text-xs mt-3 ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.ok ? '✓ ' : '✕ '}{msg.text}</p>}
+    </div>
+  );
+}
 
 const EMP_VARS = ['{employeeName}','{employeeDept}','{employeePosition}','{employeeNumber}','{employeeEmail}'];
 const EMAIL_TEMPLATE_DEFS = [

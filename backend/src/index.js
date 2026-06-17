@@ -37,6 +37,7 @@ const routes = [
   ['users', '/api/users'],
   ['settings', '/api/settings'],
   ['ocr', '/api/ocr'],
+  ['receipts', '/api/receipts'],
   ['clients', '/api/clients'],
   ['ledger', '/api/ledger'],
   ['notifications', '/api/notifications'],
