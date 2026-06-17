@@ -39,6 +39,14 @@ const authenticate = async (req, res, next) => {
     req.user = await prisma.user.findUnique({ where: { id: decoded.userId } });
     if (!req.user) return res.status(401).json({ error: 'User not found' });
     if (!req.user.isActive) return res.status(401).json({ error: 'Account deactivated' });
+    // Impersonation sessions (admin "Login as") carry impersonatedBy in the token.
+    // Don't force the target's temp-password change on the admin — that's only for
+    // the real user signing in themselves.
+    if (decoded.impersonatedBy) {
+      req.impersonatedBy = decoded.impersonatedBy;
+      req.user.isImpersonated = true;
+      req.user.mustChangePassword = false;
+    }
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });

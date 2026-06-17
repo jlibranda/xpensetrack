@@ -302,6 +302,7 @@ router.post('/:id/impersonate', authenticate, requirePermission('impersonate_use
     );
     const { passwordHash, ...safeUser } = target;
     safeUser.name = `${target.firstName} ${target.lastName}`.trim();
+    safeUser.mustChangePassword = false; // impersonation must not trigger the forced-change flow
     safeUser._impersonating = true;
     safeUser._originalAdminId = req.user.id;
     safeUser._originalAdminName = `${req.user.firstName} ${req.user.lastName}`.trim();

@@ -54,6 +54,7 @@ const DEFAULT_TEMPLATES = {
   status_RETURNED:         { subject: '↩ Expense returned — {title}',        message: 'Your approver returned this expense. Please review their comments and resubmit.' },
   status_MANAGER_APPROVED: { subject: '✓ Manager approved — {title}',        message: 'Your expense was approved by your manager and is now pending finance review.' },
   status_PROCESSED:        { subject: '💰 Expense processed — {title}',      message: 'Your expense has been processed for payout.' },
+  status_REPROCESSING:     { subject: '↻ Expense back for reprocessing — {title}', message: 'A previously processed expense has been reverted and is now back for reprocessing. You will receive an updated notification once it has been processed again.' },
   welcome:                 { subject: 'Welcome to {appName}!',               message: 'Your {appName} account has been created. Here are your login details:' },
   password_reset:          { subject: 'Reset your {appName} password',       message: 'Click below to reset your password. This link expires in 1 hour.' },
 };
@@ -107,7 +108,7 @@ function html(title, body, brand) {
   // so fall back to the company name text in that case.
   const useLogo = b.logoUrl && /^https?:\/\//i.test(b.logoUrl);
   const header = useLogo
-    ? `<img src="${b.logoUrl}" alt="${name}" style="max-height:36px;display:block" />`
+    ? `<img src="${b.logoUrl}" alt="${name}" style="max-height:36px;display:block" /><p style="margin:8px 0 0;color:#fff;font-size:14px;font-weight:600">${name}</p>`
     : `<h1 style="margin:0;color:#fff;font-size:20px;font-weight:600">${name}</h1>`;
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>

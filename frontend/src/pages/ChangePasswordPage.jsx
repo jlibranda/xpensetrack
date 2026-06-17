@@ -12,7 +12,7 @@ const readCachedBranding = () => {
 const readDark = () => { try { return localStorage.getItem('personal_dark') === 'true'; } catch { return false; } };
 
 export default function ChangePasswordPage() {
-  const { user, refreshUser, logout } = useAuth();
+  const { user, loading: authLoading, refreshUser, logout } = useAuth();
   const navigate = useNavigate();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -23,6 +23,7 @@ export default function ChangePasswordPage() {
   const branding = readCachedBranding();
   const dark = readDark();
 
+  if (authLoading) return null; // wait for session restore before deciding
   if (!user) return <Navigate to="/login" replace />;
 
   const bg = branding.primaryColor || '#1D9E75';
