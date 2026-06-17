@@ -232,7 +232,7 @@ router.post('/:id/send-credentials', authenticate, requirePermission('send_crede
     }
     const tempPassword = genTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
-    await prisma.user.update({ where: { id: target.id }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: true } });
+    await prisma.user.update({ where: { id: target.id }, data: { passwordHash, tempPasswordHash: passwordHash, failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: true } });
     const { sendCredentialsEmail } = require('../lib/email');
     const ok = await sendCredentialsEmail(target.email, `${target.firstName||''} ${target.lastName||''}`.trim(), tempPassword, target);
     await logAudit(req.user, 'USER_CREDENTIALS_SENT', { targetType: 'USER', targetId: target.id, details: `Sent login credentials to ${target.email}` });
@@ -300,7 +300,7 @@ router.post('/:id/impersonate', authenticate, requirePermission('impersonate_use
       process.env.JWT_SECRET,
       { expiresIn: '2h' }
     );
-    const { passwordHash, ...safeUser } = target;
+    const { passwordHash, tempPasswordHash, ...safeUser } = target;
     safeUser.name = `${target.firstName} ${target.lastName}`.trim();
     safeUser.mustChangePassword = false; // impersonation must not trigger the forced-change flow
     safeUser._impersonating = true;

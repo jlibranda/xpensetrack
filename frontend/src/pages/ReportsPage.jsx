@@ -21,6 +21,7 @@ export default function ReportsPage() {
     return d.toISOString().split('T')[0];
   });
   const [to, setTo] = useState(() => now.toISOString().split('T')[0]);
+  const [activeRange, setActiveRange] = useState(null);
   const [userId, setUserId] = useState('');
   const { format } = useCurrency();
   const { settings } = useOrg();
@@ -95,22 +96,25 @@ export default function ReportsPage() {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
         <div className="flex flex-wrap gap-2 mb-3">
-          {[['This week', 'week'], ['This month', 1], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 'year']].map(([label, m]) => (
-            <button key={label} onClick={() => setQuickRange(m)}
-              className="px-3 py-1 border border-gray-200 rounded-full text-xs text-gray-600 hover:bg-gray-50">
-              {label}
-            </button>
-          ))}
+          {[['This week', 'week'], ['This month', 1], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 'year']].map(([label, m]) => {
+            const active = activeRange === m;
+            return (
+              <button key={label} onClick={() => { setQuickRange(m); setActiveRange(m); }}
+                className={`px-3 py-1 rounded-full text-xs border transition-colors ${active ? 'bg-brand-400 text-white border-brand-400 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                {label}
+              </button>
+            );
+          })}
         </div>
         <div className="flex flex-wrap gap-3 items-end">
           <div>
             <label className="block text-xs text-gray-500 mb-1">From</label>
-            <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+            <input type="date" value={from} onChange={e => { setFrom(e.target.value); setActiveRange(null); }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">To</label>
-            <input type="date" value={to} onChange={e => setTo(e.target.value)}
+            <input type="date" value={to} onChange={e => { setTo(e.target.value); setActiveRange(null); }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
           </div>
           <div>

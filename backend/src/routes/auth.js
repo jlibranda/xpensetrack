@@ -8,7 +8,7 @@ const { authenticate, requirePermission } = require('../middleware/auth');
 const prisma = new PrismaClient();
 
 const safeUser = (u) => {
-  const { passwordHash, ...safe } = u;
+  const { passwordHash, tempPasswordHash, ...safe } = u;
   safe.name = `${u.firstName} ${u.lastName}`.trim();
   return safe;
 };
@@ -60,6 +60,10 @@ router.post('/login', async (req, res) => {
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
+      // Friendlier message if they typed a temporary password that was already used to set a new one.
+      if (user.tempPasswordHash && !user.mustChangePassword && await bcrypt.compare(password, user.tempPasswordHash)) {
+        return res.status(401).json({ error: 'This temporary password has already been used. Please log in with the new password you set.' });
+      }
       if (maxAttempts > 0) {
         const attempts = (user.failedLoginAttempts || 0) + 1;
         if (attempts >= maxAttempts) {
@@ -94,6 +98,10 @@ router.patch('/change-password', authenticate, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!await bcrypt.compare(currentPassword, user.passwordHash)) return res.status(400).json({ error: 'Current password incorrect' });
     await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 12), mustChangePassword: false } });
+    try {
+      const { sendPasswordChangedEmail } = require('../lib/email');
+      sendPasswordChangedEmail(user.email, `${user.firstName || ''} ${user.lastName || ''}`.trim()).catch(() => {});
+    } catch (e) { /* non-blocking */ }
     res.json({ message: 'Password changed successfully' });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -139,6 +147,10 @@ router.post('/reset-password', async (req, res) => {
       prisma.user.update({ where: { id: reset.userId }, data: { passwordHash: await bcrypt.hash(newPassword, 12), failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: false } }),
       prisma.passwordReset.update({ where: { id: reset.id }, data: { used: true } }),
     ]);
+    try {
+      const { sendPasswordChangedEmail } = require('../lib/email');
+      sendPasswordChangedEmail(reset.user.email, `${reset.user.firstName || ''} ${reset.user.lastName || ''}`.trim()).catch(() => {});
+    } catch (e) { /* non-blocking */ }
     res.json({ message: 'Password reset successfully. You can now log in.' });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });

@@ -108,7 +108,10 @@ function html(title, body, brand) {
   // so fall back to the company name text in that case.
   const useLogo = b.logoUrl && /^https?:\/\//i.test(b.logoUrl);
   const header = useLogo
-    ? `<img src="${b.logoUrl}" alt="${name}" style="max-height:36px;display:block" /><p style="margin:8px 0 0;color:#fff;font-size:14px;font-weight:600">${name}</p>`
+    ? `<table style="border-collapse:collapse"><tr>
+         <td style="vertical-align:middle;padding-right:10px"><img src="${b.logoUrl}" alt="${name}" style="max-height:36px;display:block" /></td>
+         <td style="vertical-align:middle"><span style="color:#fff;font-size:18px;font-weight:600">${name}</span></td>
+       </tr></table>`
     : `<h1 style="margin:0;color:#fff;font-size:20px;font-weight:600">${name}</h1>`;
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
@@ -355,4 +358,20 @@ async function sendStorageFullAlert() {
   } catch (e) { console.error('storage-full alert failed:', e.message); return false; }
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert };
+// Confirmation sent after a user successfully changes their password (e.g. after
+// using the temporary credentials). Lets them know the temp password is now used/invalid.
+async function sendPasswordChangedEmail(toEmail, toName) {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+  const brand = await getBranding();
+  const appName = brand.appName;
+  const when = new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+  return sendMail(toEmail, `Your ${appName} password was changed`, html(
+    'Password updated',
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName || 'there'},</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">Your ${appName} password was successfully changed on <b>${when}</b>. Any temporary password that was sent to you is no longer valid — please use your new password to sign in.</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">If you did <b>not</b> make this change, please contact your Finance Department right away.</p>
+     ${btn(`${frontendUrl}/login`, `Open ${appName} →`, brand)}`
+  , brand), appName);
+}
+
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert, sendPasswordChangedEmail };
