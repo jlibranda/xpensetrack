@@ -160,8 +160,10 @@ export default function TransactionsPage() {
     const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
     const token = localStorage.getItem('token');
     const params = new URLSearchParams({ token });
+    if (year) params.set('year', year);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    if (payoutFilter) params.set('payoutDate', payoutFilter);
     if (status === 'PROCESSED') params.set('processed', 'yes');
     else if (status === 'FOR_PROCESS') { params.set('status', 'APPROVED'); params.set('processed', 'no'); }
     else if (status) params.set('status', status);

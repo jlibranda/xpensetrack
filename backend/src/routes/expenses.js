@@ -431,7 +431,7 @@ router.post('/:id/mark-processed', authenticate, requireRole('FINANCE', 'ADMIN')
     if (!wasAlreadyProcessed && e.submittedBy?.email) {
       try {
         const { sendStatusUpdateEmail } = require('../lib/email');
-        sendStatusUpdateEmail(e.submittedBy.email, `${e.submittedBy.firstName || ''} ${e.submittedBy.lastName || ''}`.trim(), e, 'PROCESSED', e.submittedBy).catch(() => {});
+        sendStatusUpdateEmail(e.submittedBy.email, `${e.submittedBy.firstName || ''} ${e.submittedBy.lastName || ''}`.trim(), { ...updated, submittedBy: e.submittedBy }, 'PROCESSED', e.submittedBy).catch(() => {});
       } catch (mailErr) { console.error('processed email failed:', mailErr.message); }
     }
     res.json({ message: 'Marked processed', processedAt: updated.processedAt });
@@ -468,7 +468,7 @@ router.post('/bulk-mark-processed', authenticate, requireRole('FINANCE', 'ADMIN'
     const eligible = rows.filter(e => e.status === 'APPROVED' && !e.processedAt);
     let count = 0;
     for (const e of eligible) {
-      await prisma.expense.update({
+      const updated = await prisma.expense.update({
         where: { id: e.id },
         data: { status: 'PROCESSED', processedAt: when, payoutDate: when, payPeriod: payPeriod || null },
       });
@@ -476,7 +476,7 @@ router.post('/bulk-mark-processed', authenticate, requireRole('FINANCE', 'ADMIN'
       if (e.submittedBy?.email) {
         try {
           const { sendStatusUpdateEmail } = require('../lib/email');
-          sendStatusUpdateEmail(e.submittedBy.email, `${e.submittedBy.firstName || ''} ${e.submittedBy.lastName || ''}`.trim(), e, 'PROCESSED', e.submittedBy).catch(() => {});
+          sendStatusUpdateEmail(e.submittedBy.email, `${e.submittedBy.firstName || ''} ${e.submittedBy.lastName || ''}`.trim(), { ...updated, submittedBy: e.submittedBy }, 'PROCESSED', e.submittedBy).catch(() => {});
         } catch (mailErr) { /* ignore */ }
       }
     }

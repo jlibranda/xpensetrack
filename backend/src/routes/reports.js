@@ -207,17 +207,27 @@ router.get('/aging', authenticate, requirePermission('view_reports', ['MANAGER',
 // GET /api/reports/export — Excel download
 router.get('/export', authenticate, requirePermission('export_reports', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
-    const { from, to, userId, status, processed } = req.query;
+    const { from, to, userId, status, processed, year, payoutDate } = req.query;
     const where = {};
     if (userId) where.submittedById = userId;
-    if (from || to) {
-      where.expenseDate = {};
-      if (from) where.expenseDate.gte = new Date(String(from).split('T')[0]);
-      if (to) where.expenseDate.lte = new Date(String(to).split('T')[0] + 'T23:59:59');
-    }
+    // expenseDate bounds = intersection of Year (if any) and From/To (if any)
+    let gte = null, lte = null;
+    if (year) { gte = new Date(`${year}-01-01`); lte = new Date(`${year}-12-31T23:59:59`); }
+    if (from) { const f = new Date(String(from).split('T')[0]); if (!gte || f > gte) gte = f; }
+    if (to) { const t = new Date(String(to).split('T')[0] + 'T23:59:59'); if (!lte || t < lte) lte = t; }
+    if (gte || lte) { where.expenseDate = {}; if (gte) where.expenseDate.gte = gte; if (lte) where.expenseDate.lte = lte; }
     if (status) where.status = status;
     if (processed === 'yes') where.processedAt = { not: null };
     else if (processed === 'no') where.processedAt = null;
+    // Pay out date filter (mirrors the Transactions tab: payoutDate, falling back to processedAt)
+    if (payoutDate) {
+      const d0 = new Date(payoutDate + 'T00:00:00.000Z');
+      const d1 = new Date(payoutDate + 'T23:59:59.999Z');
+      where.OR = [
+        { payoutDate: { gte: d0, lte: d1 } },
+        { payoutDate: null, processedAt: { gte: d0, lte: d1 } },
+      ];
+    }
 
     const scope = await teamScopeFilter(req.user);
     if (scope) {
@@ -265,14 +275,17 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
       'Input VAT (PHP)': Number((e.amountPhp - e.amountPhp / 1.12).toFixed(2)),
       'Status': e.status,
       'Processed': e.processedAt ? 'Yes' : 'No',
-      'Processed / Payout Date': fmtDate(e.processedAt),
+      'Processed Date': fmtDate(e.processedAt),
+      'Pay Out Date': fmtDate(e.payoutDate),
+      'Pay Period': e.payPeriod || '',
+      'Remarks': e.remarks || '',
     }));
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
       {wch:12},{wch:16},{wch:26},{wch:16},{wch:14},{wch:30},{wch:25},
-      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:11},{wch:20}
+      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:11},{wch:14},{wch:14},{wch:18},{wch:24}
     ];
     // Bold header row
     const headerRange = XLSX.utils.decode_range(ws['!ref']);

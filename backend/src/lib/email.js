@@ -210,6 +210,18 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee)
   const message = DEFAULT_TEMPLATES[key] ? tpl(custom, key, 'message', vars) : '';
   const title = titles[status] || 'Expense update';
   const color = colors[status] || '#374151';
+  // For processed payouts, show pay out date + remarks (and pay period if set).
+  const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let extra = '';
+  if (status === 'PROCESSED') {
+    const lines = [];
+    if (expense.payPeriod) lines.push(`Pay period: ${esc(expense.payPeriod)}`);
+    const payout = fmtD(expense.payoutDate || expense.processedAt);
+    if (payout) lines.push(`Pay out date: ${esc(payout)}`);
+    if (expense.remarks) lines.push(`Remarks: ${esc(expense.remarks)}`);
+    extra = lines.map(l => `<p style="margin:8px 0 0;font-size:13px;color:#6b7280">${l}</p>`).join('');
+  }
   return sendMail(toEmail, subject, html(
     title,
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
@@ -217,6 +229,7 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee)
      <div style="background:#f9fafb;border-left:4px solid ${color};border-radius:4px;padding:16px;margin:0 0 20px">
        <p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#111">${expense.title}</p>
        <p style="margin:0;font-size:14px;color:#6b7280">${amt}</p>
+       ${extra}
      </div>
      ${btn(`${frontendUrl}/expenses`, 'View my expenses →', brand)}`
   , brand), appName);
