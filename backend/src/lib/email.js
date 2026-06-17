@@ -9,13 +9,14 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function getBranding() {
-  let companyName = FALLBACK_APP_NAME, primaryColor = FALLBACK_COLOR, logoUrl = null;
+  let companyName = FALLBACK_APP_NAME, primaryColor = FALLBACK_COLOR, logoUrl = null, timezone = 'Asia/Manila';
   try {
     const s = await prisma.orgSettings.findFirst();
     if (s) {
       companyName = s.companyName || companyName;
       primaryColor = s.primaryColor || primaryColor;
       logoUrl = s.logoUrl || null;
+      timezone = s.timezone || timezone;
     }
   } catch (e) { /* use fallbacks */ }
   // Email clients block data-URI images, so serve the logo from a public URL.
@@ -31,6 +32,7 @@ async function getBranding() {
     appName: ENV_APP_NAME || companyName,
     brandColor: ENV_BRAND_COLOR || primaryColor,
     logoUrl: emailLogoUrl,
+    timezone,
   };
 }
 
@@ -239,7 +241,7 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee)
   const title = titles[status] || 'Expense update';
   const color = colors[status] || '#374151';
   // For processed payouts, show pay out date + remarks (and pay period if set).
-  const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', timeZone: brand.timezone || 'Asia/Manila' }) : '';
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   let extra = '';
   if (status === 'PROCESSED') {
@@ -364,7 +366,7 @@ async function sendPasswordChangedEmail(toEmail, toName) {
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
   const brand = await getBranding();
   const appName = brand.appName;
-  const when = new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+  const when = new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: brand.timezone || 'Asia/Manila' });
   return sendMail(toEmail, `Your ${appName} password was changed`, html(
     'Password updated',
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName || 'there'},</p>
@@ -374,4 +376,27 @@ async function sendPasswordChangedEmail(toEmail, toName) {
   , brand), appName);
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert, sendPasswordChangedEmail };
+// Automatic reminder to a pending approver when an expense has been waiting too long.
+async function sendApprovalReminderEmail(toEmail, toName, expense, employee, days) {
+  if (!(await notificationsEnabled())) return { skipped: true, reason: 'notifications_disabled' };
+  const sym = expense.currency === 'PHP' ? '₱' : '$';
+  const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
+  const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+  const brand = await getBranding();
+  const appName = brand.appName;
+  const emp = await employeeVars(employee || expense.submittedBy || expense.submittedById);
+  const who = emp.employeeName || 'an employee';
+  const dayTxt = days ? `${days} day${days === 1 ? '' : 's'}` : 'a while';
+  return sendMail(toEmail, `Reminder: "${expense.title}" is awaiting your approval`, html(
+    'Approval reminder',
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName || 'there'},</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">This is a friendly reminder that an expense from ${who} has been waiting for your approval for <b>${dayTxt}</b>. Please review it when you can.</p>
+     <div style="background:#f9fafb;border-left:4px solid ${brand.brandColor};border-radius:4px;padding:16px;margin:0 0 20px">
+       <p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#111">${expense.title}</p>
+       <p style="margin:0;font-size:14px;color:#6b7280">${amt}</p>
+     </div>
+     ${btn(`${frontendUrl}/approvals`, 'Review approvals →', brand)}`
+  , brand), appName);
+}
+
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert, sendPasswordChangedEmail, sendApprovalReminderEmail };

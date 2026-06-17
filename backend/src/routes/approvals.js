@@ -159,11 +159,22 @@ router.post('/:id/approve', authenticate, requirePermission('view_approvals', ['
     await prisma.expense.update({ where: { id: approval.expenseId }, data: { status: 'PENDING' } });
 
     if (mode === 'SEQUENTIAL') {
+      // Notify + email the NEXT level's approvers only when the flow has actually
+      // advanced to a later step. If the current step is an AND (ALL) level that's
+      // still waiting on co-approvers, the open step is the SAME stepOrder, so we
+      // skip — those co-approvers were already emailed when the level became active.
       const nextStep = steps.find(s => !s.satisfied && !s.blocked);
-      if (nextStep) {
+      if (nextStep && nextStep.stepOrder > approval.stepOrder) {
+        const { sendApprovalRequestEmail } = require('../lib/email');
+        // Email every pending approver in the newly-active level — correct for both
+        // OR (any one can act) and AND (all must act).
         for (const r of nextStep.rows.filter(x => x.status === 'PENDING')) {
           await createNotification(r.approverId, 'APPROVAL_REQUEST', 'Expense needs your approval',
             `"${approval.expense.title}" has reached your approval step`, '/approvals');
+          const ap = await prisma.user.findUnique({ where: { id: r.approverId } });
+          if (ap?.email) {
+            await sendApprovalRequestEmail(ap.email, `${ap.firstName || ''} ${ap.lastName || ''}`.trim(), approval.expense, approval.expense.submittedBy).catch(() => {});
+          }
         }
       }
     }

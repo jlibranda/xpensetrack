@@ -551,6 +551,7 @@ export default function SettingsPage() {
             </div>
           )}
           {canSettingsManage && <EmailNotificationsCard settings={settings} />}
+          {canSettingsManage && <ReminderSettingsCard settings={settings} />}
           {canSecurity && <PayoutReversalCard settings={settings} />}
           {canReceiptStorage && <ReceiptStorageCard />}
         </>)}
@@ -754,6 +755,56 @@ function EmailNotificationsCard({ settings }) {
 }
 
 function EmailTestCard_REMOVED() { return null; }
+
+const TIMEZONES = [
+  'Asia/Manila', 'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Tokyo', 'Asia/Shanghai',
+  'Asia/Dubai', 'Asia/Kolkata', 'Australia/Sydney', 'Europe/London', 'Europe/Paris',
+  'America/Los_Angeles', 'America/Chicago', 'America/New_York', 'UTC',
+];
+
+// Timezone (used for dates/times in emails) + automatic approval follow-up reminders.
+function ReminderSettingsCard({ settings }) {
+  const [tz, setTz] = useState(settings?.timezone || 'Asia/Manila');
+  const [days, setDays] = useState(settings?.approvalFollowUpDays ?? 0);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      await api.patch('/settings', { timezone: tz, approvalFollowUpDays: Number(days) || 0 });
+      setMsg({ ok: true, text: 'Saved.' });
+    } catch (e) { setMsg({ ok: false, text: e.error || 'Save failed.' }); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="mt-6 p-4 rounded-xl border border-gray-100 bg-gray-50">
+      <h2 className="text-sm font-medium text-gray-700 mb-1">Reminders &amp; timezone</h2>
+      <p className="text-xs text-gray-500 mb-3">Timezone is used for dates/times shown in emails. Follow-up reminders email the current pending approver(s) when an expense has been waiting.</p>
+      <div className="flex flex-wrap gap-4 items-end">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Timezone</label>
+          <select value={tz} onChange={e => setTz(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+            {TIMEZONES.map(z => <option key={z} value={z}>{z}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Follow-up reminder after (days)</label>
+          <input type="number" min="0" value={days} onChange={e => setDays(e.target.value)}
+            className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+          <p className="text-[11px] text-gray-400 mt-1">0 = off. Re-sends every N days while still pending.</p>
+        </div>
+        <button onClick={save} disabled={saving}
+          className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        {msg && <span className={`text-xs ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.ok ? '✓ ' : '✕ '}{msg.text}</span>}
+      </div>
+    </div>
+  );
+}
 
 // Choose which user(s) may "Undo" a processed payout in the Transactions tab.
 // Empty list = Admins only.

@@ -59,7 +59,7 @@ router.patch('/', authenticate, async (req, res) => {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
             wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates,
-            loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds, emailNotificationsEnabled } = req.body;
+            loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds, emailNotificationsEnabled, timezone, approvalFollowUpDays } = req.body;
     const s = await getOrCreate();
     // Field-level permission: apply each group only if the user is allowed.
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
@@ -108,6 +108,8 @@ router.patch('/', authenticate, async (req, res) => {
         loginLockoutMinutes: canSecurity && loginLockoutMinutes !== undefined ? Math.max(1, parseInt(loginLockoutMinutes, 10) || 1) : undefined,
         payoutReversalUserIds: canSecurity && payoutReversalUserIds !== undefined ? JSON.stringify(Array.isArray(payoutReversalUserIds) ? payoutReversalUserIds : []) : undefined,
         emailNotificationsEnabled: canManage && typeof emailNotificationsEnabled === 'boolean' ? emailNotificationsEnabled : undefined,
+        timezone: canManage && timezone ? timezone : undefined,
+        approvalFollowUpDays: canManage && approvalFollowUpDays !== undefined ? Math.max(0, parseInt(approvalFollowUpDays, 10) || 0) : undefined,
       },
     });
     res.json(parseSettings(updated));

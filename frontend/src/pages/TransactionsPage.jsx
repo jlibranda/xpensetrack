@@ -10,7 +10,10 @@ import ReceiptImage from '../components/ReceiptImage';
 const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
 const pendingApprovers = (e) => {
   if (e.status !== 'PENDING') return '';
-  const names = (e.approvals || []).filter(a => a.status === 'PENDING').map(a => personName(a.approver));
+  const names = (e.approvals || [])
+    .filter(a => a.status === 'PENDING')
+    .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0)) // show in approval-step sequence
+    .map(a => personName(a.approver));
   return [...new Set(names)].join(', ');
 };
 

@@ -64,6 +64,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`XpenseTrack API v4 running on port ${PORT}`);
   // Begin periodic USD->PHP rate refresh (auto mode only).
   try { require('./lib/fxrate').startFxRefresh(); } catch (e) { console.error('fxrate start failed:', e.message); }
+  try { require('./lib/followups').startApprovalFollowups(); } catch (e) { console.error('followups start failed:', e.message); }
   // One-time admin recovery: if BOOTSTRAP_ADMIN_EMAIL is set, ensure those
   // users are ADMIN + active. Use to restore an admin, then remove the env var.
   (async () => {

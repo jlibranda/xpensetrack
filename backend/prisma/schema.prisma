@@ -160,6 +160,7 @@ model Approval {
   groupKey   String?
   stepRule   String?        @default("ANY") // per-step rule: ANY (one approves) | ALL (all must)
   notes      String?
+  lastFollowUpAt DateTime?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 }
@@ -216,6 +217,8 @@ model OrgSettings {
   loginLockoutMinutes  Int      @default(15)
   payoutReversalUserIds String  @default("[]")
   emailNotificationsEnabled Boolean @default(true)
+  timezone             String   @default("Asia/Manila")
+  approvalFollowUpDays Int      @default(0)
   updatedAt            DateTime @updatedAt
 }
 
