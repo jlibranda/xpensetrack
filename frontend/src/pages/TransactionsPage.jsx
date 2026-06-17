@@ -47,6 +47,7 @@ export default function TransactionsPage() {
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [payoutFilter, setPayoutFilter] = useState('');
   const nowYear = new Date().getFullYear();
   const [year, setYear] = useState(nowYear);
 
@@ -99,6 +100,10 @@ export default function TransactionsPage() {
 
   const visibleRows = rows.filter(e => {
     if (year && new Date(e.expenseDate).getFullYear() !== Number(year)) return false;
+    if (payoutFilter) {
+      const pd = e.payoutDate || e.processedAt;
+      if (!pd || new Date(pd).toISOString().slice(0, 10) !== payoutFilter) return false;
+    }
     if (status === 'PROCESSED') return !!e.processedAt;
     if (status === 'FOR_PROCESS') return ['APPROVED', 'PROCESSED'].includes(e.status) && !e.processedAt;
     return true;
@@ -194,12 +199,7 @@ export default function TransactionsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end mb-4 bg-white rounded-xl border border-gray-100 p-3">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Year</label>
-          <select value={year} onChange={e => setYear(Number(e.target.value))} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
-            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
+        <p className="w-full text-xs font-semibold text-gray-500 uppercase tracking-wide">Filter</p>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
@@ -222,14 +222,25 @@ export default function TransactionsPage() {
           <label className="block text-xs text-gray-500 mb-1">To</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
         </div>
-        {(status || from || to) && (
-          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Pay out date</label>
+          <input type="date" value={payoutFilter} onChange={e => setPayoutFilter(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+        </div>
+        {(status || from || to || payoutFilter) && (
+          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setPayoutFilter(''); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
         )}
       </div>
 
       {/* Process payout bar */}
       {canProcess && (
-        <div className="flex flex-wrap gap-3 items-end mb-4 bg-blue-50/50 rounded-xl border border-blue-100 p-3">
+        <div className="flex flex-wrap gap-3 items-end mb-4 bg-violet-50 rounded-xl border border-violet-200 p-3">
+          <p className="w-full text-xs font-semibold text-violet-700 uppercase tracking-wide">Process payout</p>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Year</label>
+            <select value={year} onChange={e => setYear(Number(e.target.value))} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
+              {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Pay type</label>
             <select value={payType} onChange={e => setPayType(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
