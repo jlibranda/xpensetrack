@@ -1,5 +1,5 @@
 // src/pages/TransactionsPage.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../lib/api';
 import toast from '../lib/toast';
 import { useAuth } from '../context/AuthContext';
@@ -8,7 +8,6 @@ import { useOrg } from '../context/OrgContext';
 import ReceiptImage from '../components/ReceiptImage';
 
 const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
-// Approver(s) currently pending on an expense (only meaningful when status is PENDING).
 const pendingApprovers = (e) => {
   if (e.status !== 'PENDING') return '';
   const names = (e.approvals || []).filter(a => a.status === 'PENDING').map(a => personName(a.approver));
@@ -20,20 +19,25 @@ const STATUS_COLORS = {
   PENDING:    { bg: '#f59e0b', text: '#ffffff' },
   APPROVED:   { bg: '#16a34a', text: '#ffffff' },
   REJECTED:   { bg: '#dc2626', text: '#ffffff' },
-  RETURNED: { bg: '#d97706', text: '#ffffff' },
-  PROCESSED: { bg: '#2563eb', text: '#ffffff' },
+  RETURNED:   { bg: '#d97706', text: '#ffffff' },
+  PROCESSED:  { bg: '#2563eb', text: '#ffffff' },
   CANCELLED:  { bg: '#9ca3af', text: '#ffffff' },
 };
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export default function TransactionsPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
   const { settings } = useOrg();
   const glCodes = settings?.categoryGlCodes || {};
-  // Normalize keys (uppercase, trimmed) so lookup is resilient to casing/spacing.
   const glNorm = Object.fromEntries(Object.entries(glCodes).map(([k, v]) => [String(k).trim().toUpperCase(), v]));
   const glOf = (e) => e.glCode || glNorm[String(e.category || '').trim().toUpperCase()] || '—';
   const isAdmin = user?.role === 'ADMIN';
+  const canProcess = ['FINANCE', 'ADMIN'].includes(user?.role);
+  // Only Admins or users in the org's payout-reversal list may Undo.
+  const reversalIds = Array.isArray(settings?.payoutReversalUserIds) ? settings.payoutReversalUserIds : [];
+  const canUndo = isAdmin || reversalIds.includes(user?.id);
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,22 +47,44 @@ export default function TransactionsPage() {
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const nowYear = new Date().getFullYear();
+  const [year, setYear] = useState(nowYear);
 
-  // mark-processed date per row
-  const [procDate, setProcDate] = useState({});
+  // payout / processing controls
+  const [payType, setPayType] = useState('SEMI_MONTHLY'); // MONTHLY | SEMI_MONTHLY
+  const [payPeriod, setPayPeriod] = useState('');
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+  const [payoutDate, setPayoutDate] = useState(todayStr);
+  const [processing, setProcessing] = useState(false);
 
-  // delete panel
   const [deleting, setDeleting] = useState(false);
-  const [selected, setSelected] = useState([]); // ids checked for deletion
-  const [detail, setDetail] = useState(null); // expense shown in the details modal
+  const [selected, setSelected] = useState([]);
+  const [detail, setDetail] = useState(null);
+
+  // Pay period options depend on pay type + year.
+  const payPeriodOptions = useMemo(() => {
+    const opts = [];
+    for (let m = 0; m < 12; m++) {
+      const eom = new Date(year, m + 1, 0).getDate();
+      if (payType === 'MONTHLY') {
+        opts.push(`${MONTHS[m]} ${year} (1–${eom})`);
+      } else {
+        opts.push(`${MONTHS[m]} ${year} (1–15)`);
+        opts.push(`${MONTHS[m]} ${year} (16–${eom})`);
+      }
+    }
+    return opts;
+  }, [payType, year]);
+
+  // Keep a valid pay period selected as options change.
+  useEffect(() => {
+    setPayPeriod(prev => (prev && payPeriodOptions.includes(prev)) ? prev : (payPeriodOptions[0] || ''));
+  }, [payPeriodOptions]);
 
   const load = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      // PROCESSED / FOR_PROCESS are defined by the processed DATE, not the enum,
-      // so we fetch broadly and filter client-side (handles older processed items
-      // that may still carry the APPROVED status).
       if (status && status !== 'PROCESSED' && status !== 'FOR_PROCESS') params.set('status', status);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
@@ -71,27 +97,37 @@ export default function TransactionsPage() {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, from, to]);
 
-  // Processed = has a processed date; For Process = approved/processed status with no date yet.
   const visibleRows = rows.filter(e => {
+    if (year && new Date(e.expenseDate).getFullYear() !== Number(year)) return false;
     if (status === 'PROCESSED') return !!e.processedAt;
-    if (status === 'FOR_PROCESS') return ['APPROVED','PROCESSED'].includes(e.status) && !e.processedAt;
+    if (status === 'FOR_PROCESS') return ['APPROVED', 'PROCESSED'].includes(e.status) && !e.processedAt;
     return true;
   });
 
-  const markProcessed = async (id) => {
-    const date = procDate[id] || new Date().toISOString().slice(0, 10);
+  const selectedEligible = visibleRows.filter(e => selected.includes(e.id) && e.status === 'APPROVED' && !e.processedAt);
+
+  const bulkMarkProcessed = async () => {
+    if (selectedEligible.length === 0) { setMsg({ text: 'Select approved expenses that are not yet processed.', ok: false }); return; }
+    if (!payPeriod) { setMsg({ text: 'Choose a pay period first.', ok: false }); return; }
+    setProcessing(true); setMsg({ text: '', ok: true });
     try {
-      await api.post(`/expenses/${id}/mark-processed`, { processedDate: date });
-      setMsg({ text: 'Marked processed', ok: true }); toast.success('Marked as processed');
+      const r = await api.post('/expenses/bulk-mark-processed', { ids: selectedEligible.map(e => e.id), payPeriod, payoutDate });
+      setMsg({ text: `Marked ${r.count} processed for ${payPeriod}`, ok: true });
+      toast.success(`Marked ${r.count} processed`);
+      setSelected([]);
       await load();
     } catch (e) { setMsg({ text: e.error || 'Failed', ok: false }); }
+    finally { setProcessing(false); }
   };
 
   const unmarkProcessed = async (id) => {
-    try {
-      await api.post(`/expenses/${id}/unmark-processed`, {});
-      await load();
-    } catch (e) { setMsg({ text: e.error || 'Failed', ok: false }); }
+    try { await api.post(`/expenses/${id}/unmark-processed`, {}); await load(); }
+    catch (e) { setMsg({ text: e.error || 'Failed', ok: false }); }
+  };
+
+  const saveRemarks = async (id, val) => {
+    try { await api.patch(`/expenses/${id}/remarks`, { remarks: val }); }
+    catch (e) { setMsg({ text: 'Failed to save remarks', ok: false }); }
   };
 
   const deleteSelected = async () => {
@@ -101,8 +137,7 @@ export default function TransactionsPage() {
     try {
       const r = await api.post('/expenses/delete-selected', { ids: selected });
       setMsg({ text: `Deleted ${r.deleted} transaction(s)`, ok: true }); toast.success(`Deleted ${r.deleted} transaction(s)`);
-      setSelected([]);
-      await load();
+      setSelected([]); await load();
     } catch (e) { setMsg({ text: e.error || 'Delete failed', ok: false }); }
     finally { setDeleting(false); }
   };
@@ -128,8 +163,12 @@ export default function TransactionsPage() {
     window.open(`${base}/reports/export?${params.toString()}`, '_blank');
   };
 
+  const showChecks = canProcess; // Finance/Admin can select rows
+  const yearOptions = [];
+  for (let y = nowYear + 1; y >= nowYear - 4; y--) yearOptions.push(y);
+
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-medium text-gray-900">All Transactions</h1>
@@ -143,9 +182,7 @@ export default function TransactionsPage() {
               {deleting ? 'Deleting…' : `🗑 Delete selected${selected.length ? ` (${selected.length})` : ''}`}
             </button>
           )}
-          <button onClick={exportExcel}
-            className="px-3 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ backgroundColor: '#16a34a' }}>
+          <button onClick={exportExcel} className="px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: '#16a34a' }}>
             ⬇ Export Excel
           </button>
         </div>
@@ -157,6 +194,12 @@ export default function TransactionsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end mb-4 bg-white rounded-xl border border-gray-100 p-3">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Year</label>
+          <select value={year} onChange={e => setYear(Number(e.target.value))} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
+            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
@@ -184,6 +227,35 @@ export default function TransactionsPage() {
         )}
       </div>
 
+      {/* Process payout bar */}
+      {canProcess && (
+        <div className="flex flex-wrap gap-3 items-end mb-4 bg-blue-50/50 rounded-xl border border-blue-100 p-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Pay type</label>
+            <select value={payType} onChange={e => setPayType(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
+              <option value="MONTHLY">Monthly</option>
+              <option value="SEMI_MONTHLY">Semi-monthly</option>
+            </select>
+          </div>
+          <div className="min-w-[200px]">
+            <label className="block text-xs text-gray-500 mb-1">Pay period (cut-off)</label>
+            <select value={payPeriod} onChange={e => setPayPeriod(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
+              {payPeriodOptions.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Pay out date</label>
+            <input type="date" value={payoutDate} onChange={e => setPayoutDate(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white" />
+          </div>
+          <button onClick={bulkMarkProcessed} disabled={processing || selectedEligible.length === 0}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+            {processing ? 'Processing…' : `Mark processed${selectedEligible.length ? ` (${selectedEligible.length})` : ''}`}
+          </button>
+          <p className="text-xs text-gray-500 self-center">Tick approved expenses, choose the pay period, then mark processed.</p>
+        </div>
+      )}
+
       {loading ? (
         <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
       ) : visibleRows.length === 0 ? (
@@ -193,10 +265,9 @@ export default function TransactionsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
-                {isAdmin && (
+                {showChecks && (
                   <th className="px-3 py-3 w-8">
-                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll}
-                      title="Select all" className="w-4 h-4 cursor-pointer" />
+                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} title="Select all" className="w-4 h-4 cursor-pointer" />
                   </th>
                 )}
                 <th className="px-4 py-3">Date</th>
@@ -206,58 +277,55 @@ export default function TransactionsPage() {
                 <th className="px-4 py-3 text-right">Amount</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Pending With</th>
-                <th className="px-4 py-3">Processed</th>
+                <th className="px-4 py-3">Pay period</th>
+                <th className="px-4 py-3">Pay out date</th>
+                <th className="px-4 py-3">Remarks</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
             </thead>
             <tbody>
               {visibleRows.map(e => (
                 <tr key={e.id} className="border-b border-gray-50">
-                  {isAdmin && (
+                  {showChecks && (
                     <td className="px-3 py-3">
-                      <input type="checkbox" checked={selected.includes(e.id)} onChange={() => toggleSelect(e.id)}
-                        className="w-4 h-4 cursor-pointer" />
+                      <input type="checkbox" checked={selected.includes(e.id)} onChange={() => toggleSelect(e.id)} className="w-4 h-4 cursor-pointer" />
                     </td>
                   )}
                   <td className="px-4 py-3 text-gray-600">{fmtDate(e.expenseDate)}</td>
                   <td className="px-4 py-3 font-medium text-gray-800">{personName(e.submittedBy)}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => setDetail(e)} className="text-left text-gray-600 hover:text-gray-900 hover:underline">
-                      {e.merchant || e.title}
-                    </button>
+                    <button onClick={() => setDetail(e)} className="text-left text-gray-600 hover:text-gray-900 hover:underline">{e.merchant || e.title}</button>
                   </td>
                   <td className="px-4 py-3 text-gray-500">{glOf(e)}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">{format(e.amountPhp)}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold"
-                      style={{ backgroundColor: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).bg, color: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).text }}>{e.status}</span>
+                      style={{ backgroundColor: (STATUS_COLORS[e.status] || STATUS_COLORS.DRAFT).bg, color: (STATUS_COLORS[e.status] || STATUS_COLORS.DRAFT).text }}>{e.status}</span>
                   </td>
                   <td className="px-4 py-3">
-                    {pendingApprovers(e)
-                      ? <span className="text-amber-600 text-xs font-medium">{pendingApprovers(e)}</span>
-                      : <span className="text-gray-300 text-xs">—</span>}
+                    {pendingApprovers(e) ? <span className="text-amber-600 text-xs font-medium">{pendingApprovers(e)}</span> : <span className="text-gray-300 text-xs">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    {e.processedAt
-                      ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">✓ {fmtDate(e.processedAt)}</span>
+                    {e.payPeriod ? <span className="text-xs text-gray-700">{e.payPeriod}</span> : <span className="text-xs text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {(e.payoutDate || e.processedAt)
+                      ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">✓ {fmtDate(e.payoutDate || e.processedAt)}</span>
                       : <span className="text-xs text-gray-400">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    {['APPROVED','PROCESSED'].includes(e.status) ? (
-                      e.processedAt ? (
-                        <button onClick={() => unmarkProcessed(e.id)} className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50">Undo</button>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <input type="date" value={procDate[e.id] || new Date().toISOString().slice(0,10)}
-                            onChange={ev => setProcDate(p => ({ ...p, [e.id]: ev.target.value }))}
-                            className="px-2 py-1 border border-gray-200 rounded-lg text-xs" />
-                          <button onClick={() => markProcessed(e.id)}
-                            className="text-xs px-2 py-1 rounded-lg text-white font-medium" style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
-                            Mark processed
-                          </button>
-                        </div>
-                      )
-                    ) : <span className="text-xs text-gray-300">—</span>}
+                    {canProcess ? (
+                      <input type="text" defaultValue={e.remarks || ''} placeholder="Add remarks"
+                        onBlur={ev => { if ((ev.target.value || '') !== (e.remarks || '')) saveRemarks(e.id, ev.target.value); }}
+                        className="px-2 py-1 border border-gray-200 rounded-lg text-xs w-36" />
+                    ) : (
+                      <span className="text-xs text-gray-600">{e.remarks || '—'}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {canUndo && e.processedAt && ['APPROVED', 'PROCESSED'].includes(e.status)
+                      ? <button onClick={() => unmarkProcessed(e.id)} className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50">Undo</button>
+                      : <span className="text-xs text-gray-300">—</span>}
                   </td>
                 </tr>
               ))}
@@ -282,7 +350,6 @@ export default function TransactionsPage() {
                 <p className="text-sm font-medium text-gray-900">Expense details</p>
                 <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
               </div>
-
               {e.receipt?.id ? (
                 <div className="mb-4"><ReceiptImage receiptId={e.receipt.id} className="w-full max-h-56 object-contain rounded-lg" /></div>
               ) : (
@@ -291,12 +358,10 @@ export default function TransactionsPage() {
                   <p className="text-xs text-gray-400">No receipt attached</p>
                 </div>
               )}
-
               <div className="mb-3">
                 <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold"
-                  style={{ backgroundColor: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).bg, color: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).text }}>{e.status}</span>
+                  style={{ backgroundColor: (STATUS_COLORS[e.status] || STATUS_COLORS.DRAFT).bg, color: (STATUS_COLORS[e.status] || STATUS_COLORS.DRAFT).text }}>{e.status}</span>
               </div>
-
               <div className="space-y-0.5 text-xs">
                 {row('Submitted by', personName(e.submittedBy))}
                 {row('Department', e.submittedBy?.department)}
@@ -310,7 +375,10 @@ export default function TransactionsPage() {
                 {row('Cost center', e.costCenter || e.submittedBy?.costCenter)}
                 {row('Date', fmtDate(e.expenseDate))}
                 {row('Pending with', pendingApprovers(e))}
+                {row('Pay period', e.payPeriod)}
+                {row('Pay out date', e.payoutDate ? fmtDate(e.payoutDate) : '')}
                 {row('Processed on', e.processedAt ? fmtDate(e.processedAt) : '')}
+                {row('Remarks', e.remarks)}
                 {e.description && e.description !== e.title ? row('Notes', e.description) : null}
               </div>
             </div>

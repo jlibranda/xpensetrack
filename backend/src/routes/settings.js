@@ -36,6 +36,8 @@ function parseSettings(s) {
   try { accessControl = JSON.parse(s.accessControlJson || '{}'); } catch(e) {}
   let emailTemplates = {};
   try { emailTemplates = JSON.parse(s.emailTemplatesJson || '{}'); } catch(e) {}
+  let payoutReversalUserIds = [];
+  try { payoutReversalUserIds = JSON.parse(s.payoutReversalUserIds || '[]'); } catch(e) {}
   return {
     ...s,
     categories: s.categories.split(',').map(c => c.trim()).filter(Boolean),
@@ -43,6 +45,7 @@ function parseSettings(s) {
     categoryGlCodes: glCodes,
     accessControl,
     emailTemplates,
+    payoutReversalUserIds,
   };
 }
 
@@ -56,7 +59,7 @@ router.patch('/', authenticate, async (req, res) => {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
             wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates,
-            loginMaxAttempts, loginLockoutMinutes } = req.body;
+            loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds } = req.body;
     const s = await getOrCreate();
     // Field-level permission: apply each group only if the user is allowed.
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
@@ -103,6 +106,7 @@ router.patch('/', authenticate, async (req, res) => {
         emailTemplatesJson: canManage && emailTemplates !== undefined ? JSON.stringify(emailTemplates) : undefined,
         loginMaxAttempts: canSecurity && loginMaxAttempts !== undefined ? Math.max(0, parseInt(loginMaxAttempts, 10) || 0) : undefined,
         loginLockoutMinutes: canSecurity && loginLockoutMinutes !== undefined ? Math.max(1, parseInt(loginLockoutMinutes, 10) || 1) : undefined,
+        payoutReversalUserIds: canSecurity && payoutReversalUserIds !== undefined ? JSON.stringify(Array.isArray(payoutReversalUserIds) ? payoutReversalUserIds : []) : undefined,
       },
     });
     res.json(parseSettings(updated));

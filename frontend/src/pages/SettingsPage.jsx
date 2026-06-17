@@ -549,6 +549,7 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+          {canSecurity && <PayoutReversalCard settings={settings} />}
           {canReceiptStorage && <ReceiptStorageCard />}
         </>)}
 
@@ -719,6 +720,60 @@ export default function SettingsPage() {
 }
 
 function EmailTestCard_REMOVED() { return null; }
+
+// Choose which user(s) may "Undo" a processed payout in the Transactions tab.
+// Empty list = Admins only.
+function PayoutReversalCard({ settings }) {
+  const [users, setUsers] = useState([]);
+  const [ids, setIds] = useState(() => Array.isArray(settings?.payoutReversalUserIds) ? settings.payoutReversalUserIds : []);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => {
+    api.get('/users').then(d => setUsers(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+
+  const toggle = (id) => setIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const save = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      await api.patch('/settings', { payoutReversalUserIds: ids });
+      setMsg({ ok: true, text: 'Saved. Changes apply on their next page load.' });
+    } catch (e) { setMsg({ ok: false, text: e.error || 'Save failed.' }); }
+    finally { setSaving(false); }
+  };
+
+  // Only Finance/Admin make sense as reversers.
+  const eligible = users.filter(u => ['FINANCE', 'ADMIN'].includes(u.role));
+
+  return (
+    <div className="mt-6 p-4 rounded-xl border border-gray-100 bg-gray-50">
+      <h2 className="text-sm font-medium text-gray-700 mb-1">Payout reversal access (Undo)</h2>
+      <p className="text-xs text-gray-500 mb-3">Choose who can <b>Undo</b> a processed payout in the Transactions tab. Admins can always undo. If none are selected, only Admins can.</p>
+      <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white divide-y divide-gray-50">
+        {eligible.length === 0 ? (
+          <p className="text-xs text-gray-400 p-3">No Finance/Admin users found.</p>
+        ) : eligible.map(u => (
+          <label key={u.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+            <input type="checkbox" checked={ids.includes(u.id)} onChange={() => toggle(u.id)} className="w-4 h-4" />
+            <span className="text-gray-800">{`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</span>
+            <span className="text-xs text-gray-400">· {u.role}</span>
+          </label>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 mt-3">
+        <button onClick={save} disabled={saving}
+          className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+          {saving ? 'Saving…' : 'Save reversal access'}
+        </button>
+        <span className="text-xs text-gray-500">{ids.length} selected</span>
+        {msg && <span className={`text-xs ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.ok ? '✓ ' : '✕ '}{msg.text}</span>}
+      </div>
+    </div>
+  );
+}
 
 const RS_API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
 function ReceiptStorageCard() {

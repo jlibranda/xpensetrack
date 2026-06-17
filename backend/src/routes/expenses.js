@@ -439,13 +439,58 @@ router.post('/:id/mark-processed', authenticate, requireRole('FINANCE', 'ADMIN')
 });
 
 // FINANCE/ADMIN: undo processed tag (revert to APPROVED)
-router.post('/:id/unmark-processed', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
+router.post('/:id/unmark-processed', authenticate, async (req, res) => {
   try {
+    // Allowed: ADMIN always; otherwise only users in the org's payout-reversal list.
+    let allowed = req.user.role === 'ADMIN';
+    if (!allowed) {
+      const org = await prisma.orgSettings.findFirst();
+      let list = [];
+      try { list = JSON.parse(org?.payoutReversalUserIds || '[]'); } catch (e) {}
+      allowed = Array.isArray(list) && list.includes(req.user.id);
+    }
+    if (!allowed) return res.status(403).json({ error: 'You are not authorized to undo processed payouts. Ask an admin.' });
     const updated = await prisma.expense.update({
       where: { id: req.params.id },
-      data: { processedAt: null, status: 'APPROVED' },
+      data: { processedAt: null, payoutDate: null, payPeriod: null, status: 'APPROVED' },
     });
     res.json({ message: 'Unmarked', processedAt: updated.processedAt });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk mark processed — select approved expenses, stamp a pay period + payout date.
+router.post('/bulk-mark-processed', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
+  try {
+    const { ids, payPeriod, payoutDate } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'No expenses selected' });
+    const when = payoutDate ? new Date(payoutDate) : new Date();
+    const rows = await prisma.expense.findMany({ where: { id: { in: ids } }, include: { submittedBy: true } });
+    const eligible = rows.filter(e => e.status === 'APPROVED' && !e.processedAt);
+    let count = 0;
+    for (const e of eligible) {
+      await prisma.expense.update({
+        where: { id: e.id },
+        data: { status: 'PROCESSED', processedAt: when, payoutDate: when, payPeriod: payPeriod || null },
+      });
+      count++;
+      if (e.submittedBy?.email) {
+        try {
+          const { sendStatusUpdateEmail } = require('../lib/email');
+          sendStatusUpdateEmail(e.submittedBy.email, `${e.submittedBy.firstName || ''} ${e.submittedBy.lastName || ''}`.trim(), e, 'PROCESSED', e.submittedBy).catch(() => {});
+        } catch (mailErr) { /* ignore */ }
+      }
+    }
+    await logAudit(req.user, 'EXPENSE_BULK_PROCESSED', { targetType: 'EXPENSE', details: `Marked ${count} expense(s) processed${payPeriod ? ` for pay period ${payPeriod}` : ''}` });
+    res.json({ message: `Marked ${count} expense(s) processed`, count, skipped: ids.length - count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Update remarks on a single expense (Finance/Admin), used in the Transactions tab.
+router.patch('/:id/remarks', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
+  try {
+    const { remarks } = req.body || {};
+    await prisma.expense.update({ where: { id: req.params.id }, data: { remarks: remarks ?? null } });
+    res.json({ message: 'Remarks saved' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -66,6 +66,9 @@ model Expense {
   approvals     Approval[]
   status        ExpenseStatus @default(DRAFT)
   processedAt   DateTime?
+  payoutDate    DateTime?
+  payPeriod     String?
+  remarks       String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
@@ -210,6 +213,7 @@ model OrgSettings {
   emailTemplatesJson   String   @default("{}")
   loginMaxAttempts     Int      @default(5)
   loginLockoutMinutes  Int      @default(15)
+  payoutReversalUserIds String  @default("[]")
   updatedAt            DateTime @updatedAt
 }
 
