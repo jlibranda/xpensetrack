@@ -53,17 +53,25 @@ export default function ReportsPage() {
   };
 
   const setQuickRange = (mode) => {
-    const end = new Date();
+    // Format in LOCAL time so the Sunday/Saturday boundaries aren't shifted a day by UTC.
+    const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    let end = new Date();
     let start;
-    if (mode === 'year') {
+    if (mode === 'week') {
+      // Current week: most recent Sunday → that week's Saturday.
+      start = new Date();
+      start.setDate(start.getDate() - start.getDay()); // getDay(): 0 = Sunday
+      end = new Date(start);
+      end.setDate(start.getDate() + 6); // Saturday
+    } else if (mode === 'year') {
       start = new Date(end.getFullYear(), 0, 1); // Jan 1 of the current year
     } else {
       start = new Date();
       start.setMonth(start.getMonth() - mode + 1);
       start.setDate(1);
     }
-    const f = start.toISOString().split('T')[0];
-    const t = end.toISOString().split('T')[0];
+    const f = ymd(start);
+    const t = ymd(end);
     setFrom(f);
     setTo(t);
     load(f, t); // apply immediately
@@ -87,7 +95,7 @@ export default function ReportsPage() {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
         <div className="flex flex-wrap gap-2 mb-3">
-          {[['This month', 1], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 'year']].map(([label, m]) => (
+          {[['This week', 'week'], ['This month', 1], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 'year']].map(([label, m]) => (
             <button key={label} onClick={() => setQuickRange(m)}
               className="px-3 py-1 border border-gray-200 rounded-full text-xs text-gray-600 hover:bg-gray-50">
               {label}

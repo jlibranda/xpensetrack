@@ -93,6 +93,22 @@ function AccessControlTab({ settings, navigate, refresh }) {
     });
   };
 
+  // The permission rows currently visible in the matrix (sensitive perms are
+  // hidden from non-admins). "Select all" / "None" only affect these.
+  const visiblePermKeys = () => Object.keys(DEFAULT_PERMS).filter(key => acIsAdmin || !SENSITIVE_PERMS.includes(key));
+  const setAllForRole = (role, grant) => {
+    if (role === 'ADMIN') return; // Admin always has full access
+    setPerms(prev => {
+      const next = { ...prev };
+      for (const key of visiblePermKeys()) {
+        const cur = next[key] || [];
+        if (grant) { if (!cur.includes(role)) next[key] = [...cur, role]; }
+        else next[key] = cur.filter(r => r !== role);
+      }
+      return next;
+    });
+  };
+
   const savePerms = async () => {
     setSaving2(true);
     try {
@@ -190,6 +206,15 @@ function AccessControlTab({ settings, navigate, refresh }) {
                   <th key={r} className="text-center py-3 px-3 min-w-[90px]">
                     <div className="flex flex-col items-center gap-0.5">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[r] || 'bg-gray-100 text-gray-700 border border-gray-200'}`}>{r}</span>
+                      {r !== 'ADMIN' && (
+                        <div className="flex items-center gap-1 leading-none">
+                          <button onClick={() => setAllForRole(r, true)} title={`Grant all permissions to ${r}`}
+                            className="text-[10px] text-green-300 hover:text-green-200 hover:underline">All</button>
+                          <span className="text-[10px] text-gray-500">/</span>
+                          <button onClick={() => setAllForRole(r, false)} title={`Remove all permissions from ${r}`}
+                            className="text-[10px] text-gray-400 hover:text-gray-200 hover:underline">None</button>
+                        </div>
+                      )}
                       {!isDefault && (
                         <button onClick={() => setRoles(rs => rs.filter(x => x !== r))}
                           className="text-red-400 hover:text-red-600 text-xs leading-none">✕</button>

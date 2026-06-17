@@ -5,6 +5,7 @@ import toast from '../lib/toast';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
+import ReceiptImage from '../components/ReceiptImage';
 
 const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
 // Approver(s) currently pending on an expense (only meaningful when status is PENDING).
@@ -49,6 +50,7 @@ export default function TransactionsPage() {
   // delete panel
   const [deleting, setDeleting] = useState(false);
   const [selected, setSelected] = useState([]); // ids checked for deletion
+  const [detail, setDetail] = useState(null); // expense shown in the details modal
 
   const load = async () => {
     setLoading(true);
@@ -219,7 +221,11 @@ export default function TransactionsPage() {
                   )}
                   <td className="px-4 py-3 text-gray-600">{fmtDate(e.expenseDate)}</td>
                   <td className="px-4 py-3 font-medium text-gray-800">{personName(e.submittedBy)}</td>
-                  <td className="px-4 py-3 text-gray-600">{e.merchant || e.title}</td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => setDetail(e)} className="text-left text-gray-600 hover:text-gray-900 hover:underline">
+                      {e.merchant || e.title}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-gray-500">{glOf(e)}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">{format(e.amountPhp)}</td>
                   <td className="px-4 py-3">
@@ -259,6 +265,58 @@ export default function TransactionsPage() {
           </table>
         </div>
       )}
+
+      {/* Expense details modal (read-only) */}
+      {detail && (() => {
+        const e = detail;
+        const row = (label, val) => val ? (
+          <div className="flex justify-between py-1.5 border-b border-gray-50">
+            <span className="text-gray-500">{label}</span>
+            <span className="text-gray-800 text-right max-w-[60%]">{val}</span>
+          </div>
+        ) : null;
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setDetail(null)}>
+            <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5" onClick={ev => ev.stopPropagation()}>
+              <div className="flex justify-between items-center mb-3">
+                <p className="text-sm font-medium text-gray-900">Expense details</p>
+                <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+              </div>
+
+              {e.receipt?.id ? (
+                <div className="mb-4"><ReceiptImage receiptId={e.receipt.id} className="w-full max-h-56 object-contain rounded-lg" /></div>
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-6 text-center mb-4">
+                  <p className="text-2xl mb-1">🧾</p>
+                  <p className="text-xs text-gray-400">No receipt attached</p>
+                </div>
+              )}
+
+              <div className="mb-3">
+                <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold"
+                  style={{ backgroundColor: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).bg, color: (STATUS_COLORS[e.status]||STATUS_COLORS.DRAFT).text }}>{e.status}</span>
+              </div>
+
+              <div className="space-y-0.5 text-xs">
+                {row('Submitted by', personName(e.submittedBy))}
+                {row('Department', e.submittedBy?.department)}
+                {row('Merchant', e.merchant)}
+                {row('Description', e.title)}
+                {row('Amount', format(e.amountPhp))}
+                {row('OR / Invoice no.', e.orNumber)}
+                {row('Type', e.expenseType ? e.expenseType.toLowerCase().replace('_', ' ') : '')}
+                {row('Category', e.category)}
+                {row('GL code', glOf(e))}
+                {row('Cost center', e.costCenter || e.submittedBy?.costCenter)}
+                {row('Date', fmtDate(e.expenseDate))}
+                {row('Pending with', pendingApprovers(e))}
+                {row('Processed on', e.processedAt ? fmtDate(e.processedAt) : '')}
+                {e.description && e.description !== e.title ? row('Notes', e.description) : null}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
