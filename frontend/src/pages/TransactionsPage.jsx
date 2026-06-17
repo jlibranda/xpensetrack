@@ -109,6 +109,23 @@ export default function TransactionsPage() {
     return true;
   });
 
+  // Distinct payout dates that have actually been processed (within the selected year),
+  // used to populate the "Pay out date" filter dropdown. Most recent first.
+  const payoutDateOptions = useMemo(() => {
+    const set = new Set();
+    for (const e of rows) {
+      if (year && new Date(e.expenseDate).getFullYear() !== Number(year)) continue;
+      const pd = e.payoutDate || e.processedAt;
+      if (pd) set.add(new Date(pd).toISOString().slice(0, 10));
+    }
+    return [...set].sort().reverse();
+  }, [rows, year]);
+
+  // If the selected payout date is no longer in the list (e.g. year changed), clear it.
+  useEffect(() => {
+    if (payoutFilter && !payoutDateOptions.includes(payoutFilter)) setPayoutFilter('');
+  }, [payoutDateOptions]); // eslint-disable-line
+
   const selectedEligible = visibleRows.filter(e => selected.includes(e.id) && e.status === 'APPROVED' && !e.processedAt);
 
   const bulkMarkProcessed = async () => {
@@ -226,7 +243,10 @@ export default function TransactionsPage() {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Pay out date</label>
-          <input type="date" value={payoutFilter} onChange={e => setPayoutFilter(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+          <select value={payoutFilter} onChange={e => setPayoutFilter(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
+            <option value="">All</option>
+            {payoutDateOptions.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+          </select>
         </div>
         {(status || from || to || payoutFilter) && (
           <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setPayoutFilter(''); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
