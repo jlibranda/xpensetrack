@@ -462,6 +462,7 @@ router.post('/:id/unmark-processed', authenticate, async (req, res) => {
         sendStatusUpdateEmail(before.submittedBy.email, `${before.submittedBy.firstName || ''} ${before.submittedBy.lastName || ''}`.trim(), { ...updated, submittedBy: before.submittedBy }, 'REPROCESSING', before.submittedBy).catch(() => {});
       } catch (mailErr) { /* ignore */ }
     }
+    await logAudit(req.user, 'EXPENSE_PAYOUT_REVERSED', { targetType: 'EXPENSE', targetId: req.params.id, details: `Payout reversed (Undo) for "${before?.title || req.params.id}"` });
     res.json({ message: 'Unmarked', processedAt: updated.processedAt });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

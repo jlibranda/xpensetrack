@@ -304,6 +304,7 @@ router.post('/:id/impersonate', authenticate, requirePermission('impersonate_use
     safeUser.name = `${target.firstName} ${target.lastName}`.trim();
     safeUser.mustChangePassword = false; // impersonation must not trigger the forced-change flow
     safeUser._impersonating = true;
+    await logAudit(req.user, 'USER_IMPERSONATED', { targetType: 'USER', targetId: target.id, details: `Logged in as ${target.firstName || ''} ${target.lastName || ''}`.trim() + ` (${target.email})` });
     safeUser._originalAdminId = req.user.id;
     safeUser._originalAdminName = `${req.user.firstName} ${req.user.lastName}`.trim();
     res.json({ user: safeUser, token });
