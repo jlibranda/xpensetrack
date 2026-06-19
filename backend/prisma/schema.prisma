@@ -1,0 +1,246 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(cuid())
+  employeeNumber String?         @unique
+  email          String          @unique
+  firstName      String
+  lastName       String
+  passwordHash   String
+  role           String          @default("EMPLOYEE")
+  department     String?
+  costCenter     String?
+  position       String?
+  payrollAccount String?
+  isActive       Boolean         @default(true)
+  failedLoginAttempts Int        @default(0)
+  lockedUntil    DateTime?
+  mustChangePassword Boolean     @default(false)
+  tempPasswordHash String?
+  managerId      String?
+  manager        User?           @relation("Reports", fields: [managerId], references: [id])
+  reports        User[]          @relation("Reports")
+  // Per-employee approval flow:
+  //  - approverIds: ordered list of approver user IDs (1..5), stored as comma-separated string
+  //  - approvalMode: SEQUENTIAL or ANY_ORDER
+  //  - approvalRule: ALL (all must approve) or ANY (any one is enough)
+  approverIds    String?
+  approvalMode   ApprovalMode    @default(SEQUENTIAL)
+  approvalRule   ApprovalRule    @default(ALL)
+  approvalFlowJson String?       // structured step builder: [{approvers:[id],rule:'ANY'|'ALL'}]
+  expenses       Expense[]       @relation("SubmittedBy")
+  approvals      Approval[]
+  passwordResets PasswordReset[]
+  ledgerDocs     LedgerDoc[]     @relation("LedgerCreatedBy")
+  assignedLedgerDocs LedgerDoc[] @relation("LedgerAssignedTo")
+  editedLedgerDocs LedgerDoc[]   @relation("LedgerLastEditedBy")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model Expense {
+  id            String        @id @default(cuid())
+  title         String
+  orNumber      String?
+  merchant      String?
+  description   String?
+  amount        Float
+  currency      Currency      @default(PHP)
+  amountPhp     Float
+  category      String
+  glCode        String?
+  expenseType   String        @default("REIMBURSEMENT")
+  receiptId     String?
+  receipt       Receipt?      @relation(fields: [receiptId], references: [id])
+  costCenter    String?
+  expenseDate   DateTime
+  submittedById String
+  submittedBy   User          @relation("SubmittedBy", fields: [submittedById], references: [id])
+  approvals     Approval[]
+  status        ExpenseStatus @default(DRAFT)
+  processedAt   DateTime?
+  payoutDate    DateTime?
+  payPeriod     String?
+  remarks       String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum Currency {
+  PHP
+  USD
+}
+
+enum ExpenseStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  RETURNED
+  PROCESSED
+  REIMBURSED
+  CANCELLED
+}
+
+model Receipt {
+  id        String    @id @default(cuid())
+  data      Bytes?
+  storageKey String?
+  mimeType  String    @default("image/jpeg")
+  filename  String?
+  expenses  Expense[]
+  ledgerDocs LedgerDoc[]
+  createdAt DateTime  @default(now())
+}
+
+model Client {
+  id        String      @id @default(cuid())
+  name      String
+  isDefault Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  docs      LedgerDoc[]
+}
+
+model LedgerDoc {
+  id            String    @id @default(cuid())
+  docType       String    // AP_INVOICE | AP_RECEIPT | AR_INVOICE
+  clientId      String?
+  client        Client?   @relation(fields: [clientId], references: [id])
+  vendorName    String?
+  vendorTin     String?
+  businessStyle String?
+  docNumber     String?
+  poNumber      String?
+  docDate       DateTime?
+  dueDate       DateTime?
+  amount        Float     @default(0)
+  currency      String    @default("PHP")
+  amountPhp     Float     @default(0)
+  vatableAmount Float?
+  vatAmount     Float?
+  category      String?
+  notes         String?
+  remarks       String?
+  archived      Boolean   @default(false)
+  status        String    @default("DRAFT") // DRAFT | FOR_VERIFICATION | FOR_APPROVAL | PAID
+  paidAt        DateTime?
+  receiptId     String?
+  receipt       Receipt?  @relation(fields: [receiptId], references: [id])
+  assignedToId  String?
+  assignedTo    User?     @relation("LedgerAssignedTo", fields: [assignedToId], references: [id])
+  lastEditedById String?
+  lastEditedBy  User?     @relation("LedgerLastEditedBy", fields: [lastEditedById], references: [id])
+  createdById   String?
+  createdBy     User?     @relation("LedgerCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([docType, status])
+  @@index([clientId])
+  @@index([archived])
+}
+
+model Approval {
+  id         String         @id @default(cuid())
+  expenseId  String
+  expense    Expense        @relation(fields: [expenseId], references: [id])
+  approverId String
+  approver   User           @relation(fields: [approverId], references: [id])
+  status     ApprovalStatus @default(PENDING)
+  level      Int            @default(1)
+  stepOrder  Int            @default(1)
+  groupKey   String?
+  stepRule   String?        @default("ANY") // per-step rule: ANY (one approves) | ALL (all must)
+  notes      String?
+  lastFollowUpAt DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+enum ApprovalMode {
+  SEQUENTIAL
+  ANY_ORDER
+}
+
+enum ApprovalRule {
+  ALL
+  ANY
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model OrgSettings {
+  id                   String   @id @default(cuid())
+  companyName          String   @default("My Company")
+  defaultCurrency      Currency @default(PHP)
+  receiptRequiredAbove Float    @default(500)
+  approvalLevels       Int      @default(2)
+  primaryColor         String   @default("#1D9E75")
+  logoUrl              String?
+  wallpaperUrl         String?
+  wallpaperStyle       String   @default("cover")
+  darkMode             Boolean  @default(false)
+  usdPhpRate           Float    @default(56)
+  usdPhpRateAuto       Boolean  @default(true)
+  usdPhpRateUpdatedAt  DateTime?
+  autoReapplyApprovalFlow Boolean @default(false)
+  tin                  String?
+  categories           String   @default("Cleaning,Education and Training,Entertainment/Meals,Equipment,Facility Maintenance and Repair,Furniture and Fixtures,General Office Expense,Hardware,Miscellaneous,Mobile Device,Non-Capital Small Tools Equipment and Furniture,Office Rent,Parking,Printing,Recruiting,Travel - Air Ticket (International),Travel - Air Ticket (Domestic),Travel - Others,Travel - Hotel (Domestic)")
+  categoryGlCodes      String   @default("{}")
+  expenseTypes         String   @default("REIMBURSEMENT,CASH_ADVANCE")
+  defaultPassword      String   @default("Welcome123")
+  accessControlJson    String   @default("{}")
+  emailTemplatesJson   String   @default("{}")
+  loginMaxAttempts     Int      @default(5)
+  loginLockoutMinutes  Int      @default(15)
+  payoutReversalUserIds String  @default("[]")
+  emailNotificationsEnabled Boolean @default(true)
+  timezone             String   @default("Asia/Manila")
+  approvalFollowUpDays Int      @default(0)
+  updatedAt            DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?  // who performed the action (null if system)
+  actorName  String   // snapshot of name at the time
+  actorRole  String?
+  action     String   // e.g. EXPENSE_APPROVED, USER_DELETED, EXPENSE_BULK_DELETED
+  targetType String?  // EXPENSE | USER | SETTINGS | TRANSACTION
+  targetId   String?
+  details    String?  // human-readable summary
+  createdAt  DateTime @default(now())
+}
