@@ -92,11 +92,12 @@ async function runFollowups() {
 let timer = null;
 function startApprovalFollowups() {
   if (timer) return;
-  // Run every 6 hours; also run shortly after boot.
-  const INTERVAL = 6 * 60 * 60 * 1000;
-  setTimeout(() => { runFollowups().catch(e => console.error('Follow-ups run failed:', e.message)); }, 30 * 1000);
-  timer = setInterval(() => { runFollowups().catch(e => console.error('Follow-ups run failed:', e.message)); }, INTERVAL);
-  console.log('Approval follow-up scheduler started (every 6h).');
+  const { runIfDue } = require('./scheduler-lock');
+  const INTERVAL = 6 * 60 * 60 * 1000; // real cadence: every 6h (enforced across replicas)
+  const CHECK = 30 * 60 * 1000;        // each replica checks every 30 min
+  setTimeout(() => { runIfDue('approval_followups', INTERVAL, runFollowups); }, 30 * 1000);
+  timer = setInterval(() => { runIfDue('approval_followups', INTERVAL, runFollowups); }, CHECK);
+  console.log('Approval follow-up scheduler started (single-runner, ~6h).');
 }
 
 module.exports = { startApprovalFollowups, runFollowups };

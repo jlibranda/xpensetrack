@@ -122,8 +122,11 @@ async function refreshUsdPhpRate() {
 }
 
 function startFxRefresh() {
-  setTimeout(() => { refreshUsdPhpRate(); }, 5000);
-  setInterval(() => { refreshUsdPhpRate(); }, 12 * 60 * 60 * 1000);
+  const { runIfDue } = require('./scheduler-lock');
+  const INTERVAL = 12 * 60 * 60 * 1000; // real cadence: every 12h (enforced across replicas)
+  const CHECK = 30 * 60 * 1000;         // each replica checks every 30 min
+  setTimeout(() => { runIfDue('fx_refresh', INTERVAL, refreshUsdPhpRate); }, 8000);
+  setInterval(() => { runIfDue('fx_refresh', INTERVAL, refreshUsdPhpRate); }, CHECK);
 }
 
 module.exports = { getUsdPhpRate, refreshUsdPhpRate, startFxRefresh, fetchBspTtBuyingRate, fetchBspUsdPhp, FALLBACK_RATE };

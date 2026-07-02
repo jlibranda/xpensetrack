@@ -72,6 +72,12 @@ model Expense {
   remarks       String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+
+  @@index([status])
+  @@index([submittedById])
+  @@index([expenseDate])
+  @@index([processedAt])
+  @@index([status, expenseDate])
 }
 
 enum Currency {
@@ -163,6 +169,10 @@ model Approval {
   lastFollowUpAt DateTime?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
+
+  @@index([expenseId])
+  @@index([approverId, status])
+  @@index([status])
 }
 
 enum ApprovalMode {
@@ -231,6 +241,18 @@ model Notification {
   link      String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+// Cross-instance lock so scheduled jobs (fx refresh, approval follow-ups) run on
+// exactly ONE replica per interval — prevents duplicate work / duplicate emails
+// when the backend is horizontally scaled.
+model SchedulerLock {
+  name      String   @id
+  nextRunAt DateTime
+  holder    String?
+  updatedAt DateTime @updatedAt
 }
 
 model AuditLog {
@@ -243,4 +265,7 @@ model AuditLog {
   targetId   String?
   details    String?  // human-readable summary
   createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
 }
