@@ -3,6 +3,7 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole, requirePermission } = require('../middleware/auth');
 const XLSX = require('xlsx');
+const { signReceiptToken } = require('../lib/receipt-token');
 const prisma = new PrismaClient();
 
 // For a MANAGER, reports are limited to employees they approve for:
@@ -279,13 +280,14 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
       'Pay Out Date': fmtDate(e.payoutDate),
       'Pay Period': e.payPeriod || '',
       'Remarks': e.remarks || '',
+      'Receipt': e.receiptId ? 'View receipt' : '',
     }));
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
       {wch:12},{wch:16},{wch:26},{wch:16},{wch:14},{wch:30},{wch:25},
-      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:11},{wch:14},{wch:14},{wch:18},{wch:24}
+      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:11},{wch:14},{wch:14},{wch:18},{wch:24},{wch:16}
     ];
     // Bold header row
     const headerRange = XLSX.utils.decode_range(ws['!ref']);
@@ -293,6 +295,18 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
       const addr = XLSX.utils.encode_cell({ r: 0, c: C });
       if (!ws[addr]) continue;
       ws[addr].s = { font: { bold: true }, fill: { fgColor: { rgb: '1D9E75' } } };
+    }
+    // Clickable receipt links (last column) — open the receipt in a browser via a
+    // long-lived, receipt-scoped token (no login needed, can't browse other receipts).
+    const apiBase = (process.env.PUBLIC_API_URL || 'https://xpensetrack-production.up.railway.app/api').replace(/\/$/, '');
+    const receiptCol = headerRange.e.c; // Receipt is the last column
+    for (let i = 0; i < expenses.length; i++) {
+      const rid = expenses[i].receiptId;
+      if (!rid) continue;
+      const addr = XLSX.utils.encode_cell({ r: i + 1, c: receiptCol });
+      if (!ws[addr]) continue;
+      ws[addr].l = { Target: `${apiBase}/ocr/receipt/${rid}?token=${signReceiptToken(rid)}`, Tooltip: 'Open receipt' };
+      ws[addr].s = { font: { color: { rgb: '1155CC' }, underline: true } };
     }
     XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
 
