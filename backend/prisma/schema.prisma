@@ -59,7 +59,9 @@ model Expense {
   glCode        String?
   expenseType   String        @default("REIMBURSEMENT")
   receiptId     String?
-  receipt       Receipt?      @relation(fields: [receiptId], references: [id])
+  receipt       Receipt?      @relation("ExpenseReceipt", fields: [receiptId], references: [id])
+  proofOfPaymentId String?
+  proofOfPayment   Receipt?   @relation("ExpenseProofOfPayment", fields: [proofOfPaymentId], references: [id])
   costCenter    String?
   expenseDate   DateTime
   submittedById String
@@ -102,7 +104,8 @@ model Receipt {
   storageKey String?
   mimeType  String    @default("image/jpeg")
   filename  String?
-  expenses  Expense[]
+  expenses  Expense[] @relation("ExpenseReceipt")
+  proofForExpenses Expense[] @relation("ExpenseProofOfPayment")
   ledgerDocs LedgerDoc[]
   createdAt DateTime  @default(now())
 }

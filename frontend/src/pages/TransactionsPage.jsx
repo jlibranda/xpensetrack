@@ -155,6 +155,22 @@ export default function TransactionsPage() {
     catch (e) { setMsg({ text: 'Failed to save remarks', ok: false }); }
   };
 
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const uploadProof = async (expenseId, file) => {
+    if (!file) return;
+    setUploadingProof(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await api.post(`/ocr/proof-of-payment/${expenseId}`, fd);
+      toast.success('Proof of payment uploaded');
+      setDetail(d => (d && d.id === expenseId) ? { ...d, proofOfPayment: { id: r.id, mimeType: r.mimeType } } : d);
+      await load();
+    } catch (e) {
+      setMsg({ text: e.error || e.message || 'Upload failed', ok: false });
+    } finally { setUploadingProof(false); }
+  };
+
   const deleteSelected = async () => {
     if (selected.length === 0) return;
     if (!window.confirm(`PERMANENTLY delete ${selected.length} selected transaction(s)? This cannot be undone.`)) return;
@@ -416,6 +432,33 @@ export default function TransactionsPage() {
                 {row('Processed on', e.processedAt ? fmtDate(e.processedAt) : '')}
                 {row('Remarks', e.remarks)}
                 {e.description && e.description !== e.title ? row('Notes', e.description) : null}
+              </div>
+
+              {/* Proof of payment */}
+              <div className="mt-4 pt-3 border-t border-gray-100">
+                <p className="text-xs font-medium text-gray-700 mb-2">Proof of payment</p>
+                {e.proofOfPayment?.id ? (
+                  <div className="space-y-2">
+                    <ReceiptImage receiptId={e.proofOfPayment.id} className="w-full max-h-56 object-contain rounded-lg border border-gray-100" />
+                    {canProcess && (
+                      <label className={`inline-block text-xs px-3 py-1.5 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 ${uploadingProof ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {uploadingProof ? 'Uploading…' : 'Replace proof of payment'}
+                        <input type="file" accept="image/*,application/pdf" className="hidden"
+                          onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; uploadProof(e.id, f); }} />
+                      </label>
+                    )}
+                  </div>
+                ) : canProcess ? (
+                  <label className={`flex flex-col items-center justify-center gap-1 border-2 border-dashed border-gray-200 rounded-lg p-4 cursor-pointer hover:border-brand-400 hover:bg-gray-50 ${uploadingProof ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <span className="text-2xl">📎</span>
+                    <span className="text-xs text-gray-600">{uploadingProof ? 'Uploading…' : 'Upload proof of payment'}</span>
+                    <span className="text-[10px] text-gray-400">Image or PDF</span>
+                    <input type="file" accept="image/*,application/pdf" className="hidden"
+                      onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; uploadProof(e.id, f); }} />
+                  </label>
+                ) : (
+                  <p className="text-xs text-gray-400">No proof of payment uploaded</p>
+                )}
               </div>
             </div>
           </div>

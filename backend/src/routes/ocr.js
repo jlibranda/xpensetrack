@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const multer = require('multer');
 const { PrismaClient } = require('@prisma/client');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
 
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -486,6 +486,43 @@ router.post('/scan', authenticate, upload.single('receipt'), async (req, res) =>
       return res.status(507).json({ error: 'Storage is full. Please ask an admin to free up space (download & purge receipts).' });
     }
     res.status(500).json({ error: 'Receipt upload failed', message: err.message });
+  }
+});
+
+// Finance/Admin upload a proof-of-payment document for an expense.
+// Stored the same way as receipts (object storage if configured, else DB), and
+// linked to the expense so it can be viewed in-app and via the Excel export link.
+router.post('/proof-of-payment/:expenseId', authenticate, requireRole('FINANCE', 'ADMIN'), upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const storage = require('../lib/storage');
+    const { buffer: storeBuf, mime: storeMime } = await compressForStorage(
+      req.file.buffer, req.file.mimetype, req.file.originalname
+    );
+    const receiptData = { mimeType: storeMime, filename: req.file.originalname || 'proof-of-payment' };
+    if (storage.storageConfigured()) {
+      try {
+        const ext = storeMime.includes('pdf') ? 'pdf' : 'jpg';
+        const key = `pop/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        await storage.putObject(key, storeBuf, storeMime);
+        receiptData.storageKey = key;
+      } catch (e) {
+        console.error('POP storage upload failed, falling back to DB:', e.message);
+        receiptData.data = storeBuf;
+      }
+    } else {
+      receiptData.data = storeBuf;
+    }
+    const rec = await prisma.receipt.create({ data: receiptData });
+    await prisma.expense.update({ where: { id: req.params.expenseId }, data: { proofOfPaymentId: rec.id } });
+    try {
+      const { logAudit } = require('../lib/audit');
+      await logAudit(req.user, 'PROOF_OF_PAYMENT_UPLOADED', { targetType: 'EXPENSE', targetId: req.params.expenseId, details: `Uploaded proof of payment (${receiptData.filename})` });
+    } catch (e) { /* non-blocking */ }
+    res.json({ id: rec.id, mimeType: rec.mimeType });
+  } catch (err) {
+    console.error('POP upload failed:', err.message);
+    res.status(500).json({ error: 'Proof-of-payment upload failed', message: err.message });
   }
 });
 

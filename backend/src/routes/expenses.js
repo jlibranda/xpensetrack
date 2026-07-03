@@ -23,6 +23,7 @@ const expenseInclude = {
     orderBy: { createdAt: 'asc' },
   },
   receipt: { select: { id:true, mimeType:true, filename:true } },
+  proofOfPayment: { select: { id:true, mimeType:true, filename:true } },
 };
 
 // People who report to / are approved by this user (excludes the user themselves) —
