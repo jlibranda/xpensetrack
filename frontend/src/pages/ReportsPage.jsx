@@ -16,12 +16,9 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const now = new Date();
-  const [from, setFrom] = useState(() => {
-    const d = new Date(now.getFullYear(), now.getMonth(), 1);
-    return d.toISOString().split('T')[0];
-  });
-  const [to, setTo] = useState(() => now.toISOString().split('T')[0]);
-  const [activeRange, setActiveRange] = useState(null);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default)
   const [userId, setUserId] = useState('');
   const { format } = useCurrency();
   const { settings } = useOrg();
@@ -110,7 +107,10 @@ export default function ReportsPage() {
           {[['This week', 'week'], ['This month', 1], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 'year'], ['All dates', 'all']].map(([label, m]) => {
             const active = activeRange === m;
             return (
-              <button key={label} onClick={() => { setQuickRange(m); setActiveRange(m); }}
+              <button key={label} onClick={() => {
+                  if (m !== 'all' && activeRange === m) { setQuickRange('all'); setActiveRange('all'); } // toggle off -> all dates
+                  else { setQuickRange(m); setActiveRange(m); }
+                }}
                 className={`px-3 py-1 rounded-full text-xs border transition-colors ${active ? 'bg-brand-400 text-white border-brand-400 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
                 {label}
               </button>

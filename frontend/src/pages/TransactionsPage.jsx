@@ -51,8 +51,7 @@ export default function TransactionsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [payoutFilter, setPayoutFilter] = useState('');
-  const nowYear = new Date().getFullYear();
-  const [year, setYear] = useState(nowYear);
+  const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default = all dates)
 
   // payout / processing controls
   const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
@@ -80,8 +79,21 @@ export default function TransactionsPage() {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, from, to]);
 
+  // Quick date-range presets for the Filter. Setting from/to re-triggers load().
+  const setQuickRange = (mode) => {
+    setActiveRange(mode);
+    if (mode === 'all') { setFrom(''); setTo(''); return; }
+    const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    let end = new Date(); let start;
+    if (mode === 'week') { start = new Date(); start.setDate(start.getDate() - start.getDay()); end = new Date(start); end.setDate(start.getDate() + 6); }
+    else if (mode === 'year') { start = new Date(end.getFullYear(), 0, 1); }
+    else { start = new Date(); start.setMonth(start.getMonth() - mode + 1); start.setDate(1); }
+    setFrom(ymd(start)); setTo(ymd(end));
+  };
+
   const visibleRows = rows.filter(e => {
-    if (year && new Date(e.expenseDate).getFullYear() !== Number(year)) return false;
+    if (from && new Date(e.expenseDate) < new Date(from + 'T00:00:00')) return false;
+    if (to && new Date(e.expenseDate) > new Date(to + 'T23:59:59')) return false;
     if (payoutFilter) {
       const pd = e.payoutDate || e.processedAt;
       if (!pd || new Date(pd).toISOString().slice(0, 10) !== payoutFilter) return false;
@@ -96,12 +108,11 @@ export default function TransactionsPage() {
   const payoutDateOptions = useMemo(() => {
     const set = new Set();
     for (const e of rows) {
-      if (year && new Date(e.expenseDate).getFullYear() !== Number(year)) continue;
       const pd = e.payoutDate || e.processedAt;
       if (pd) set.add(new Date(pd).toISOString().slice(0, 10));
     }
     return [...set].sort().reverse();
-  }, [rows, year]);
+  }, [rows]);
 
   // If the selected payout date is no longer in the list (e.g. year changed), clear it.
   useEffect(() => {
@@ -175,7 +186,6 @@ export default function TransactionsPage() {
     const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
     const token = localStorage.getItem('token');
     const params = new URLSearchParams({ token });
-    if (year) params.set('year', year);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     if (payoutFilter) params.set('payoutDate', payoutFilter);
@@ -186,8 +196,6 @@ export default function TransactionsPage() {
   };
 
   const showChecks = canProcess; // Finance/Admin can select rows
-  const yearOptions = [];
-  for (let y = nowYear + 1; y >= nowYear - 4; y--) yearOptions.push(y);
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -217,6 +225,17 @@ export default function TransactionsPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end mb-4 bg-white rounded-xl border border-gray-100 p-3">
         <p className="w-full text-xs font-semibold text-gray-500 uppercase tracking-wide">Filter</p>
+        <div className="w-full flex flex-wrap gap-2">
+          {[['This week','week'],['This month',1],['Last 3 months',3],['Last 6 months',6],['This year','year'],['All dates','all']].map(([label,m]) => {
+            const active = activeRange === m;
+            return (
+              <button key={label} onClick={() => { if (m !== 'all' && activeRange === m) setQuickRange('all'); else setQuickRange(m); }}
+                className={`px-3 py-1 rounded-full text-xs border transition-colors ${active ? 'bg-brand-400 text-white border-brand-400 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
@@ -233,11 +252,11 @@ export default function TransactionsPage() {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">From</label>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+          <input type="date" value={from} onChange={e => { setFrom(e.target.value); setActiveRange(null); }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">To</label>
-          <input type="date" value={to} onChange={e => setTo(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+          <input type="date" value={to} onChange={e => { setTo(e.target.value); setActiveRange(null); }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Pay out date</label>
@@ -247,7 +266,7 @@ export default function TransactionsPage() {
           </select>
         </div>
         {(status || from || to || payoutFilter) && (
-          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setPayoutFilter(''); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
+          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setPayoutFilter(''); setActiveRange('all'); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
         )}
       </div>
 
@@ -255,12 +274,6 @@ export default function TransactionsPage() {
       {canProcess && (
         <div className="flex flex-wrap gap-3 items-end mb-4 bg-violet-50 rounded-xl border border-violet-200 p-3">
           <p className="w-full text-xs font-semibold text-violet-700 uppercase tracking-wide">Process payout</p>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Year</label>
-            <select value={year} onChange={e => setYear(Number(e.target.value))} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
-              {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Pay out date</label>
             <input type="date" value={payoutDate} onChange={e => setPayoutDate(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white" />
@@ -270,7 +283,7 @@ export default function TransactionsPage() {
             style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
             {processing ? 'Processing…' : `Mark processed${selectedEligible.length ? ` (${selectedEligible.length})` : ''}`}
           </button>
-          <p className="text-xs text-gray-500 self-center">Tick approved expenses, choose the pay period, then mark processed.</p>
+          <p className="text-xs text-gray-500 self-center">Tick approved expenses, choose the pay out date, then mark processed.</p>
         </div>
       )}
 
