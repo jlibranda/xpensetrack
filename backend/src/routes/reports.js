@@ -278,7 +278,6 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
       'Processed': e.processedAt ? 'Yes' : 'No',
       'Processed Date': fmtDate(e.processedAt),
       'Pay Out Date': fmtDate(e.payoutDate),
-      'Pay Period': e.payPeriod || '',
       'Remarks': e.remarks || '',
       'Receipt': e.receiptId ? 'View receipt' : '',
       'Proof of Payment': e.proofOfPaymentId ? 'View proof' : '',
@@ -288,7 +287,7 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
       {wch:12},{wch:16},{wch:26},{wch:16},{wch:14},{wch:30},{wch:25},
-      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:11},{wch:14},{wch:14},{wch:18},{wch:24},{wch:16},{wch:18}
+      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:11},{wch:14},{wch:14},{wch:24},{wch:16},{wch:18}
     ];
     // Bold header row
     const headerRange = XLSX.utils.decode_range(ws['!ref']);

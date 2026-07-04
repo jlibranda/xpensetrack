@@ -40,7 +40,9 @@ export default function ReportsPage() {
   const load = async (f = from, t = to) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ from: f, to: t });
+      const params = new URLSearchParams();
+      if (f) params.append('from', f);
+      if (t) params.append('to', t);
       if (userId) params.append('userId', userId);
       const data = await api.get(`/reports/summary?${params}`);
       setSummary(data);
@@ -54,6 +56,13 @@ export default function ReportsPage() {
   };
 
   const setQuickRange = (mode) => {
+    if (mode === 'all') {
+      // No range = include ALL dates (nothing hidden by a date filter).
+      setFrom('');
+      setTo('');
+      load('', '');
+      return;
+    }
     // Format in LOCAL time so the Sunday/Saturday boundaries aren't shifted a day by UTC.
     const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     let end = new Date();
@@ -81,7 +90,9 @@ export default function ReportsPage() {
   const exportExcel = () => {
     const base = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
     const token = localStorage.getItem('token');
-    const params = new URLSearchParams({ from, to, token });
+    const params = new URLSearchParams({ token });
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
     if (userId) params.append('userId', userId);
     window.open(`${base}/reports/export?${params}`, '_blank');
   };
@@ -96,7 +107,7 @@ export default function ReportsPage() {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
         <div className="flex flex-wrap gap-2 mb-3">
-          {[['This week', 'week'], ['This month', 1], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 'year']].map(([label, m]) => {
+          {[['This week', 'week'], ['This month', 1], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 'year'], ['All dates', 'all']].map(([label, m]) => {
             const active = activeRange === m;
             return (
               <button key={label} onClick={() => { setQuickRange(m); setActiveRange(m); }}

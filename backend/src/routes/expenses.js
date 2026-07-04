@@ -471,7 +471,7 @@ router.post('/:id/unmark-processed', authenticate, async (req, res) => {
 // Bulk mark processed — select approved expenses, stamp a pay period + payout date.
 router.post('/bulk-mark-processed', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
-    const { ids, payPeriod, payoutDate } = req.body || {};
+    const { ids, payoutDate } = req.body || {};
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'No expenses selected' });
     const when = payoutDate ? new Date(payoutDate) : new Date();
     const rows = await prisma.expense.findMany({ where: { id: { in: ids } }, include: { submittedBy: true } });
@@ -480,7 +480,7 @@ router.post('/bulk-mark-processed', authenticate, requireRole('FINANCE', 'ADMIN'
     for (const e of eligible) {
       const updated = await prisma.expense.update({
         where: { id: e.id },
-        data: { status: 'PROCESSED', processedAt: when, payoutDate: when, payPeriod: payPeriod || null },
+        data: { status: 'PROCESSED', processedAt: when, payoutDate: when },
       });
       count++;
       if (e.submittedBy?.email) {
@@ -490,7 +490,7 @@ router.post('/bulk-mark-processed', authenticate, requireRole('FINANCE', 'ADMIN'
         } catch (mailErr) { /* ignore */ }
       }
     }
-    await logAudit(req.user, 'EXPENSE_BULK_PROCESSED', { targetType: 'EXPENSE', details: `Marked ${count} expense(s) processed${payPeriod ? ` for pay period ${payPeriod}` : ''}` });
+    await logAudit(req.user, 'EXPENSE_BULK_PROCESSED', { targetType: 'EXPENSE', details: `Marked ${count} expense(s) processed` });
     res.json({ message: `Marked ${count} expense(s) processed`, count, skipped: ids.length - count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

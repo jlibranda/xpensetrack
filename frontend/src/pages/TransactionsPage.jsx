@@ -55,8 +55,6 @@ export default function TransactionsPage() {
   const [year, setYear] = useState(nowYear);
 
   // payout / processing controls
-  const [payType, setPayType] = useState('SEMI_MONTHLY'); // MONTHLY | SEMI_MONTHLY
-  const [payPeriod, setPayPeriod] = useState('');
   const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
   const [payoutDate, setPayoutDate] = useState(todayStr);
   const [processing, setProcessing] = useState(false);
@@ -65,25 +63,6 @@ export default function TransactionsPage() {
   const [selected, setSelected] = useState([]);
   const [detail, setDetail] = useState(null);
 
-  // Pay period options depend on pay type + year.
-  const payPeriodOptions = useMemo(() => {
-    const opts = [];
-    for (let m = 0; m < 12; m++) {
-      const eom = new Date(year, m + 1, 0).getDate();
-      if (payType === 'MONTHLY') {
-        opts.push(`${MONTHS[m]} ${year} (1–${eom})`);
-      } else {
-        opts.push(`${MONTHS[m]} ${year} (1–15)`);
-        opts.push(`${MONTHS[m]} ${year} (16–${eom})`);
-      }
-    }
-    return opts;
-  }, [payType, year]);
-
-  // Keep a valid pay period selected as options change.
-  useEffect(() => {
-    setPayPeriod(prev => (prev && payPeriodOptions.includes(prev)) ? prev : (payPeriodOptions[0] || ''));
-  }, [payPeriodOptions]);
 
   const load = async () => {
     setLoading(true);
@@ -133,11 +112,11 @@ export default function TransactionsPage() {
 
   const bulkMarkProcessed = async () => {
     if (selectedEligible.length === 0) { setMsg({ text: 'Select approved expenses that are not yet processed.', ok: false }); return; }
-    if (!payPeriod) { setMsg({ text: 'Choose a pay period first.', ok: false }); return; }
+    if (!payoutDate) { setMsg({ text: 'Choose a pay out date first.', ok: false }); return; }
     setProcessing(true); setMsg({ text: '', ok: true });
     try {
-      const r = await api.post('/expenses/bulk-mark-processed', { ids: selectedEligible.map(e => e.id), payPeriod, payoutDate });
-      setMsg({ text: `Marked ${r.count} processed for ${payPeriod}`, ok: true });
+      const r = await api.post('/expenses/bulk-mark-processed', { ids: selectedEligible.map(e => e.id), payoutDate });
+      setMsg({ text: `Marked ${r.count} processed`, ok: true });
       toast.success(`Marked ${r.count} processed`);
       setSelected([]);
       await load();
@@ -283,19 +262,6 @@ export default function TransactionsPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Pay type</label>
-            <select value={payType} onChange={e => setPayType(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
-              <option value="MONTHLY">Monthly</option>
-              <option value="SEMI_MONTHLY">Semi-monthly</option>
-            </select>
-          </div>
-          <div className="min-w-[200px]">
-            <label className="block text-xs text-gray-500 mb-1">Pay period (cut-off)</label>
-            <select value={payPeriod} onChange={e => setPayPeriod(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
-              {payPeriodOptions.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-          <div>
             <label className="block text-xs text-gray-500 mb-1">Pay out date</label>
             <input type="date" value={payoutDate} onChange={e => setPayoutDate(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white" />
           </div>
@@ -329,7 +295,6 @@ export default function TransactionsPage() {
                 <th className="px-4 py-3 text-right">Amount</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Pending With</th>
-                <th className="px-4 py-3">Pay period</th>
                 <th className="px-4 py-3">Pay out date</th>
                 <th className="px-4 py-3">Remarks</th>
                 <th className="px-4 py-3">Action</th>
@@ -356,9 +321,6 @@ export default function TransactionsPage() {
                   </td>
                   <td className="px-4 py-3">
                     {pendingApprovers(e) ? <span className="text-amber-600 text-xs font-medium">{pendingApprovers(e)}</span> : <span className="text-gray-300 text-xs">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    {e.payPeriod ? <span className="text-xs text-gray-700">{e.payPeriod}</span> : <span className="text-xs text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     {(e.payoutDate || e.processedAt)
@@ -427,7 +389,6 @@ export default function TransactionsPage() {
                 {row('Cost center', e.costCenter || e.submittedBy?.costCenter)}
                 {row('Date', fmtDate(e.expenseDate))}
                 {row('Pending with', pendingApprovers(e))}
-                {row('Pay period', e.payPeriod)}
                 {row('Pay out date', e.payoutDate ? fmtDate(e.payoutDate) : '')}
                 {row('Processed on', e.processedAt ? fmtDate(e.processedAt) : '')}
                 {row('Remarks', e.remarks)}
