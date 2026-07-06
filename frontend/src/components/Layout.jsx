@@ -15,7 +15,7 @@ const NAV = [
 const MANAGER_NAV = [
   { to:'/approvals', label:'My Approvals', icon:'✓', perm:'view_approvals' },
   { to:'/reports', label:'Reports', icon:'📊', perm:'view_reports' },
-  { to:'/payables', label:'Payables & Receivables', icon:'🧾', perm:'manage_ap_ar', feature:'apAr' },
+  { to:'/payables', label:'AP and AR Invoices', icon:'🧾', perm:'manage_ap_ar', feature:'apAr' },
   { to:'/analytics', label:'Analytics', icon:'📈', perm:'view_analytics' },
 ];
 const ADMIN_NAV = [

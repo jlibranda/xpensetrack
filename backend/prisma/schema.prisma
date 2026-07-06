@@ -136,6 +136,7 @@ model LedgerDoc {
   vatableAmount Float?
   vatAmount     Float?
   category      String?
+  frequency     String?   // ONE_TIME | WEEKLY | MONTHLY | QUARTERLY | ANNUALLY
   notes         String?
   remarks       String?
   archived      Boolean   @default(false)
@@ -232,6 +233,7 @@ model OrgSettings {
   emailNotificationsEnabled Boolean @default(true)
   timezone             String   @default("Asia/Manila")
   approvalFollowUpDays Int      @default(0)
+  vendors              String   @default("[]")  // JSON: [{name, tin?}]
   updatedAt            DateTime @updatedAt
 }
 

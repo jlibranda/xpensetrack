@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import toast from '../lib/toast';
 
-const TABS = ['General','Branding','Categories','Expense Types','Password','Email Templates','Access Control'];
+const TABS = ['General','Branding','Categories','Expense Types','Vendors/Payees','Password','Email Templates','Access Control'];
 
 
 // Separate component for Access Control tab
@@ -298,6 +298,7 @@ export default function SettingsPage() {
   const canSecurity = can('manage_security', ['ADMIN']);
   const canSettingsManage = can('manage_settings', ['FINANCE', 'ADMIN']);
   const canReceiptStorage = can('manage_receipt_storage', ['ADMIN']);
+  const canApAr = can('manage_ap_ar', ['FINANCE','ADMIN']);
 
   // Exchange rate (USD -> PHP) — separate from the main settings form.
   const [fx, setFx] = useState(null);          // { usdPhpRate, auto, updatedAt }
@@ -361,6 +362,7 @@ export default function SettingsPage() {
         autoReapplyApprovalFlow: s.autoReapplyApprovalFlow ?? settings?.autoReapplyApprovalFlow,
         loginMaxAttempts: s.loginMaxAttempts ?? settings?.loginMaxAttempts,
         loginLockoutMinutes: s.loginLockoutMinutes ?? settings?.loginLockoutMinutes,
+        vendors: Array.isArray(s?.vendors) ? s.vendors : (settings?.vendors || []),
       };
       const updated = await api.patch('/settings', payload);
       applyTheme(updated);
@@ -427,6 +429,7 @@ export default function SettingsPage() {
           if (t === 'Password') return canPassword;
           if (t === 'Access Control') return canAccessControl;
           if (t === 'Email Templates') return canManageSettings;
+          if (t === 'Vendors/Payees') return canApAr || canManageSettings;
           return true; // General, Categories
         }).map(t => (
           <button key={t} onClick={()=>setTab(t)}
@@ -684,6 +687,34 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+
+        {tab === 'Vendors/Payees' && (canApAr || canManageSettings) && (() => {
+          const vlist = Array.isArray(s?.vendors) ? s.vendors : (settings?.vendors || []);
+          const upd = (i, key, val) => set('vendors', vlist.map((v, idx) => idx === i ? { ...v, [key]: val } : v));
+          return (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-medium text-gray-700">Vendors / Payees</h2>
+                <button onClick={() => set('vendors', [...vlist, { name: '', tin: '' }])}
+                  className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">+ Add vendor</button>
+              </div>
+              {vlist.length === 0 && <p className="text-xs text-gray-400 mb-2">No vendors yet. Add vendors here so they appear in the Add Document dropdown.</p>}
+              <div className="space-y-2">
+                {vlist.map((v, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input value={v.name || ''} onChange={e => upd(i, 'name', e.target.value)} placeholder="Vendor / payee name"
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+                    <input value={v.tin || ''} onChange={e => upd(i, 'tin', e.target.value)} placeholder="TIN (optional)"
+                      className="w-40 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
+                    <button onClick={() => set('vendors', vlist.filter((_, idx) => idx !== i))}
+                      className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">These appear in the AP/AR "Add Document" Vendor/Payee dropdown. Users can still pick "Others" to type a name manually. Remember to click Save.</p>
+            </div>
+          );
+        })()}
 
         {tab === 'Password' && canPassword && (
           <div>

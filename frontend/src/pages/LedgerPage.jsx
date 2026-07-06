@@ -21,11 +21,12 @@ const STATUS_BADGE = {
   PAID: 'bg-green-50 text-green-700',
 };
 const statusLabel = (s) => STATUS_LABEL[s] || s || '—';
+const FREQ = [['ONE_TIME','One-time'],['WEEKLY','Weekly'],['MONTHLY','Monthly'],['QUARTERLY','Quarterly'],['ANNUALLY','Annually']];
 
 const emptyDoc = (defaults = {}) => ({
   docType: 'AP_INVOICE', clientId: '', vendorName: '', vendorTin: '', businessStyle: '',
   docNumber: '', poNumber: '', docDate: '', dueDate: '', amount: '', currency: 'PHP',
-  category: '', notes: '', remarks: '', assignedToId: '', status: 'DRAFT', receiptId: '', ...defaults,
+  category: '', notes: '', remarks: '', assignedToId: '', status: 'DRAFT', frequency: 'ONE_TIME', receiptId: '', ...defaults,
 });
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -36,6 +37,8 @@ export default function LedgerPage() {
   const { format } = useCurrency();
   const { settings } = useOrg();
   const categories = settings?.categories || [];
+  const vendors = Array.isArray(settings?.vendors) ? settings.vendors : [];
+  const vendorNames = vendors.map(v => v.name);
 
   const [tab, setTab] = useState('ALL'); // ALL | AP_INVOICE | AP_RECEIPT | AR_INVOICE | ARCHIVED | CLIENTS
   const [docs, setDocs] = useState([]);
@@ -195,7 +198,7 @@ export default function LedgerPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Payables &amp; Receivables</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">AP and AR Invoices</h1>
           <p className="text-sm text-gray-500 mt-0.5">Capture vendor invoices &amp; receipts, assign owners, and track what's paid.</p>
         </div>
         {isDocTab && !isArchived && (
@@ -360,17 +363,30 @@ export default function LedgerPage() {
           )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Type"><select value={editing.docType} onChange={(e) => setEditing({ ...editing, docType: e.target.value })} className="inp">
-              <option value="AP_INVOICE">AP Invoice (payable)</option><option value="AP_RECEIPT">AP Receipt (payable)</option><option value="AR_INVOICE">AR Invoice (receivable)</option>
+              <option value="AP_INVOICE">AP Invoice (payable)</option><option value="AR_INVOICE">AR Invoice (receivable)</option>
             </select></Field>
-            <Field label="Client"><select value={editing.clientId} onChange={(e) => setEditing({ ...editing, clientId: e.target.value })} className="inp">
-              <option value="">— none —</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <Field label="Frequency"><select value={editing.frequency || 'ONE_TIME'} onChange={(e) => setEditing({ ...editing, frequency: e.target.value })} className="inp">
+              {FREQ.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select></Field>
-            <Field label="Vendor / Payee"><input className="inp" value={editing.vendorName} onChange={(e) => setEditing({ ...editing, vendorName: e.target.value })} /></Field>
-            <Field label="Assigned to"><select value={editing.assignedToId} onChange={(e) => setEditing({ ...editing, assignedToId: e.target.value })} className="inp">
-              <option value="">— unassigned —</option>{users.map(u => <option key={u.id} value={u.id}>{fullName(u)}</option>)}
-            </select></Field>
+            <div className="col-span-2"><Field label="Vendor / Payee">
+              <select
+                value={(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) ? '__OTHER__' : (editing.vendorName || '')}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '__OTHER__') setEditing({ ...editing, _vendorOther: true, vendorName: '', vendorTin: '' });
+                  else { const v = vendors.find(x => x.name === val); setEditing({ ...editing, _vendorOther: false, vendorName: val, vendorTin: (v && v.tin) || '' }); }
+                }}
+                className="inp">
+                <option value="">— select vendor / payee —</option>
+                {vendors.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+                <option value="__OTHER__">Others (type manually)</option>
+              </select>
+              {(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) && (
+                <input className="inp mt-2" placeholder="Enter vendor / payee name" value={editing.vendorName}
+                  onChange={(e) => setEditing({ ...editing, _vendorOther: true, vendorName: e.target.value })} />
+              )}
+            </Field></div>
             <Field label="Vendor TIN"><input className="inp" value={editing.vendorTin} onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value })} /></Field>
-            <Field label="Business style"><input className="inp" value={editing.businessStyle} onChange={(e) => setEditing({ ...editing, businessStyle: e.target.value })} /></Field>
             <Field label="Doc / OR number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>
             <Field label="PO number"><input className="inp" value={editing.poNumber} onChange={(e) => setEditing({ ...editing, poNumber: e.target.value })} /></Field>
             <Field label="Category"><select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} className="inp">
@@ -382,9 +398,6 @@ export default function LedgerPage() {
               <input type="number" step="0.01" className="inp" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value })} />
               <select value={editing.currency} onChange={(e) => setEditing({ ...editing, currency: e.target.value })} className="inp w-20"><option>PHP</option><option>USD</option></select>
             </div></Field>
-            <Field label="Status"><select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className="inp">
-              {STAGES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-            </select></Field>
             <div className="col-span-2"><Field label="Remarks"><input className="inp" value={editing.remarks} onChange={(e) => setEditing({ ...editing, remarks: e.target.value })} placeholder="Notes visible in the list" /></Field></div>
           </div>
           <p className="text-xs text-gray-400 mt-2">VAT (12% inclusive) is computed automatically from the amount.</p>

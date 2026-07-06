@@ -38,6 +38,8 @@ function parseSettings(s) {
   try { emailTemplates = JSON.parse(s.emailTemplatesJson || '{}'); } catch(e) {}
   let payoutReversalUserIds = [];
   try { payoutReversalUserIds = JSON.parse(s.payoutReversalUserIds || '[]'); } catch(e) {}
+  let vendors = [];
+  try { vendors = JSON.parse(s.vendors || '[]'); } catch(e) {}
   return {
     ...s,
     categories: s.categories.split(',').map(c => c.trim()).filter(Boolean),
@@ -46,6 +48,7 @@ function parseSettings(s) {
     accessControl,
     emailTemplates,
     payoutReversalUserIds,
+    vendors,
   };
 }
 
@@ -59,7 +62,7 @@ router.patch('/', authenticate, async (req, res) => {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
             wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates,
-            loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds, emailNotificationsEnabled, timezone, approvalFollowUpDays } = req.body;
+            loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds, emailNotificationsEnabled, timezone, approvalFollowUpDays, vendors } = req.body;
     const s = await getOrCreate();
     // Field-level permission: apply each group only if the user is allowed.
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
@@ -69,6 +72,7 @@ router.patch('/', authenticate, async (req, res) => {
     const canPassword = await hasPermission(req.user, 'manage_password', ['ADMIN']);
     const canAccessCtrl = await hasPermission(req.user, 'manage_access_control', ['ADMIN']);
     const canSecurity = await hasPermission(req.user, 'manage_security', ['ADMIN']);
+    const canApAr = await hasPermission(req.user, 'manage_ap_ar', ['FINANCE', 'ADMIN']);
 
     // Access-control write: Admin sets anything; a non-admin manager may edit the
     // matrix EXCEPT the 4 sensitive permissions, which are preserved from current.
@@ -110,6 +114,7 @@ router.patch('/', authenticate, async (req, res) => {
         emailNotificationsEnabled: canManage && typeof emailNotificationsEnabled === 'boolean' ? emailNotificationsEnabled : undefined,
         timezone: canManage && timezone ? timezone : undefined,
         approvalFollowUpDays: canManage && approvalFollowUpDays !== undefined ? Math.max(0, parseInt(approvalFollowUpDays, 10) || 0) : undefined,
+        vendors: (canApAr || canManage) && vendors !== undefined ? JSON.stringify(Array.isArray(vendors) ? vendors.filter(v => v && v.name).map(v => ({ name: String(v.name).trim(), tin: v.tin ? String(v.tin).trim() : undefined })) : []) : undefined,
       },
     });
     res.json(parseSettings(updated));
