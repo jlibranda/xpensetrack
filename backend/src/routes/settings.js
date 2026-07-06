@@ -118,7 +118,7 @@ router.patch('/', authenticate, async (req, res) => {
         emailNotificationsEnabled: canManage && typeof emailNotificationsEnabled === 'boolean' ? emailNotificationsEnabled : undefined,
         timezone: canManage && timezone ? timezone : undefined,
         approvalFollowUpDays: canManage && approvalFollowUpDays !== undefined ? Math.max(0, parseInt(approvalFollowUpDays, 10) || 0) : undefined,
-        vendors: (canApAr || canManage) && vendors !== undefined ? JSON.stringify(Array.isArray(vendors) ? vendors.filter(v => v && v.name).map(v => ({ name: String(v.name).trim(), tin: v.tin ? String(v.tin).trim() : undefined, type: ['COMPANY','GOVERNMENT','LGU'].includes(v.type) ? v.type : 'COMPANY' })) : []) : undefined,
+        vendors: (canApAr || canManage) && vendors !== undefined ? JSON.stringify(Array.isArray(vendors) ? vendors.filter(v => v && v.name).map(v => ({ name: String(v.name).trim(), tin: v.tin ? String(v.tin).trim() : undefined, type: ['COMPANY','GOVERNMENT','LGU'].includes(v.type) ? v.type : 'COMPANY', address: v.address ? String(v.address).trim() : undefined })) : []) : undefined,
       },
     });
     res.json(parseSettings(updated));

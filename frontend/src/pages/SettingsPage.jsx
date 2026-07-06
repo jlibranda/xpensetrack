@@ -710,9 +710,9 @@ export default function SettingsPage() {
               {vlist.length === 0 && <p className="text-xs text-gray-400 mb-2">No vendors yet. Add vendors here so they appear in the Add Document dropdown.</p>}
               <div className="space-y-2">
                 {vlist.map((v, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={i} className="flex flex-wrap items-center gap-2 border border-gray-100 rounded-lg p-2">
                     <input value={v.name || ''} onChange={e => upd(i, 'name', e.target.value)} placeholder="Vendor / payee name"
-                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+                      className="flex-1 min-w-[160px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
                     <select value={v.type || 'COMPANY'} onChange={e => upd(i, 'type', e.target.value)}
                       className="w-40 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-brand-400">
                       <option value="COMPANY">Company/Payee</option>
@@ -723,6 +723,8 @@ export default function SettingsPage() {
                       className="w-36 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
                     <button onClick={() => set('vendors', vlist.filter((_, idx) => idx !== i))}
                       className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                    <input value={v.address || ''} onChange={e => upd(i, 'address', e.target.value)} placeholder="Registered address (for BIR 2307)"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
                   </div>
                 ))}
               </div>
