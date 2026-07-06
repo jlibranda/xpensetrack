@@ -11,7 +11,9 @@ const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production
 export default function AddExpensePage() {
   const navigate = useNavigate();
   const { settings } = useOrg();
-  const categories = settings?.categories || ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COMMUNICATIONS','OTHER'];
+  const _catTypes = settings?.categoryTypes || {};
+  const categories = (settings?.categories || ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COMMUNICATIONS','OTHER'])
+    .filter(c => ['EXPENSE','BOTH'].includes(_catTypes[c] || 'BOTH'));
   const expenseTypes = settings?.expenseTypes || ['REIMBURSEMENT','CASH_ADVANCE'];
   const { id } = useParams();
   const fileRef = useRef();

@@ -342,6 +342,7 @@ export default function SettingsPage() {
   const cats = Array.isArray(s?.categories) ? s.categories : (s?.categories?.split(',').map(c=>c.trim())||[]);
   const types = Array.isArray(s?.expenseTypes) ? s.expenseTypes : (s?.expenseTypes?.split(',').map(t=>t.trim())||[]);
   const glCodes = s?.categoryGlCodes || {};
+  const catTypes = s?.categoryTypes || {};
 
   const save = async () => {
     setSaving(true);
@@ -357,6 +358,7 @@ export default function SettingsPage() {
         categories: cats,
         expenseTypes: types,
         categoryGlCodes: glCodes,
+        categoryTypes: catTypes,
         defaultPassword: s.defaultPassword,
         wallpaperStyle: s.wallpaperStyle ?? settings?.wallpaperStyle,
         autoReapplyApprovalFlow: s.autoReapplyApprovalFlow ?? settings?.autoReapplyApprovalFlow,
@@ -411,9 +413,10 @@ export default function SettingsPage() {
   };
 
   const addCat = () => set('categories', [...cats, '']);
-  const removeCat = (i) => { set('categories', cats.filter((_,idx)=>idx!==i)); const g={...glCodes}; delete g[cats[i]]; set('categoryGlCodes',g); };
-  const updateCat = (i,v) => { const old=cats[i]; const newCats=cats.map((c,idx)=>idx===i?v.toUpperCase():c); const g={...glCodes}; if(g[old]){g[v.toUpperCase()]=g[old];delete g[old];} set('categories',newCats); set('categoryGlCodes',g); };
+  const removeCat = (i) => { const old=cats[i]; set('categories', cats.filter((_,idx)=>idx!==i)); const g={...glCodes}; delete g[old]; set('categoryGlCodes',g); const ty={...catTypes}; delete ty[old]; set('categoryTypes',ty); };
+  const updateCat = (i,v) => { const old=cats[i]; const nv=v.toUpperCase(); const newCats=cats.map((c,idx)=>idx===i?nv:c); const g={...glCodes}; if(g[old]){g[nv]=g[old];delete g[old];} const ty={...catTypes}; if(ty[old]){ty[nv]=ty[old];delete ty[old];} set('categories',newCats); set('categoryGlCodes',g); set('categoryTypes',ty); };
   const updateGl = (cat,v) => set('categoryGlCodes',{...glCodes,[cat]:v});
+  const updateType = (cat,v) => set('categoryTypes',{...catTypes,[cat]:v});
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -659,6 +662,12 @@ export default function SettingsPage() {
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 uppercase disabled:bg-gray-50 disabled:text-gray-500" />
                   <input value={glCodes[cat]||''} onChange={e=>updateGl(cat,e.target.value)} placeholder="GL code" disabled={!canEditCategories}
                     className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono disabled:bg-gray-50 disabled:text-gray-500" />
+                  <select value={catTypes[cat]||'BOTH'} onChange={e=>updateType(cat,e.target.value)} disabled={!canEditCategories}
+                    className="w-44 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-brand-400 disabled:bg-gray-50 disabled:text-gray-500">
+                    <option value="EXPENSE">Expense</option>
+                    <option value="AP_AR">AP/AR Invoice</option>
+                    <option value="BOTH">Both</option>
+                  </select>
                   {canEditCategories && (
                     <button onClick={()=>removeCat(i)} className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
                   )}

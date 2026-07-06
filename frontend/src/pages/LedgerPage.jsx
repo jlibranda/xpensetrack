@@ -36,7 +36,8 @@ const fullName = (u) => u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : 
 export default function LedgerPage() {
   const { format } = useCurrency();
   const { settings } = useOrg();
-  const categories = settings?.categories || [];
+  const _catTypes = settings?.categoryTypes || {};
+  const categories = (settings?.categories || []).filter(c => ['AP_AR','BOTH'].includes(_catTypes[c] || 'BOTH'));
   const vendors = Array.isArray(settings?.vendors) ? settings.vendors : [];
   const vendorNames = vendors.map(v => v.name);
 

@@ -32,6 +32,8 @@ async function getOrCreate() {
 function parseSettings(s) {
   let glCodes = {};
   try { glCodes = JSON.parse(s.categoryGlCodes || '{}'); } catch(e) {}
+  let categoryTypes = {};
+  try { categoryTypes = JSON.parse(s.categoryTypes || '{}'); } catch(e) {}
   let accessControl = {};
   try { accessControl = JSON.parse(s.accessControlJson || '{}'); } catch(e) {}
   let emailTemplates = {};
@@ -45,6 +47,7 @@ function parseSettings(s) {
     categories: s.categories.split(',').map(c => c.trim()).filter(Boolean),
     expenseTypes: s.expenseTypes.split(',').map(t => t.trim()).filter(Boolean),
     categoryGlCodes: glCodes,
+    categoryTypes,
     accessControl,
     emailTemplates,
     payoutReversalUserIds,
@@ -60,7 +63,7 @@ router.get('/', authenticate, async (req, res) => {
 router.patch('/', authenticate, async (req, res) => {
   try {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
-            primaryColor, categories, expenseTypes, categoryGlCodes, defaultPassword, darkMode,
+            primaryColor, categories, expenseTypes, categoryGlCodes, categoryTypes, defaultPassword, darkMode,
             wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates,
             loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds, emailNotificationsEnabled, timezone, approvalFollowUpDays, vendors } = req.body;
     const s = await getOrCreate();
@@ -105,6 +108,7 @@ router.patch('/', authenticate, async (req, res) => {
         categories: canCats ? (Array.isArray(categories) ? categories.join(',') : categories) : undefined,
         expenseTypes: canExpTypes ? (Array.isArray(expenseTypes) ? expenseTypes.join(',') : expenseTypes) : undefined,
         categoryGlCodes: canCats ? (categoryGlCodes ? JSON.stringify(categoryGlCodes) : undefined) : undefined,
+        categoryTypes: canCats && categoryTypes !== undefined ? JSON.stringify(categoryTypes || {}) : undefined,
         defaultPassword: canPassword ? (defaultPassword || undefined) : undefined,
         accessControlJson,
         emailTemplatesJson: canManage && emailTemplates !== undefined ? JSON.stringify(emailTemplates) : undefined,
