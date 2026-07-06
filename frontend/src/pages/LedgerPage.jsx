@@ -135,6 +135,14 @@ export default function LedgerPage() {
     finally { setScanning(false); }
   };
 
+  // Open the Add Document window and scan the picked/dropped file into it.
+  const openDocWithScan = (files) => {
+    const file = Array.from(files || [])[0];
+    const dt = ['AP_INVOICE', 'AR_INVOICE'].includes(tab) ? tab : 'AP_INVOICE';
+    setEditing(emptyDoc({ docType: dt, clientId: clientFilter || defaultClientId() }));
+    if (file) scanInto(file);
+  };
+
   // ---- bulk OCR upload (drop or pick) ----
   const startBulk = async (files) => {
     const list = Array.from(files || []).filter(f => f);
@@ -209,18 +217,18 @@ export default function LedgerPage() {
         )}
       </div>
 
-      {/* Drag & drop upload zone */}
+      {/* Drag & drop upload zone — opens the Add Document window with the file scanned in */}
       {isDocTab && !isArchived && (
         <label
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setDragging(false); startBulk(e.dataTransfer.files); }}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); openDocWithScan(e.dataTransfer.files); }}
           className={`block mb-5 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center px-6 py-8 ${dragging ? 'bg-emerald-50 border-emerald-400 scale-[1.01]' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-          <input type="file" accept="image/*,application/pdf" multiple className="hidden"
-            onChange={(e) => { startBulk(e.target.files); e.target.value = ''; }} />
+          <input type="file" accept="image/*,application/pdf" className="hidden"
+            onChange={(e) => { openDocWithScan(e.target.files); e.target.value = ''; }} />
           <div className="text-3xl mb-1">🧾</div>
-          <p className="text-sm font-medium text-gray-700">Drop invoices &amp; receipts here, or <span style={{ color: BRAND }}>browse</span></p>
-          <p className="text-xs text-gray-400 mt-1">PDF, PNG, JPEG up to ~10 MB · we'll read each one for you</p>
+          <p className="text-sm font-medium text-gray-700">Drop an invoice &amp; receipt here, or <span style={{ color: BRAND }}>browse</span></p>
+          <p className="text-xs text-gray-400 mt-1">PDF, PNG, JPEG up to ~10 MB · opens the Add Document window with details auto-filled</p>
         </label>
       )}
 
@@ -352,7 +360,10 @@ export default function LedgerPage() {
       )}
 
       {/* Add/edit modal */}
-      {editing && (
+      {editing && (() => {
+        const _vSel = vendors.find(v => v.name === editing.vendorName);
+        const isGovt = (editing._vendorType || (_vSel && _vSel.type)) === 'GOVERNMENT';
+        return (
         <Modal title={editing.id ? 'Edit document' : 'Add document'} onClose={() => setEditing(null)}>
           {!editing.id && (
             <label className="block mb-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-center cursor-pointer hover:bg-gray-50 text-gray-600">
@@ -373,8 +384,8 @@ export default function LedgerPage() {
                 value={(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) ? '__OTHER__' : (editing.vendorName || '')}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === '__OTHER__') setEditing({ ...editing, _vendorOther: true, vendorName: '', vendorTin: '' });
-                  else { const v = vendors.find(x => x.name === val); setEditing({ ...editing, _vendorOther: false, vendorName: val, vendorTin: (v && v.tin) || '' }); }
+                  if (val === '__OTHER__') setEditing({ ...editing, _vendorOther: true, vendorName: '', vendorTin: '', _vendorType: 'COMPANY' });
+                  else { const v = vendors.find(x => x.name === val); setEditing({ ...editing, _vendorOther: false, vendorName: val, vendorTin: (v && v.tin) || '', _vendorType: (v && v.type) || 'COMPANY' }); }
                 }}
                 className="inp">
                 <option value="">— select vendor / payee —</option>
@@ -386,9 +397,9 @@ export default function LedgerPage() {
                   onChange={(e) => setEditing({ ...editing, _vendorOther: true, vendorName: e.target.value })} />
               )}
             </Field></div>
-            <Field label="Vendor TIN"><input className="inp" value={editing.vendorTin} onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value })} /></Field>
-            <Field label="Doc / OR number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>
-            <Field label="PO number"><input className="inp" value={editing.poNumber} onChange={(e) => setEditing({ ...editing, poNumber: e.target.value })} /></Field>
+            {!isGovt && <Field label="Vendor TIN"><input className="inp" value={editing.vendorTin} onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value })} /></Field>}
+            {!isGovt && <Field label="Doc / OR number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>}
+            {!isGovt && <Field label="PO number"><input className="inp" value={editing.poNumber} onChange={(e) => setEditing({ ...editing, poNumber: e.target.value })} /></Field>}
             <Field label="Category"><select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} className="inp">
               <option value="">—</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select></Field>
@@ -409,7 +420,8 @@ export default function LedgerPage() {
             <button onClick={saveDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Save</button>
           </div>
         </Modal>
-      )}
+        );
+      })()}
 
       {/* Bulk review modal */}
       {bulk && (

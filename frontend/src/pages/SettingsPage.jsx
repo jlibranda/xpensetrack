@@ -704,14 +704,20 @@ export default function SettingsPage() {
                   <div key={i} className="flex items-center gap-2">
                     <input value={v.name || ''} onChange={e => upd(i, 'name', e.target.value)} placeholder="Vendor / payee name"
                       className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+                    <select value={v.type || 'COMPANY'} onChange={e => upd(i, 'type', e.target.value)}
+                      className="w-40 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-brand-400">
+                      <option value="COMPANY">Company/Payee</option>
+                      <option value="GOVERNMENT">Government</option>
+                      <option value="LGU">LGU</option>
+                    </select>
                     <input value={v.tin || ''} onChange={e => upd(i, 'tin', e.target.value)} placeholder="TIN (optional)"
-                      className="w-40 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
+                      className="w-36 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
                     <button onClick={() => set('vendors', vlist.filter((_, idx) => idx !== i))}
                       className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-2">These appear in the AP/AR "Add Document" Vendor/Payee dropdown. Users can still pick "Others" to type a name manually. Remember to click Save.</p>
+              <p className="text-xs text-gray-400 mt-2">These appear in the AP/AR "Add Document" Vendor/Payee dropdown. Type controls which fields show (Government hides Vendor TIN, Doc/OR no., and PO no.). Users can still pick "Others" to type a name manually. Remember to click Save.</p>
             </div>
           );
         })()}
