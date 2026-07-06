@@ -108,6 +108,18 @@ export default function LedgerPage() {
       setEditing(null); load();
     } catch (err) { alert(err.error || 'Save failed'); }
   };
+  const saveAndSubmitDoc = async () => {
+    const f = editing;
+    try {
+      let id = f.id;
+      if (id) await api.patch(`/ledger/${id}`, f);
+      else { const created = await api.post('/ledger', f); id = created?.id; }
+      if (!id) { setEditing(null); load(); alert('Saved, but could not submit automatically.'); return; }
+      const r = await api.post(`/ledger/${id}/submit`);
+      setEditing(null); load();
+      alert(r?.doc?.status === 'APPROVED' ? 'Saved \u2014 auto-approved (no approver in the creator\u2019s flow).' : 'Saved & submitted for approval.');
+    } catch (err) { alert(err.error || 'Failed'); }
+  };
   const markPaid = async (doc) => {
     try { await api.post(`/ledger/${doc.id}/${doc.status === 'PAID' ? 'mark-unpaid' : 'mark-paid'}`); load(); }
     catch (err) { alert(err.error || 'Failed'); }
@@ -209,7 +221,7 @@ export default function LedgerPage() {
     try { await api.delete(`/clients/${c.id}`); loadClients(); load(); } catch (err) { alert(err.error || 'Failed'); }
   };
 
-  const tabs = [['ALL', 'All'], ['AP_INVOICE', 'AP Invoices'], ['AP_RECEIPT', 'AP Receipts'], ['AR_INVOICE', 'AR Invoices'], ['ARCHIVED', 'Archived'], ['CLIENTS', 'Clients']];
+  const tabs = [['ALL', 'All'], ['AP_INVOICE', 'AP Invoices'], ['AR_INVOICE', 'AR Invoices'], ['ARCHIVED', 'Archived'], ['CLIENTS', 'Clients']];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
@@ -431,7 +443,8 @@ export default function LedgerPage() {
           )}
           <div className="flex justify-end gap-2 mt-4">
             <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-            <button onClick={saveDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Save</button>
+            <button onClick={saveDoc} className="px-4 py-2 text-sm rounded-lg font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">Save</button>
+            <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Save &amp; submit for approval</button>
           </div>
         </Modal>
         );
