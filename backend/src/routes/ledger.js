@@ -279,7 +279,7 @@ router.post('/:id/submit', authenticate, requirePermission(PERM, FALLBACK), asyn
   try {
     const doc = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id } });
     if (!doc) return res.status(404).json({ error: 'Not found' });
-    if (!['DRAFT', 'RETURNED'].includes(doc.status)) return res.status(400).json({ error: 'Already submitted' });
+    if (['PENDING', 'APPROVED', 'PROCESSED', 'PAID'].includes(doc.status)) return res.status(400).json({ error: 'Already submitted or processed' });
 
     // The chain follows the creator's approval flow (fallback to the submitter).
     const creatorId = doc.createdById || req.user.id;

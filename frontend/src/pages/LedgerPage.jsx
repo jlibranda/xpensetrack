@@ -347,6 +347,10 @@ export default function LedgerPage() {
                       <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_BADGE[d.status] || 'bg-gray-100 text-gray-600'}`}>{statusLabel(d.status)}</span></td>
                       <td className="px-3 py-3 text-gray-500 text-xs">{d.lastEditedBy ? fullName(d.lastEditedBy) : '—'}</td>
                       <td className="px-3 py-3 text-right whitespace-nowrap">
+                        {!['PENDING','APPROVED','PROCESSED','PAID'].includes(d.status) && (
+                          <button onClick={() => submitDoc(d)} title="Submit for approval"
+                            className="text-xs font-medium mr-2 px-2 py-1 rounded-md text-white bg-brand-400 hover:bg-brand-600">Submit</button>
+                        )}
                         <button onClick={() => setViewing(d)} title="View" className="text-base mr-1.5 hover:opacity-70">👁</button>
                         <button onClick={() => setEditing({
                           id: d.id, docType: d.docType, clientId: d.clientId || '', vendorName: d.vendorName || '',
@@ -504,7 +508,7 @@ export default function LedgerPage() {
             <a href={`${API_BASE}/ocr/receipt/${viewing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline mt-3 inline-block" style={{ color: BRAND }}>📎 View attached file</a>
           )}
           <div className="flex justify-end gap-2 mt-4">
-            {['DRAFT','RETURNED'].includes(viewing.status) && (
+            {!['PENDING','APPROVED','PROCESSED','PAID'].includes(viewing.status) && (
               <button onClick={() => submitDoc(viewing)} className="px-4 py-2 text-sm text-white rounded-lg font-medium bg-brand-400 hover:bg-brand-600">Submit for approval</button>
             )}
             <button onClick={() => { const d = viewing; setViewing(null); setEditing({
