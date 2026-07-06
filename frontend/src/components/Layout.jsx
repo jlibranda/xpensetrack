@@ -155,7 +155,7 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto" onClick={() => setMobileNavOpen(false)}>
-          {NAV.map(item => (
+          {NAV.filter(item => !(showManagement && item.to === '/expenses')).map(item => (
             <NavLink key={item.to} to={item.to} end={item.exact} className={navLinkClass}
               style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
               <span className="w-4 text-center text-sm">{item.icon}</span>
@@ -171,12 +171,13 @@ export default function Layout() {
             <NavLink to="/payables" className={navLinkClass}
               style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
               <span className="w-4 text-center text-sm">+</span>
-              <span>AP &amp; AR Invoice</span>
+              <span>Add AP &amp; AR Invoice</span>
             </NavLink>
           )}
 
           {showManagement && (
             <>
+              <p className="pt-3 pb-1 px-3 text-xs text-gray-400 uppercase tracking-wider font-medium">Management</p>
               {['FINANCE','ADMIN'].includes(user?.role) && (
                 <NavLink to="/transactions" className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
@@ -184,17 +185,38 @@ export default function Layout() {
                   <span>Transactions</span>
                 </NavLink>
               )}
-              <p className="pt-3 pb-1 px-3 text-xs text-gray-400 uppercase tracking-wider font-medium">Management</p>
-              {MANAGER_NAV.filter(navVisible).map(item => (
-                <NavLink key={item.to} to={item.to} className={navLinkClass}
+              {navVisible({ perm:'view_approvals' }) && (
+                <NavLink to="/approvals" className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
-                  <span className="w-4 text-center text-sm">{item.icon}</span>
-                  <span>{item.label}</span>
-                  {item.to === '/approvals' && pendingCounts.toApprove > 0 && (
+                  <span className="w-4 text-center text-sm">✓</span>
+                  <span>My Approvals</span>
+                  {pendingCounts.toApprove > 0 && (
                     <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium">{pendingCounts.toApprove}</span>
                   )}
                 </NavLink>
-              ))}
+              )}
+              <NavLink to="/expenses" end className={navLinkClass}
+                style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                <span className="w-4 text-center text-sm">🧾</span>
+                <span>My Expenses</span>
+                {(pendingCounts.myPending > 0 || pendingCounts.myReturned > 0) && (
+                  <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">{(pendingCounts.myPending || 0) + (pendingCounts.myReturned || 0)}</span>
+                )}
+              </NavLink>
+              {navVisible({ perm:'view_reports' }) && (
+                <NavLink to="/reports" className={navLinkClass}
+                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  <span className="w-4 text-center text-sm">📊</span>
+                  <span>Reports</span>
+                </NavLink>
+              )}
+              {navVisible({ perm:'view_analytics' }) && (
+                <NavLink to="/analytics" className={navLinkClass}
+                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  <span className="w-4 text-center text-sm">📈</span>
+                  <span>Analytics</span>
+                </NavLink>
+              )}
             </>
           )}
 
@@ -219,7 +241,7 @@ export default function Layout() {
                 <NavLink to="/audit" className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
                   <span className="w-4 text-center text-sm">📋</span>
-                  <span>Audit Log</span>
+                  <span>Audit Logs</span>
                 </NavLink>
               )}
             </>
