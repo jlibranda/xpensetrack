@@ -150,6 +150,7 @@ model LedgerDoc {
   lastEditedBy  User?     @relation("LedgerLastEditedBy", fields: [lastEditedById], references: [id])
   createdById   String?
   createdBy     User?     @relation("LedgerCreatedBy", fields: [createdById], references: [id])
+  approvals     Approval[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -160,8 +161,10 @@ model LedgerDoc {
 
 model Approval {
   id         String         @id @default(cuid())
-  expenseId  String
-  expense    Expense        @relation(fields: [expenseId], references: [id])
+  expenseId  String?
+  expense    Expense?       @relation(fields: [expenseId], references: [id])
+  ledgerDocId String?
+  ledgerDoc  LedgerDoc?     @relation(fields: [ledgerDocId], references: [id])
   approverId String
   approver   User           @relation(fields: [approverId], references: [id])
   status     ApprovalStatus @default(PENDING)
@@ -175,6 +178,7 @@ model Approval {
   updatedAt  DateTime       @updatedAt
 
   @@index([expenseId])
+  @@index([ledgerDocId])
   @@index([approverId, status])
   @@index([status])
 }

@@ -5,12 +5,15 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, requirePermission } = require('../middleware/auth');
 const { getUsdPhpRate } = require('../lib/fxrate');
+const { getFlowSteps, buildRowsFromSteps } = require('../lib/approvalChain');
+const { createNotification } = require('../lib/notifications');
 const prisma = new PrismaClient();
 
 const PERM = 'manage_ap_ar';
 const FALLBACK = ['FINANCE', 'ADMIN'];
 const DOC_TYPES = ['AP_INVOICE', 'AP_RECEIPT', 'AR_INVOICE'];
-const STAGES = ['DRAFT', 'FOR_VERIFICATION', 'FOR_APPROVAL', 'PAID'];
+// Expense-aligned statuses (Phase 2) + legacy stages kept for backward compatibility.
+const STAGES = ['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'RETURNED', 'PROCESSED', 'FOR_VERIFICATION', 'FOR_APPROVAL', 'PAID'];
 const normStatus = (s) => STAGES.includes(String(s || '').toUpperCase()) ? String(s).toUpperCase() : 'DRAFT';
 const VAT_RATE = 0.12;
 
@@ -27,6 +30,7 @@ const include = {
   createdBy: { select: { id: true, firstName: true, lastName: true } },
   assignedTo: { select: { id: true, firstName: true, lastName: true } },
   lastEditedBy: { select: { id: true, firstName: true, lastName: true } },
+  approvals: { include: { approver: { select: { id: true, firstName: true, lastName: true, role: true } } }, orderBy: { stepOrder: 'asc' } },
 };
 
 // Compute VATable / VAT from a VAT-inclusive total when not provided.
@@ -266,6 +270,50 @@ router.delete('/:id', authenticate, requirePermission(PERM, FALLBACK), async (re
   try {
     await prisma.ledgerDoc.delete({ where: { id: req.params.id } });
     res.json({ message: 'Deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Submit an AP/AR document for approval — builds the approval chain from the
+// document CREATOR's approval flow (same engine as expenses).
+router.post('/:id/submit', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+  try {
+    const doc = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    if (!['DRAFT', 'RETURNED'].includes(doc.status)) return res.status(400).json({ error: 'Already submitted' });
+
+    // The chain follows the creator's approval flow (fallback to the submitter).
+    const creatorId = doc.createdById || req.user.id;
+    const creator = await prisma.user.findUnique({ where: { id: creatorId } });
+    const steps = getFlowSteps(creator || req.user);
+
+    // No approvers -> auto-approve.
+    if (steps.length === 0) {
+      await prisma.$transaction([
+        prisma.approval.deleteMany({ where: { ledgerDocId: doc.id } }),
+        prisma.ledgerDoc.update({ where: { id: doc.id }, data: { status: 'APPROVED', lastEditedById: req.user.id } }),
+      ]);
+      return res.json({ message: 'Submitted', doc: await prisma.ledgerDoc.findUnique({ where: { id: doc.id }, include }) });
+    }
+
+    const mode = (creator && creator.approvalMode) || 'SEQUENTIAL';
+    const rows = buildRowsFromSteps(doc.id, steps);
+    await prisma.$transaction([
+      prisma.approval.deleteMany({ where: { ledgerDocId: doc.id } }),
+      prisma.ledgerDoc.update({ where: { id: doc.id }, data: { status: 'PENDING', lastEditedById: req.user.id } }),
+      ...rows.map(r => prisma.approval.create({ data: {
+        ledgerDocId: doc.id, approverId: r.approverId, level: r.stepOrder,
+        stepOrder: r.stepOrder, groupKey: r.groupKey, stepRule: r.stepRule, status: 'PENDING',
+      } })),
+    ]);
+
+    // Notify the currently-actionable approvers (in-app). Email is added in 2b.
+    const notify = mode === 'ANY_ORDER' ? rows : rows.filter(r => r.stepOrder === 1);
+    const label = `${doc.vendorName || 'AP/AR document'}${doc.docNumber ? ` (${doc.docNumber})` : ''}`;
+    for (const approverId of [...new Set(notify.map(r => r.approverId))]) {
+      await createNotification(approverId, 'APPROVAL_REQUEST', 'New AP/AR invoice to approve',
+        `An AP/AR invoice "${label}" needs your approval`, '/approvals').catch(() => {});
+    }
+    res.json({ message: 'Submitted', doc: await prisma.ledgerDoc.findUnique({ where: { id: doc.id }, include }) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

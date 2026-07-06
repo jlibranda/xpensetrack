@@ -13,9 +13,14 @@ const TYPE_BADGE = {
   AR_INVOICE: 'bg-teal-50 text-teal-700',
 };
 const STAGES = ['DRAFT', 'FOR_VERIFICATION', 'FOR_APPROVAL', 'PAID'];
-const STATUS_LABEL = { DRAFT: 'Draft', FOR_VERIFICATION: 'For Verification', FOR_APPROVAL: 'For Approval', PAID: 'Paid' };
+const STATUS_LABEL = { DRAFT: 'Draft', PENDING: 'Pending', APPROVED: 'Approved', REJECTED: 'Rejected', RETURNED: 'Returned', PROCESSED: 'Processed', FOR_VERIFICATION: 'For Verification', FOR_APPROVAL: 'For Approval', PAID: 'Paid' };
 const STATUS_BADGE = {
   DRAFT: 'bg-gray-100 text-gray-600',
+  PENDING: 'bg-amber-50 text-amber-700',
+  APPROVED: 'bg-green-50 text-green-700',
+  REJECTED: 'bg-red-50 text-red-700',
+  RETURNED: 'bg-orange-50 text-orange-700',
+  PROCESSED: 'bg-emerald-50 text-emerald-700',
   FOR_VERIFICATION: 'bg-blue-50 text-blue-700',
   FOR_APPROVAL: 'bg-amber-50 text-amber-700',
   PAID: 'bg-green-50 text-green-700',
@@ -106,6 +111,10 @@ export default function LedgerPage() {
   const markPaid = async (doc) => {
     try { await api.post(`/ledger/${doc.id}/${doc.status === 'PAID' ? 'mark-unpaid' : 'mark-paid'}`); load(); }
     catch (err) { alert(err.error || 'Failed'); }
+  };
+  const submitDoc = async (doc) => {
+    try { const r = await api.post(`/ledger/${doc.id}/submit`); setViewing(null); load(); alert(r?.doc?.status === 'APPROVED' ? 'Submitted — auto-approved (no approver in the creator\u2019s flow).' : 'Submitted for approval.'); }
+    catch (err) { alert(err.error || 'Submit failed'); }
   };
   const archiveDoc = async (doc, archived) => {
     try { await api.patch(`/ledger/${doc.id}`, { archived }); load(); } catch (err) { alert(err.error || 'Failed'); }
@@ -495,6 +504,9 @@ export default function LedgerPage() {
             <a href={`${API_BASE}/ocr/receipt/${viewing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline mt-3 inline-block" style={{ color: BRAND }}>📎 View attached file</a>
           )}
           <div className="flex justify-end gap-2 mt-4">
+            {['DRAFT','RETURNED'].includes(viewing.status) && (
+              <button onClick={() => submitDoc(viewing)} className="px-4 py-2 text-sm text-white rounded-lg font-medium bg-brand-400 hover:bg-brand-600">Submit for approval</button>
+            )}
             <button onClick={() => { const d = viewing; setViewing(null); setEditing({
               id: d.id, docType: d.docType, clientId: d.clientId || '', vendorName: d.vendorName || '', vendorTin: d.vendorTin || '',
               businessStyle: d.businessStyle || '', docNumber: d.docNumber || '', poNumber: d.poNumber || '',
