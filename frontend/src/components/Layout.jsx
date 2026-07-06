@@ -15,7 +15,6 @@ const NAV = [
 const MANAGER_NAV = [
   { to:'/approvals', label:'My Approvals', icon:'✓', perm:'view_approvals' },
   { to:'/reports', label:'Reports', icon:'📊', perm:'view_reports' },
-  { to:'/payables', label:'AP and AR Invoices', icon:'🧾', perm:'manage_ap_ar', feature:'apAr' },
   { to:'/analytics', label:'Analytics', icon:'📈', perm:'view_analytics' },
 ];
 const ADMIN_NAV = [
@@ -166,6 +165,15 @@ export default function Layout() {
               )}
             </NavLink>
           ))}
+
+          {/* AP & AR Invoice — grouped with Add Expense, gated like before */}
+          {navVisible({ perm:'manage_ap_ar', feature:'apAr' }) && (
+            <NavLink to="/payables" className={navLinkClass}
+              style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+              <span className="w-4 text-center text-sm">+</span>
+              <span>AP &amp; AR Invoice</span>
+            </NavLink>
+          )}
 
           {showManagement && (
             <>

@@ -207,7 +207,7 @@ export default function LedgerPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">AP and AR Invoices</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">AP &amp; AR Invoice</h1>
           <p className="text-sm text-gray-500 mt-0.5">Capture vendor invoices &amp; receipts, assign owners, and track what's paid.</p>
         </div>
         {isDocTab && !isArchived && (
