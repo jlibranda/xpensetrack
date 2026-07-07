@@ -444,7 +444,7 @@ export default function LedgerPage() {
           <div className="flex justify-end gap-2 mt-4">
             <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
             <button onClick={saveDoc} className="px-4 py-2 text-sm rounded-lg font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">Save</button>
-            <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Save &amp; submit for approval</button>
+            <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Submit for approval</button>
           </div>
         </Modal>
         );

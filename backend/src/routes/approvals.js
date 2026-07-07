@@ -237,6 +237,176 @@ router.post('/:id/return', authenticate, requirePermission('view_approvals', ['M
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ==================== AP/AR (LedgerDoc) APPROVALS ====================
+// Parallel engine for AP/AR invoices. Reuses the SAME pure step helpers
+// (summarizeSteps / groupId / isActionable) as expenses but operates on
+// ledgerDocId and updates LedgerDoc.status. The expense endpoints above are
+// left untouched.
+
+const ledgerInclude = {
+  createdBy: { select: { id: true, firstName: true, lastName: true, email: true } },
+  receipt: { select: { id: true, mimeType: true } },
+  approvals: { include: { approver: { select: { firstName: true, lastName: true, role: true } } }, orderBy: { stepOrder: 'asc' } },
+};
+
+function loadLedgerApprovals(ledgerDocId) {
+  return prisma.approval.findMany({ where: { ledgerDocId }, orderBy: { stepOrder: 'asc' } });
+}
+
+async function chainModeForLedger(doc) {
+  if (!doc.createdById) return 'SEQUENTIAL';
+  const creator = await prisma.user.findUnique({ where: { id: doc.createdById } });
+  return creator?.approvalMode || 'SEQUENTIAL';
+}
+
+// Shape a LedgerDoc like an expense so the existing email templates work.
+function ledgerAsExpense(doc, creator) {
+  return {
+    id: doc.id,
+    title: `${doc.vendorName || 'AP/AR document'}${doc.docNumber ? ` \u2014 ${doc.docNumber}` : ''}`,
+    amount: doc.amount != null ? doc.amount : (doc.amountPhp || 0),
+    currency: doc.currency || 'PHP',
+    expenseDate: doc.docDate || doc.createdAt || new Date(),
+    category: doc.category || '',
+    description: doc.notes || '',
+    remarks: doc.remarks || '',
+    submittedBy: creator || null,
+    submittedById: doc.createdById || null,
+  };
+}
+const nm = (u) => `${u?.firstName || ''} ${u?.lastName || ''}`.trim();
+
+router.get('/ledger/pending', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const baseWhere = req.user.role === 'ADMIN'
+      ? { status: 'PENDING', ledgerDocId: { not: null } }
+      : { approverId: req.user.id, status: 'PENDING', ledgerDocId: { not: null } };
+    const approvals = await prisma.approval.findMany({
+      where: baseWhere,
+      include: { ledgerDoc: { include: ledgerInclude } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const visible = [];
+    const seen = new Set();
+    for (const ap of approvals) {
+      if (!ap.ledgerDoc || seen.has(ap.ledgerDocId)) continue;
+      const all = await loadLedgerApprovals(ap.ledgerDocId);
+      const steps = summarizeSteps(all);
+      const thisStep = steps.find(s => s.stepOrder === ap.stepOrder);
+      if (thisStep && (thisStep.satisfied || thisStep.blocked)) continue;
+      if (req.user.role === 'ADMIN') { visible.push(ap); seen.add(ap.ledgerDocId); continue; }
+      const mode = await chainModeForLedger(ap.ledgerDoc);
+      if (isActionable(ap, all, mode)) { visible.push(ap); seen.add(ap.ledgerDocId); }
+    }
+    res.json(visible);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/ledger/history', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const where = req.user.role === 'ADMIN'
+      ? { status: { not: 'PENDING' }, ledgerDocId: { not: null } }
+      : { approverId: req.user.id, status: { not: 'PENDING' }, ledgerDocId: { not: null } };
+    const approvals = await prisma.approval.findMany({
+      where, include: { ledgerDoc: { include: ledgerInclude } }, orderBy: { updatedAt: 'desc' }, take: 100,
+    });
+    res.json(approvals.filter(a => a.ledgerDoc));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/ledger/:id/approve', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const approval = await prisma.approval.findUnique({ where: { id: req.params.id }, include: { ledgerDoc: true } });
+    if (!approval || !approval.ledgerDocId) return res.status(404).json({ error: 'Not found' });
+    if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
+    if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
+
+    const all = await loadLedgerApprovals(approval.ledgerDocId);
+    const creator = approval.ledgerDoc.createdById ? await prisma.user.findUnique({ where: { id: approval.ledgerDoc.createdById } }) : null;
+    const mode = creator?.approvalMode || 'SEQUENTIAL';
+    if (req.user.role !== 'ADMIN' && !isActionable(approval, all, mode)) return res.status(400).json({ error: 'An earlier approval step is still pending.' });
+
+    const g = groupId(approval);
+    const isAnyStep = (approval.stepRule || 'ANY') !== 'ALL';
+    const siblingIds = isAnyStep ? all.filter(a => groupId(a) === g && a.id !== approval.id && a.status === 'PENDING').map(a => a.id) : [];
+    await prisma.$transaction([
+      prisma.approval.update({ where: { id: approval.id }, data: { status: 'APPROVED', notes } }),
+      ...(siblingIds.length ? [prisma.approval.updateMany({ where: { id: { in: siblingIds } }, data: { status: 'APPROVED', notes: '[auto] satisfied by another approver in this step' } })] : []),
+    ]);
+
+    const steps = summarizeSteps(await loadLedgerApprovals(approval.ledgerDocId));
+    const allSatisfied = steps.length > 0 && steps.every(s => s.satisfied);
+    const pseudo = ledgerAsExpense(approval.ledgerDoc, creator);
+
+    if (allSatisfied) {
+      await prisma.ledgerDoc.update({ where: { id: approval.ledgerDocId }, data: { status: 'APPROVED' } });
+      if (creator?.email) await sendStatusUpdateEmail(creator.email, nm(creator), pseudo, 'APPROVED', creator).catch(() => {});
+      if (creator) await createNotification(creator.id, 'EXPENSE_APPROVED', 'AP/AR invoice approved', `"${pseudo.title}" has been fully approved`, '/payables').catch(() => {});
+      await logAudit(req.user, 'LEDGER_APPROVED', { targetType: 'LEDGER_DOC', targetId: approval.ledgerDocId, details: `Fully approved "${pseudo.title}"` });
+      return res.json({ message: 'Approved', finalStatus: 'APPROVED' });
+    }
+
+    await prisma.ledgerDoc.update({ where: { id: approval.ledgerDocId }, data: { status: 'PENDING' } });
+    if (mode === 'SEQUENTIAL') {
+      const nextStep = steps.find(s => !s.satisfied && !s.blocked);
+      if (nextStep && nextStep.stepOrder > approval.stepOrder) {
+        const { sendApprovalRequestEmail } = require('../lib/email');
+        for (const r of nextStep.rows.filter(x => x.status === 'PENDING')) {
+          await createNotification(r.approverId, 'APPROVAL_REQUEST', 'AP/AR invoice needs your approval', `"${pseudo.title}" has reached your approval step`, '/approvals').catch(() => {});
+          const apu = await prisma.user.findUnique({ where: { id: r.approverId } });
+          if (apu?.email) await sendApprovalRequestEmail(apu.email, nm(apu), pseudo, creator).catch(() => {});
+        }
+      }
+    }
+    if (creator) await createNotification(creator.id, 'EXPENSE_PROGRESS', 'Approval progress', `"${pseudo.title}" was approved at one step and awaits the remaining approver(s)`, '/payables').catch(() => {});
+    res.json({ message: 'Approved', finalStatus: 'PENDING' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/ledger/:id/reject', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const { notes } = req.body;
+    if (!notes || !notes.trim()) return res.status(400).json({ error: 'A reason is required when rejecting' });
+    const approval = await prisma.approval.findUnique({ where: { id: req.params.id }, include: { ledgerDoc: true } });
+    if (!approval || !approval.ledgerDocId) return res.status(404).json({ error: 'Not found' });
+    if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
+    if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
+    const creator = approval.ledgerDoc.createdById ? await prisma.user.findUnique({ where: { id: approval.ledgerDoc.createdById } }) : null;
+    await prisma.$transaction([
+      prisma.approval.update({ where: { id: approval.id }, data: { status: 'REJECTED', notes } }),
+      prisma.approval.updateMany({ where: { ledgerDocId: approval.ledgerDocId, status: 'PENDING', id: { not: approval.id } }, data: { status: 'REJECTED', notes: '[auto] invoice rejected' } }),
+      prisma.ledgerDoc.update({ where: { id: approval.ledgerDocId }, data: { status: 'REJECTED' } }),
+    ]);
+    const pseudo = ledgerAsExpense(approval.ledgerDoc, creator);
+    if (creator?.email) await sendStatusUpdateEmail(creator.email, nm(creator), pseudo, 'REJECTED', creator).catch(() => {});
+    if (creator) await createNotification(creator.id, 'EXPENSE_REJECTED', 'AP/AR invoice rejected', `"${pseudo.title}" was rejected${notes ? `: ${notes}` : ''}. This decision is final.`, '/payables').catch(() => {});
+    await logAudit(req.user, 'LEDGER_REJECTED', { targetType: 'LEDGER_DOC', targetId: approval.ledgerDocId, details: `Rejected "${pseudo.title}"${notes ? `: ${notes}` : ''}` });
+    res.json({ message: 'Rejected' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/ledger/:id/return', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const { notes } = req.body;
+    if (!notes || !notes.trim()) return res.status(400).json({ error: 'Comment required when returning' });
+    const approval = await prisma.approval.findUnique({ where: { id: req.params.id }, include: { ledgerDoc: true } });
+    if (!approval || !approval.ledgerDocId) return res.status(404).json({ error: 'Not found' });
+    if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
+    const creator = approval.ledgerDoc.createdById ? await prisma.user.findUnique({ where: { id: approval.ledgerDoc.createdById } }) : null;
+    await prisma.$transaction([
+      prisma.approval.update({ where: { id: approval.id }, data: { status: 'REJECTED', notes: `[RETURNED] ${notes}` } }),
+      prisma.approval.updateMany({ where: { ledgerDocId: approval.ledgerDocId, status: 'PENDING', id: { not: approval.id } }, data: { status: 'REJECTED', notes: '[auto] invoice returned to creator' } }),
+      prisma.ledgerDoc.update({ where: { id: approval.ledgerDocId }, data: { status: 'RETURNED' } }),
+    ]);
+    const pseudo = ledgerAsExpense(approval.ledgerDoc, creator);
+    if (creator?.email) await sendStatusUpdateEmail(creator.email, nm(creator), pseudo, 'RETURNED', creator).catch(() => {});
+    if (creator) await createNotification(creator.id, 'EXPENSE_RETURNED', 'AP/AR invoice returned for revision', `"${pseudo.title}" was returned: ${notes}`, '/payables').catch(() => {});
+    await logAudit(req.user, 'LEDGER_RETURNED', { targetType: 'LEDGER_DOC', targetId: approval.ledgerDocId, details: `Returned "${pseudo.title}": ${notes}` });
+    res.json({ message: 'Returned' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/:id/reimburse', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
     const expense = await prisma.expense.findUnique({ where: { id: req.params.id }, include: { submittedBy: true } });

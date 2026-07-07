@@ -21,6 +21,7 @@ export default function ApprovalsPage() {
   const [historyDetail, setHistoryDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
+  const [source, setSource] = useState('expense'); // 'expense' | 'ledger' (AP/AR)
   const [notes, setNotes] = useState({});
   const [selected, setSelected] = useState(null);
   const [actioning, setActioning] = useState(null);
@@ -30,19 +31,47 @@ export default function ApprovalsPage() {
   // Build a full name from a user object (backend returns firstName/lastName).
   const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
 
+  // Normalize an AP/AR approval row into the same shape the expense UI expects,
+  // so the existing list + detail modal render without a parallel layout.
+  const normLedger = (a) => ({
+    ...a,
+    expense: {
+      _isLedger: true,
+      title: `${a.ledgerDoc?.vendorName || 'AP/AR document'}${a.ledgerDoc?.docNumber ? ` \u2014 ${a.ledgerDoc.docNumber}` : ''}`,
+      amount: a.ledgerDoc?.amount,
+      amountPhp: a.ledgerDoc?.amountPhp,
+      currency: a.ledgerDoc?.currency || 'PHP',
+      category: a.ledgerDoc?.category || '',
+      expenseDate: a.ledgerDoc?.docDate,
+      description: a.ledgerDoc?.notes || '',
+      submittedBy: a.ledgerDoc?.createdBy || null,
+      approvals: a.ledgerDoc?.approvals || [],
+      receipt: a.ledgerDoc?.receipt || null,
+    },
+  });
+
   const load = async () => {
     setLoading(true);
     try {
-      const [p, h] = await Promise.all([
-        api.get('/approvals/pending'),
-        api.get('/approvals/history'),
-      ]);
-      setApprovals(Array.isArray(p) ? p : []);
-      setHistory(Array.isArray(h) ? h : []);
+      if (source === 'ledger') {
+        const [p, h] = await Promise.all([
+          api.get('/approvals/ledger/pending'),
+          api.get('/approvals/ledger/history'),
+        ]);
+        setApprovals((Array.isArray(p) ? p : []).map(normLedger));
+        setHistory((Array.isArray(h) ? h : []).map(normLedger));
+      } else {
+        const [p, h] = await Promise.all([
+          api.get('/approvals/pending'),
+          api.get('/approvals/history'),
+        ]);
+        setApprovals(Array.isArray(p) ? p : []);
+        setHistory(Array.isArray(h) ? h : []);
+      }
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { setSelected(null); load(); /* eslint-disable-next-line */ }, [source]);
 
   const action = async (id, type) => {
     if (type === 'return' && !notes[id]?.trim()) {
@@ -53,12 +82,13 @@ export default function ApprovalsPage() {
     }
     setActioning(id + type);
     try {
-      await api.post(`/approvals/${id}/${type}`, { notes: notes[id] || '' });
+      const base = source === 'ledger' ? '/approvals/ledger' : '/approvals';
+      await api.post(`${base}/${id}/${type}`, { notes: notes[id] || '' });
       setNotes(n => { const c = {...n}; delete c[id]; return c; });
       setSelected(null);
       await load();
       refreshNotif();
-      toast.success(type === 'approve' ? 'Expense approved' : type === 'reject' ? 'Expense rejected' : 'Returned to submitter');
+      toast.success(type === 'approve' ? 'Approved' : type === 'reject' ? 'Rejected' : 'Returned to submitter');
     } catch(err) {
       alert(err.error || 'Action failed. Please try again.');
     } finally { setActioning(null); }
@@ -81,6 +111,18 @@ export default function ApprovalsPage() {
           <span className="inline-flex items-center justify-center min-w-6 h-6 px-2 rounded-full bg-red-500 text-white text-sm font-bold mr-1">{approvals.length}</span>
           pending · {history.length} actioned
         </p>
+      </div>
+
+      {/* Source toggle: Expenses vs AP & AR invoices */}
+      <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+        <button onClick={() => setSource('expense')}
+          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'expense' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          Expenses
+        </button>
+        <button onClick={() => setSource('ledger')}
+          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'ledger' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          AP &amp; AR
+        </button>
       </div>
 
       {/* Tabs */}
@@ -199,7 +241,7 @@ export default function ApprovalsPage() {
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setSelected(null)}>
                   <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5" onClick={ev => ev.stopPropagation()}>
                     <div className="flex justify-between items-center mb-3">
-                      <p className="text-sm font-medium text-gray-900">Expense details</p>
+                      <p className="text-sm font-medium text-gray-900">{source === 'ledger' ? 'AP/AR invoice details' : 'Expense details'}</p>
                       <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
                     </div>
                     {hasReceipt(e) ? (
