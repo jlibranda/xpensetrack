@@ -59,15 +59,15 @@ export default function ApprovalsPage() {
           api.get('/approvals/ledger/pending'),
           api.get('/approvals/ledger/history'),
         ]);
-        setApprovals((Array.isArray(p) ? p : []).map(normLedger));
-        setHistory((Array.isArray(h) ? h : []).map(normLedger));
+        setApprovals((Array.isArray(p) ? p : []).filter(a => a.ledgerDoc).map(normLedger));
+        setHistory((Array.isArray(h) ? h : []).filter(a => a.ledgerDoc).map(normLedger));
       } else {
         const [p, h] = await Promise.all([
           api.get('/approvals/pending'),
           api.get('/approvals/history'),
         ]);
-        setApprovals(Array.isArray(p) ? p : []);
-        setHistory(Array.isArray(h) ? h : []);
+        setApprovals((Array.isArray(p) ? p : []).filter(a => a.expense));
+        setHistory((Array.isArray(h) ? h : []).filter(a => a.expense));
       }
     } finally { setLoading(false); }
   };

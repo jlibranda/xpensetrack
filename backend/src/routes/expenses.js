@@ -89,7 +89,7 @@ router.get('/pending-count', authenticate, async (req, res) => {
       if (req.user.role === 'ADMIN') {
         // Admin can act on any pending approval; count distinct expenses with a pending row.
         const rows = await prisma.approval.findMany({
-          where: { status: 'PENDING' },
+          where: { status: 'PENDING', expenseId: { not: null } },
           select: { expenseId: true },
           distinct: ['expenseId'],
         });
@@ -100,7 +100,7 @@ router.get('/pending-count', authenticate, async (req, res) => {
         // (sequential) or always (any-order), and its step isn't already satisfied
         // by an OR-group sibling.
         const myRows = await prisma.approval.findMany({
-          where: { approverId: req.user.id, status: 'PENDING' },
+          where: { approverId: req.user.id, status: 'PENDING', expenseId: { not: null } },
           select: { id: true, expenseId: true, stepOrder: true, groupKey: true },
         });
         const expenseIds = [...new Set(myRows.map(r => r.expenseId))];

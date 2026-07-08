@@ -68,8 +68,8 @@ async function chainModeForExpense(expense) {
 router.get('/pending', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
     const baseWhere = req.user.role === 'ADMIN'
-      ? { status: 'PENDING' }
-      : { approverId: req.user.id, status: 'PENDING' };
+      ? { status: 'PENDING', expenseId: { not: null } }
+      : { approverId: req.user.id, status: 'PENDING', expenseId: { not: null } };
 
     const approvals = await prisma.approval.findMany({
       where: baseWhere,
@@ -96,8 +96,8 @@ router.get('/pending', authenticate, requirePermission('view_approvals', ['MANAG
 router.get('/history', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
     const where = req.user.role === 'ADMIN'
-      ? { status: { not: 'PENDING' } }
-      : { approverId: req.user.id, status: { not: 'PENDING' } };
+      ? { status: { not: 'PENDING' }, expenseId: { not: null } }
+      : { approverId: req.user.id, status: { not: 'PENDING' }, expenseId: { not: null } };
     const approvals = await prisma.approval.findMany({
       where,
       include: { expense: { include: { submittedBy: { select: { id: true, firstName: true, lastName: true } }, receipt: { select: { id: true, mimeType: true } } } } },
