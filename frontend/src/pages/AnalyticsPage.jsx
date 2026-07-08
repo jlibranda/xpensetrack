@@ -11,11 +11,12 @@ export default function AnalyticsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('month');
+  const [source, setSource] = useState('expense'); // 'expense' | 'ledger'
   const { format } = useCurrency();
   const { settings } = useOrg();
   const brandColor = settings?.primaryColor || '#1D9E75';
 
-  useEffect(() => { load(); }, [range]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [range, source]);
 
   const load = async () => {
     setLoading(true);
@@ -25,13 +26,21 @@ export default function AnalyticsPage() {
       if (range === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1);
       else if (range === 'quarter') from = new Date(now.getFullYear(), Math.floor(now.getMonth()/3)*3, 1);
       else from = new Date(now.getFullYear(), 0, 1);
+      const fromS = from.toISOString().split('T')[0];
+      const toS = now.toISOString().split('T')[0];
 
-      const [summary, expenses] = await Promise.all([
-        api.get(`/reports/summary?from=${from.toISOString().split('T')[0]}&to=${now.toISOString().split('T')[0]}`),
-        api.get(`/expenses?limit=1000`),
-      ]);
-      setData({ summary, expenses: expenses.expenses || [] });
-    } finally { setLoading(false); }
+      if (source === 'ledger') {
+        const rows = await api.get(`/ledger?from=${fromS}&to=${toS}`);
+        setData({ ledger: Array.isArray(rows) ? rows : [] });
+      } else {
+        const [summary, expenses] = await Promise.all([
+          api.get(`/reports/summary?from=${fromS}&to=${toS}`),
+          api.get(`/expenses?limit=1000`),
+        ]);
+        setData({ summary, expenses: expenses.expenses || [] });
+      }
+    } catch { setData(source === 'ledger' ? { ledger: [] } : { summary: {}, expenses: [] }); }
+    finally { setLoading(false); }
   };
 
   if (loading) return <div className="py-16 text-center text-sm text-gray-400">Loading analytics...</div>;
@@ -90,6 +99,116 @@ export default function AnalyticsPage() {
   const totalApproved = summary?.totalPhp || 0;
   const avgExpense = summary?.count > 0 ? totalApproved / summary.count : 0;
 
+  // ---------- AP/AR analytics (computed from the ledger rows) ----------
+  const ledgerRows = data?.ledger || [];
+  const lActive = ledgerRows.filter(d => ['APPROVED', 'PROCESSED'].includes(d.status));
+  const apRows = ledgerRows.filter(d => d.docType !== 'AR_INVOICE');
+  const arRows = ledgerRows.filter(d => d.docType === 'AR_INVOICE');
+  const apTotal = apRows.filter(d => ['APPROVED', 'PROCESSED'].includes(d.status)).reduce((s, d) => s + (d.amountPhp || 0), 0);
+  const arTotal = arRows.filter(d => ['APPROVED', 'PROCESSED'].includes(d.status)).reduce((s, d) => s + (d.amountPhp || 0), 0);
+  const lActiveTotal = lActive.reduce((s, d) => s + (d.amountPhp || 0), 0);
+  const lPending = ledgerRows.filter(d => d.status === 'PENDING').length;
+
+  const lNow = new Date();
+  const lMonths = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(lNow.getFullYear(), lNow.getMonth() - i, 1);
+    lMonths.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('en-PH', { month: 'short', year: '2-digit' }), value: 0 });
+  }
+  const lIdx = Object.fromEntries(lMonths.map((m, i) => [m.key, i]));
+  lActive.forEach(d => { const dt = new Date(d.docDate); const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`; if (key in lIdx) lMonths[lIdx[key]].value += (d.amountPhp || 0); });
+  const ledgerMonthly = lMonths.map(m => ({ month: m.label, value: Math.round(m.value) }));
+  const hasLedgerMonthly = ledgerMonthly.some(m => m.value > 0);
+
+  const lCatMap = {};
+  lActive.forEach(d => { const c = titleCase(d.category || 'Uncategorized'); lCatMap[c] = (lCatMap[c] || 0) + (d.amountPhp || 0); });
+  const ledgerCategory = Object.entries(lCatMap).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a, b) => b.value - a.value);
+
+  const lVenMap = {};
+  lActive.forEach(d => { const v = d.vendorName || '—'; lVenMap[v] = (lVenMap[v] || 0) + (d.amountPhp || 0); });
+  const ledgerVendors = Object.entries(lVenMap).map(([name, value]) => ({ name: name.length > 14 ? name.slice(0, 13) + '…' : name, value: Math.round(value) })).sort((a, b) => b.value - a.value).slice(0, 8);
+
+  const apArSplit = [{ name: 'AP (payables)', value: Math.round(apTotal) }, { name: 'AR (receivables)', value: Math.round(arTotal) }].filter(x => x.value > 0);
+
+  const ledgerBody = (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: 'Approved / processed', value: format(lActiveTotal), sub: `${ledgerRows.length} invoice(s)` },
+          { label: 'Pending', value: lPending, sub: 'awaiting approval' },
+          { label: 'Payables (AP)', value: format(apTotal), sub: `${apRows.length} invoice(s)` },
+          { label: 'Receivables (AR)', value: format(arTotal), sub: `${arRows.length} invoice(s)` },
+        ].map((k, i) => (
+          <div key={i} className="bg-white rounded-xl border border-gray-100 p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{k.label}</p>
+            <p className="text-2xl font-medium text-gray-900">{k.value}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <h2 className="text-sm font-medium text-gray-700 mb-3">Monthly AP/AR trend</h2>
+          {hasLedgerMonthly ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={ledgerMonthly}>
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={v => format(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                <Line type="monotone" dataKey="value" stroke={brandColor} strokeWidth={2} dot={{ fill: brandColor }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <h2 className="text-sm font-medium text-gray-700 mb-3">AP vs AR</h2>
+          {apArSplit.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={apArSplit} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+                  {apArSplit.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={v => format(v)} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <h2 className="text-sm font-medium text-gray-700 mb-3">Top vendors / payees</h2>
+          {ledgerVendors.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={ledgerVendors} layout="vertical" margin={{ left: 20 }}>
+                <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
+                <Tooltip formatter={v => format(v)} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Bar dataKey="value" fill={brandColor} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <h2 className="text-sm font-medium text-gray-700 mb-3">By category</h2>
+          {ledgerCategory.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={ledgerCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+                  {ledgerCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={v => format(v)} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -107,6 +226,17 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Source toggle: Expenses vs AP & AR */}
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+        {[['expense', 'Expenses'], ['ledger', 'AP & AR']].map(([val, label]) => (
+          <button key={val} onClick={() => setSource(val)}
+            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === val ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {source === 'ledger' ? ledgerBody : (<>
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
@@ -191,6 +321,7 @@ export default function AnalyticsPage() {
           ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
         </div>
       </div>
+      </>)}
     </div>
   );
 }

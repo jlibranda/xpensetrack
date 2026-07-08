@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import ReceiptImage from '../components/ReceiptImage';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
 
@@ -477,8 +478,8 @@ export default function LedgerPage({ mode = 'manage' }) {
 
               {viewing.receiptId && (
                 <div className="mb-3">
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">Attached file</p>
-                  <a href={`${API_BASE}/ocr/receipt/${viewing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline inline-block" style={{ color: BRAND }}>📎 View attached file</a>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">Uploaded invoice</p>
+                  <ReceiptImage receiptId={viewing.receiptId} className="w-full max-h-56 object-contain" />
                 </div>
               )}
 
