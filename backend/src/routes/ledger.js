@@ -551,8 +551,15 @@ router.post('/bulk', authenticate, requirePermission(PERM, FALLBACK), async (req
 
 router.patch('/:id', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
-    const existing = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id }, include: { approvals: true } });
     if (!existing) return res.status(404).json({ error: 'Not found' });
+    // Lock content edits once approved by ANY approver (or fully approved / processed /
+    // paid). After that only FINANCE and ADMIN may edit — mirrors the expense rule.
+    const isAdminFinance = ['ADMIN', 'FINANCE'].includes(req.user.role);
+    const approvedByAny = ['APPROVED', 'PROCESSED', 'PAID'].includes(existing.status) || (existing.approvals || []).some(a => a.status === 'APPROVED');
+    if (approvedByAny && !isAdminFinance) {
+      return res.status(403).json({ error: 'This AP/AR record is locked after approval — only Finance or Admin can edit it.' });
+    }
     const b = req.body;
     const amount = b.amount !== undefined ? Number(b.amount) : existing.amount;
     const currency = b.currency || existing.currency;

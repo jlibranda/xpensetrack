@@ -57,6 +57,11 @@ export default function LedgerPage({ mode = 'manage' }) {
   // Full manage rights (create/edit/delete/submit). Approvers with only
   // view_approvals get read-only access so they can still see invoices they handled.
   const canManageApAr = user?.role === 'ADMIN' || (settings?.accessControl?.manage_ap_ar || ['FINANCE', 'ADMIN']).includes(user?.role);
+  const isAdminFinance = user?.role === 'ADMIN' || user?.role === 'FINANCE';
+  // A record is locked once any approver has approved it (or it is fully approved /
+  // processed / paid). After that only Finance/Admin may edit — matches the backend.
+  const docApproved = (d) => !!d && (['APPROVED', 'PROCESSED', 'PAID'].includes(d.status) || (d.approvals || []).some(a => a.status === 'APPROVED'));
+  const canEditDoc = (d) => canManageApAr && (isAdminFinance || !docApproved(d));
   const _catTypes = settings?.categoryTypes || {};
   const categories = (settings?.categories || []).filter(c => ['AP_AR','BOTH'].includes(_catTypes[c] || 'BOTH'));
   const vendors = Array.isArray(settings?.vendors) ? settings.vendors : [];
@@ -530,7 +535,9 @@ export default function LedgerPage({ mode = 'manage' }) {
                   {!['PENDING', 'APPROVED', 'PROCESSED', 'PAID'].includes(viewing.status) && (
                     <button onClick={() => submitDoc(viewing)} className="w-full py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: BRAND }}>📤 Submit for approval</button>
                   )}
-                  <button onClick={() => { const d = viewing; setViewing(null); openEdit(d); }} className="w-full py-2 border border-gray-200 text-gray-700 rounded-lg text-xs hover:bg-gray-50">✏️ Edit</button>
+                  {canEditDoc(viewing)
+                    ? <button onClick={() => { const d = viewing; setViewing(null); openEdit(d); }} className="w-full py-2 border border-gray-200 text-gray-700 rounded-lg text-xs hover:bg-gray-50">✏️ Edit</button>
+                    : <p className="text-[11px] text-gray-400 text-center">🔒 Locked after approval — only Finance/Admin can edit.</p>}
                   {['DRAFT', 'RETURNED', 'REJECTED'].includes(viewing.status) && (
                     <button onClick={() => { removeDoc(viewing); setViewing(null); }} className="w-full py-2 border border-red-100 text-red-600 rounded-lg text-xs hover:bg-red-50">🗑️ Delete permanently</button>
                   )}

@@ -242,10 +242,18 @@ router.post('/check-duplicate', authenticate, async (req, res) => {
 
 router.patch('/:id', authenticate, async (req, res) => {
   try {
-    const e = await prisma.expense.findUnique({where:{id:req.params.id}});
+    const e = await prisma.expense.findUnique({ where: { id: req.params.id }, include: { approvals: true } });
     if(!e) return res.status(404).json({error:'Not found'});
-    if(e.submittedById!==req.user.id && req.user.role==='EMPLOYEE') return res.status(403).json({error:'Forbidden'});
-    if(!['DRAFT','RETURNED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
+    // Once approved by ANY approver (or fully approved / processed), the form is
+    // locked. Only FINANCE and ADMIN may edit it after that point.
+    const isAdminFinance = ['ADMIN', 'FINANCE'].includes(req.user.role);
+    const approvedByAny = ['APPROVED', 'PROCESSED'].includes(e.status) || (e.approvals || []).some(a => a.status === 'APPROVED');
+    if (approvedByAny) {
+      if (!isAdminFinance) return res.status(403).json({ error: 'This expense is locked after approval — only Finance or Admin can edit it.' });
+    } else {
+      if(e.submittedById!==req.user.id && req.user.role==='EMPLOYEE') return res.status(403).json({error:'Forbidden'});
+      if(!['DRAFT','RETURNED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
+    }
     const { title, orNumber, merchant, description, amount, currency, category, expenseType, receiptId, costCenter, expenseDate } = req.body;
     const amountPhp = amount ? await toPhp(Number(amount), currency||e.currency) : undefined;
     const updated = await prisma.expense.update({
@@ -257,7 +265,9 @@ router.patch('/:id', authenticate, async (req, res) => {
         receiptId: receiptId !== undefined ? (receiptId||null) : undefined,
         costCenter, amountPhp,
         expenseDate: expenseDate ? new Date(expenseDate) : undefined,
-        status: 'DRAFT',
+        // A pre-approval edit resets to DRAFT (must be re-submitted). An admin/finance
+        // correction to an already-approved expense keeps its current status.
+        status: approvedByAny ? undefined : 'DRAFT',
       },
       include: expenseInclude,
     });
