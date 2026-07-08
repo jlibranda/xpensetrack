@@ -208,8 +208,10 @@ router.get('/aging', authenticate, requirePermission('view_reports', ['MANAGER',
 // GET /api/reports/export — Excel download
 router.get('/export', authenticate, requirePermission('export_reports', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
-    const { from, to, userId, status, processed, year, payoutDate } = req.query;
-    const where = {};
+    const { from, to, userId, status, processed, year, payoutDate, ids } = req.query;
+    const idList = ids ? String(ids).split(',').map(s => s.trim()).filter(Boolean) : null;
+    const where = idList ? { id: { in: idList } } : {};
+    if (!idList) {
     if (userId) where.submittedById = userId;
     // expenseDate bounds = intersection of Year (if any) and From/To (if any)
     let gte = null, lte = null;
@@ -235,6 +237,7 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
       where.submittedById = where.submittedById && scope.includes(where.submittedById)
         ? where.submittedById
         : { in: scope };
+    }
     }
 
     // GL code mapping by category (from org settings) used as a fallback when

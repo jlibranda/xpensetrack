@@ -256,6 +256,12 @@ export default function TransactionsPage() {
     const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
     const token = localStorage.getItem('token');
     const params = new URLSearchParams({ token });
+    // If rows are ticked, export ONLY those (selection wins over the filters).
+    if (selected.length > 0) {
+      params.set('ids', selected.join(','));
+      window.open(`${base}/${source === 'ledger' ? 'ledger' : 'reports'}/export?${params.toString()}`, '_blank');
+      return;
+    }
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     if (payoutFilter) params.set('payoutDate', payoutFilter);
@@ -348,7 +354,7 @@ export default function TransactionsPage() {
             </button>
           )}
           <button onClick={exportExcel} className="px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: '#16a34a' }}>
-            ⬇ Export Excel
+            ⬇ {selected.length > 0 ? `Export selected (${selected.length})` : 'Export Excel'}
           </button>
         </div>
       </div>

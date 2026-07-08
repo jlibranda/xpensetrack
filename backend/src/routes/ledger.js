@@ -174,8 +174,10 @@ router.get('/summary', authenticate, canViewLedger, async (req, res) => {
 
 router.get('/export', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
-    const { docType, status, from, to, payoutDate, archived } = req.query;
-    const where = { archived: archived === '1' || archived === 'true' };
+    const { docType, status, from, to, payoutDate, archived, ids } = req.query;
+    const idList = ids ? String(ids).split(',').map(s => s.trim()).filter(Boolean) : null;
+    const where = idList ? { id: { in: idList } } : { archived: archived === '1' || archived === 'true' };
+    if (!idList) {
     if (docType && docType !== 'ALL') {
       if (docType === 'AP') where.docType = { in: ['AP_INVOICE', 'AP_RECEIPT'] };
       else if (docType === 'AR') where.docType = 'AR_INVOICE';
@@ -194,6 +196,7 @@ router.get('/export', authenticate, requirePermission(PERM, FALLBACK), async (re
         { payoutDate: { gte: d0, lte: d1 } },
         { payoutDate: null, processedAt: { gte: d0, lte: d1 } },
       ];
+    }
     }
 
     let glCodes = {};
