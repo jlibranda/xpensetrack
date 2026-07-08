@@ -279,7 +279,7 @@ export default function TransactionsPage() {
       }
       const data = await api.get(`/ledger/2307/prepare?${qs}`);
       // ensure at least one editable row
-      if (!data.rows || !data.rows.length) data.rows = [{ atc: '', m1: 0, m2: 0, m3: 0, tax: 0 }];
+      if (!data.rows || !data.rows.length) data.rows = [{ desc: '', atc: '', m1: 0, m2: 0, m3: 0, tax: 0 }];
       setGen2307Data(data);
     } catch (e) { toast.error(e?.response?.data?.error || 'No data to prepare'); }
     finally { setGen2307Loading(false); }
@@ -685,12 +685,13 @@ export default function TransactionsPage() {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-xs font-semibold text-gray-700">Income Payments Subject to Expanded Withholding Tax</p>
-                      <button onClick={() => setGen2307Data(x => ({ ...x, rows: [...x.rows, { atc: '', m1: 0, m2: 0, m3: 0, tax: 0 }] }))}
+                      <button onClick={() => setGen2307Data(x => ({ ...x, rows: [...x.rows, { desc: '', atc: '', m1: 0, m2: 0, m3: 0, tax: 0 }] }))}
                         className="text-xs px-2 py-1 border border-gray-200 rounded-lg hover:bg-gray-50">+ Row</button>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead><tr className="text-gray-400">
+                          <th className="text-left font-medium p-1">Income payment (description)</th>
                           <th className="text-left font-medium p-1">ATC</th>
                           <th className="text-right font-medium p-1">{d.monthLabels?.[0] || '1st Mo'}</th>
                           <th className="text-right font-medium p-1">{d.monthLabels?.[1] || '2nd Mo'}</th>
@@ -699,16 +700,27 @@ export default function TransactionsPage() {
                           <th></th>
                         </tr></thead>
                         <tbody>
-                          {d.rows.map((r, i) => (
+                          {d.rows.map((r, i) => {
+                            const codes = atcList.map(a => a.code);
+                            const opts = r.atc && !codes.includes(r.atc) ? [r.atc, ...codes] : codes;
+                            return (
                             <tr key={i}>
-                              <td className="p-1"><input value={r.atc || ''} onChange={e => setRow2307(i, 'atc', e.target.value.toUpperCase())} className="w-20 px-1 py-1 border border-gray-200 rounded font-mono" /></td>
+                              <td className="p-1"><input value={r.desc || ''} onChange={e => setRow2307(i, 'desc', e.target.value)} placeholder="Nature of income payment" className="w-52 px-1 py-1 border border-gray-200 rounded" /></td>
+                              <td className="p-1">
+                                <select value={r.atc || ''} className="w-24 px-1 py-1 border border-gray-200 rounded bg-white font-mono"
+                                  onChange={e => { const code = e.target.value; const a = atcList.find(x => x.code === code); setGen2307Data(x => ({ ...x, rows: x.rows.map((rr, idx) => idx === i ? { ...rr, atc: code, desc: rr.desc || (a ? a.description : '') } : rr) })); }}>
+                                  <option value="">—</option>
+                                  {opts.map(code => <option key={code} value={code}>{code}</option>)}
+                                </select>
+                              </td>
                               <td className="p-1"><input type="number" step="0.01" value={r.m1 ?? ''} onChange={e => setRow2307(i, 'm1', e.target.value === '' ? '' : Number(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-right" /></td>
                               <td className="p-1"><input type="number" step="0.01" value={r.m2 ?? ''} onChange={e => setRow2307(i, 'm2', e.target.value === '' ? '' : Number(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-right" /></td>
                               <td className="p-1"><input type="number" step="0.01" value={r.m3 ?? ''} onChange={e => setRow2307(i, 'm3', e.target.value === '' ? '' : Number(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-right" /></td>
                               <td className="p-1"><input type="number" step="0.01" value={r.tax ?? ''} onChange={e => setRow2307(i, 'tax', e.target.value === '' ? '' : Number(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-right" /></td>
                               <td className="p-1"><button onClick={() => setGen2307Data(x => ({ ...x, rows: x.rows.filter((_, idx) => idx !== i) }))} className="text-red-400 hover:text-red-600">✕</button></td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

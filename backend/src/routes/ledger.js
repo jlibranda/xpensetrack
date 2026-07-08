@@ -315,6 +315,10 @@ async function build2307(docs) {
   const periodFrom = new Date(y, startMonth, 1);
   const periodTo = new Date(y, startMonth + 3, 0);
 
+  const org = await prisma.orgSettings.findFirst();
+  let atcMap = {};
+  try { (JSON.parse(org?.atcCodes || '[]') || []).forEach(a => { if (a && a.code) atcMap[a.code] = a.description || ''; }); } catch (e) { /* ignore */ }
+
   const byAtc = {};
   for (const d of docs) {
     if (d.ewtAmount == null) continue; // only income subject to EWT
@@ -323,7 +327,7 @@ async function build2307(docs) {
     const dt = new Date(d.payoutDate || d.processedAt || d.docDate);
     const mi = dt.getMonth() - startMonth;
     if (mi < 0 || mi > 2) continue;
-    if (!byAtc[atc]) byAtc[atc] = { atc, rate: d.ewtRate, income: [0, 0, 0], tax: [0, 0, 0] };
+    if (!byAtc[atc]) byAtc[atc] = { atc, desc: atcMap[atc] || '', rate: d.ewtRate, income: [0, 0, 0], tax: [0, 0, 0] };
     byAtc[atc].income[mi] += base || 0;
     byAtc[atc].tax[mi] += d.ewtAmount || 0;
   }
@@ -331,7 +335,6 @@ async function build2307(docs) {
   const grandIncome = rows.reduce((a, r) => a + r.incomeTotal, 0);
   const grandTax = rows.reduce((a, r) => a + r.taxTotal, 0);
 
-  const org = await prisma.orgSettings.findFirst();
   const payor = { name: org?.companyName || '', tin: org?.tin || '', address: org?.companyAddress || '', zip: org?.companyZip || '', signatory: org?.signatoryName || '', title: org?.signatoryTitle || '' };
   const first = docs[0] || {};
   const payee = { name: first.vendorName || '', tin: first.vendorTin || '', address: '', zip: '' };
@@ -354,6 +357,7 @@ function prepare2307(data) {
     monthLabels: data.monthLabels,
     payee: data.payee, payor: data.payor,
     rows: data.rows.map(r => ({
+      desc: r.desc || '',
       atc: r.atc === '(no ATC)' ? '' : r.atc,
       m1: +r.income[0].toFixed(2), m2: +r.income[1].toFixed(2), m3: +r.income[2].toFixed(2),
       tax: +r.taxTotal.toFixed(2),
@@ -375,7 +379,7 @@ const COORD = {
   payorNameC: 313, payorNameVc: 287, payorAddrC: 285, payorAddrVc: 316,
   rowVc: [371.65,385.35,399.05,412.75,426.45,440.1,453.75,467.45,481.15,494.85],
   totalVc: 509.05,
-  col: { atc:198, m1:256, m2:330, m3:404, tot:478, tax:555 },
+  col: { desc: 21, atc:198, m1:256, m2:330, m3:404, tot:478, tax:555 },
   signC: 307, signVc: 745,
 };
 function money(n) { return (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -411,6 +415,7 @@ async function fill2307Pdf(d) {
   let t1 = 0, t2 = 0, t3 = 0, tt = 0;
   rows.forEach((r, i) => {
     const vc = COORD.rowVc[i];
+    if (r.desc) put(COORD.col.desc, vc, String(r.desc).slice(0, 60), 6, 'left');
     put(COORD.col.atc, vc, r.atc || '');
     if (Number(r.m1)) put(COORD.col.m1, vc, money(r.m1));
     if (Number(r.m2)) put(COORD.col.m2, vc, money(r.m2));
