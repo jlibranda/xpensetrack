@@ -83,8 +83,8 @@ export default function Layout() {
     return allowed.includes(user?.role);
   };
   // The Management section shows if the user can see any item in it (incl. an
-  // Employee granted approvals access), or Transactions (Finance/Admin).
-  const showManagement = MANAGER_NAV.some(item => can(item.perm)) || ['FINANCE','ADMIN'].includes(user?.role);
+  // Employee granted approvals or AP/AR access), or Transactions (Finance/Admin).
+  const showManagement = MANAGER_NAV.some(item => can(item.perm)) || can('manage_ap_ar') || ['FINANCE','ADMIN'].includes(user?.role);
   // A nav item tagged with an in-development `feature` is visible to Admin always,
   // and to permitted roles only once the feature is switched on in Access Control.
   const navVisible = (item) => {
