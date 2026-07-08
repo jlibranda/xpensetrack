@@ -11,7 +11,7 @@ const NotificationContext = createContext({
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [pendingCounts, setPendingCounts] = useState({ myPending:0, toApprove:0 });
+  const [pendingCounts, setPendingCounts] = useState({ myPending:0, toApprove:0, toApproveLedger:0 });
   const { user } = useAuth();
 
   const load = useCallback(async () => {
@@ -23,7 +23,9 @@ export function NotificationProvider({ children }) {
       ]);
       setNotifications(notif?.notifications || []);
       setUnreadCount(notif?.unreadCount || 0);
-      setPendingCounts(counts || { myPending:0, toApprove:0 });
+      let toApproveLedger = 0;
+      try { const lc = await api.get('/approvals/ledger/pending-count'); toApproveLedger = lc?.count || 0; } catch { toApproveLedger = 0; }
+      setPendingCounts({ ...(counts || { myPending:0, toApprove:0 }), toApproveLedger });
     } catch(e) {}
   }, [user]);
 

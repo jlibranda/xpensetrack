@@ -22,6 +22,7 @@ export default function ApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger' (AP/AR)
+  const [counts, setCounts] = useState({ expense: 0, ledger: 0 });
   const [notes, setNotes] = useState({});
   const [selected, setSelected] = useState(null);
   const [actioning, setActioning] = useState(null);
@@ -73,6 +74,18 @@ export default function ApprovalsPage() {
 
   useEffect(() => { setSelected(null); load(); /* eslint-disable-next-line */ }, [source]);
 
+  // Pending counts for BOTH sources, so each toggle shows its own bubble.
+  const loadCounts = async () => {
+    try {
+      const [pe, pl] = await Promise.all([
+        api.get('/approvals/pending'),
+        api.get('/approvals/ledger/pending'),
+      ]);
+      setCounts({ expense: Array.isArray(pe) ? pe.length : 0, ledger: Array.isArray(pl) ? pl.length : 0 });
+    } catch { /* ignore */ }
+  };
+  useEffect(() => { loadCounts(); }, []);
+
   const action = async (id, type) => {
     if (type === 'return' && !notes[id]?.trim()) {
       alert('Please add a comment before returning to submitter.'); return;
@@ -87,6 +100,7 @@ export default function ApprovalsPage() {
       setNotes(n => { const c = {...n}; delete c[id]; return c; });
       setSelected(null);
       await load();
+      loadCounts();
       refreshNotif();
       toast.success(type === 'approve' ? 'Approved' : type === 'reject' ? 'Rejected' : 'Returned to submitter');
     } catch(err) {
@@ -118,10 +132,16 @@ export default function ApprovalsPage() {
         <button onClick={() => setSource('expense')}
           className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'expense' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           Expenses
+          {counts.expense > 0 && (
+            <span className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 bg-red-500 text-white text-xs font-bold rounded-full">{counts.expense}</span>
+          )}
         </button>
         <button onClick={() => setSource('ledger')}
           className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'ledger' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           AP &amp; AR
+          {counts.ledger > 0 && (
+            <span className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 bg-red-500 text-white text-xs font-bold rounded-full">{counts.ledger}</span>
+          )}
         </button>
       </div>
 

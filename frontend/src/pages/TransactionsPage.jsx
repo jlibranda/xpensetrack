@@ -51,6 +51,7 @@ export default function TransactionsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [payoutFilter, setPayoutFilter] = useState('');
+  const [source, setSource] = useState('expense'); // 'expense' | 'ledger' (AP/AR)
   const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default = all dates)
 
   // payout / processing controls
@@ -66,18 +67,42 @@ export default function TransactionsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (status && status !== 'PROCESSED' && status !== 'FOR_PROCESS') params.set('status', status);
-      if (from) params.set('from', from);
-      if (to) params.set('to', to);
-      params.set('limit', '500');
-      const d = await api.get(`/expenses?${params.toString()}`);
-      setRows(d?.expenses || []);
+      if (source === 'ledger') {
+        const d = await api.get('/ledger');
+        const arr = Array.isArray(d) ? d : (d?.docs || []);
+        // Normalize AP/AR docs into the expense shape this table expects.
+        setRows(arr.map(doc => ({
+          id: doc.id,
+          _isLedger: true,
+          merchant: doc.vendorName || 'AP/AR document',
+          title: doc.docNumber ? `${doc.vendorName || 'AP/AR'} — ${doc.docNumber}` : (doc.vendorName || 'AP/AR document'),
+          description: doc.notes || '',
+          amountPhp: doc.amountPhp != null ? doc.amountPhp : doc.amount,
+          category: doc.category || '',
+          status: doc.status,
+          expenseDate: doc.docDate || doc.createdAt,
+          processedAt: doc.processedAt,
+          payoutDate: doc.payoutDate,
+          remarks: doc.remarks || '',
+          submittedBy: doc.createdBy || null,
+          approvals: doc.approvals || [],
+          receipt: doc.receipt || null,
+          orNumber: doc.docNumber || '',
+        })));
+      } else {
+        const params = new URLSearchParams();
+        if (status && status !== 'PROCESSED' && status !== 'FOR_PROCESS') params.set('status', status);
+        if (from) params.set('from', from);
+        if (to) params.set('to', to);
+        params.set('limit', '500');
+        const d = await api.get(`/expenses?${params.toString()}`);
+        setRows(d?.expenses || []);
+      }
     } catch (e) {
       setMsg({ text: e.error || 'Failed to load', ok: false });
     } finally { setLoading(false); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, from, to]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, from, to, source]);
 
   // Quick date-range presets for the Filter. Setting from/to re-triggers load().
   const setQuickRange = (mode) => {
@@ -122,11 +147,12 @@ export default function TransactionsPage() {
   const selectedEligible = visibleRows.filter(e => selected.includes(e.id) && e.status === 'APPROVED' && !e.processedAt);
 
   const bulkMarkProcessed = async () => {
-    if (selectedEligible.length === 0) { setMsg({ text: 'Select approved expenses that are not yet processed.', ok: false }); return; }
+    if (selectedEligible.length === 0) { setMsg({ text: 'Select approved items that are not yet processed.', ok: false }); return; }
     if (!payoutDate) { setMsg({ text: 'Choose a pay out date first.', ok: false }); return; }
     setProcessing(true); setMsg({ text: '', ok: true });
     try {
-      const r = await api.post('/expenses/bulk-mark-processed', { ids: selectedEligible.map(e => e.id), payoutDate });
+      const url = source === 'ledger' ? '/ledger/bulk-mark-processed' : '/expenses/bulk-mark-processed';
+      const r = await api.post(url, { ids: selectedEligible.map(e => e.id), payoutDate });
       setMsg({ text: `Marked ${r.count} processed`, ok: true });
       toast.success(`Marked ${r.count} processed`);
       setSelected([]);
@@ -136,12 +162,12 @@ export default function TransactionsPage() {
   };
 
   const unmarkProcessed = async (id) => {
-    try { await api.post(`/expenses/${id}/unmark-processed`, {}); await load(); }
+    try { await api.post(source === 'ledger' ? `/ledger/${id}/unmark-processed` : `/expenses/${id}/unmark-processed`, {}); await load(); }
     catch (e) { setMsg({ text: e.error || 'Failed', ok: false }); }
   };
 
   const saveRemarks = async (id, val) => {
-    try { await api.patch(`/expenses/${id}/remarks`, { remarks: val }); }
+    try { if (source === 'ledger') await api.patch(`/ledger/${id}`, { remarks: val }); else await api.patch(`/expenses/${id}/remarks`, { remarks: val }); }
     catch (e) { setMsg({ text: 'Failed to save remarks', ok: false }); }
   };
 
@@ -205,17 +231,31 @@ export default function TransactionsPage() {
           <p className="text-sm text-gray-500">{visibleRows.length} shown</p>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && (
+          {isAdmin && source === 'expense' && (
             <button onClick={deleteSelected} disabled={deleting || selected.length === 0}
               className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: '#dc2626' }}>
               {deleting ? 'Deleting…' : `🗑 Delete selected${selected.length ? ` (${selected.length})` : ''}`}
             </button>
           )}
-          <button onClick={exportExcel} className="px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: '#16a34a' }}>
-            ⬇ Export Excel
-          </button>
+          {source === 'expense' && (
+            <button onClick={exportExcel} className="px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: '#16a34a' }}>
+              ⬇ Export Excel
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* Source toggle: Expenses vs AP & AR invoices */}
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+        <button onClick={() => { setSource('expense'); setSelected([]); }}
+          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'expense' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          Expenses
+        </button>
+        <button onClick={() => { setSource('ledger'); setSelected([]); }}
+          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'ledger' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          AP &amp; AR
+        </button>
       </div>
 
       {msg.text && (
@@ -374,7 +414,7 @@ export default function TransactionsPage() {
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setDetail(null)}>
             <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5" onClick={ev => ev.stopPropagation()}>
               <div className="flex justify-between items-center mb-3">
-                <p className="text-sm font-medium text-gray-900">Expense details</p>
+                <p className="text-sm font-medium text-gray-900">{source === 'ledger' ? 'AP/AR invoice details' : 'Expense details'}</p>
                 <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
               </div>
               {e.receipt?.id ? (
@@ -408,7 +448,8 @@ export default function TransactionsPage() {
                 {e.description && e.description !== e.title ? row('Notes', e.description) : null}
               </div>
 
-              {/* Proof of payment */}
+              {/* Proof of payment (expenses only) */}
+              {source === 'expense' && (
               <div className="mt-4 pt-3 border-t border-gray-100">
                 <p className="text-xs font-medium text-gray-700 mb-2">Proof of payment</p>
                 {e.proofOfPayment?.id ? (
@@ -434,6 +475,7 @@ export default function TransactionsPage() {
                   <p className="text-xs text-gray-400">No proof of payment uploaded</p>
                 )}
               </div>
+              )}
             </div>
           </div>
         );

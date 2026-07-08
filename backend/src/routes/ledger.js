@@ -7,6 +7,7 @@ const { authenticate, requirePermission } = require('../middleware/auth');
 const { getUsdPhpRate } = require('../lib/fxrate');
 const { getFlowSteps, buildRowsFromSteps } = require('../lib/approvalChain');
 const { createNotification } = require('../lib/notifications');
+const { logAudit } = require('../lib/audit');
 const prisma = new PrismaClient();
 
 const PERM = 'manage_ap_ar';
@@ -314,6 +315,36 @@ router.post('/:id/submit', authenticate, requirePermission(PERM, FALLBACK), asyn
         `An AP/AR invoice "${label}" needs your approval`, '/approvals').catch(() => {});
     }
     res.json({ message: 'Submitted', doc: await prisma.ledgerDoc.findUnique({ where: { id: doc.id }, include }) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk mark AP/AR invoices processed (paid out) — mirrors expense payouts.
+router.post('/bulk-mark-processed', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+  try {
+    const { ids, payoutDate } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'No invoices selected' });
+    const when = payoutDate ? new Date(payoutDate) : new Date();
+    const rows = await prisma.ledgerDoc.findMany({ where: { id: { in: ids } } });
+    const eligible = rows.filter(d => d.status === 'APPROVED' && !d.processedAt);
+    let count = 0;
+    for (const d of eligible) {
+      await prisma.ledgerDoc.update({ where: { id: d.id }, data: { status: 'PROCESSED', processedAt: when, payoutDate: when, paidAt: when } });
+      count++;
+    }
+    await logAudit(req.user, 'LEDGER_BULK_PROCESSED', { targetType: 'LEDGER_DOC', details: `Marked ${count} AP/AR invoice(s) processed` });
+    res.json({ message: `Marked ${count} invoice(s) processed`, count, skipped: ids.length - count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Undo a processed AP/AR payout (revert to APPROVED).
+router.post('/:id/unmark-processed', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+  try {
+    const d = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id } });
+    if (!d) return res.status(404).json({ error: 'Not found' });
+    if (d.status !== 'PROCESSED') return res.status(400).json({ error: 'Not a processed invoice' });
+    await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'APPROVED', processedAt: null, payoutDate: null, paidAt: null } });
+    await logAudit(req.user, 'LEDGER_PAYOUT_REVERSED', { targetType: 'LEDGER_DOC', targetId: req.params.id, details: `Reversed payout for "${d.vendorName || 'AP/AR document'}${d.docNumber ? ` (${d.docNumber})` : ''}"` });
+    res.json({ message: 'Unmarked' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

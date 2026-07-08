@@ -140,8 +140,10 @@ model LedgerDoc {
   notes         String?
   remarks       String?
   archived      Boolean   @default(false)
-  status        String    @default("DRAFT") // DRAFT | FOR_VERIFICATION | FOR_APPROVAL | PAID
+  status        String    @default("DRAFT") // DRAFT | PENDING | APPROVED | REJECTED | RETURNED | PROCESSED | (legacy: FOR_VERIFICATION | FOR_APPROVAL | PAID)
   paidAt        DateTime?
+  processedAt   DateTime?
+  payoutDate    DateTime?
   receiptId     String?
   receipt       Receipt?  @relation(fields: [receiptId], references: [id])
   assignedToId  String?
