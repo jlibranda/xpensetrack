@@ -707,6 +707,12 @@ export default function TransactionsPage() {
                       <input value={d.payor?.tin || ''} onChange={e => setField2307('payor.tin', e.target.value)} placeholder="TIN" className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono" />
                       <input value={d.payor?.address || ''} onChange={e => setField2307('payor.address', e.target.value)} placeholder="Address" className="w-full px-2 py-1 border border-gray-200 rounded text-xs" />
                       <input value={d.payor?.zip || ''} onChange={e => setField2307('payor.zip', e.target.value)} placeholder="ZIP" className="w-full px-2 py-1 border border-gray-200 rounded text-xs" />
+                      <div className="pt-1 mt-1 border-t border-gray-100">
+                        <p className="text-[10px] text-gray-400 mb-1">Authorized signatory (reflects on the form)</p>
+                        <input value={d.payor?.signatory || ''} onChange={e => setField2307('payor.signatory', e.target.value)} placeholder="Signatory name" className="w-full px-2 py-1 border border-gray-200 rounded text-xs mb-1" />
+                        <input value={d.payor?.title || ''} onChange={e => setField2307('payor.title', e.target.value)} placeholder="Title / designation" className="w-full px-2 py-1 border border-gray-200 rounded text-xs mb-1" />
+                        <input value={d.payor?.signatoryTin || ''} onChange={e => setField2307('payor.signatoryTin', e.target.value)} placeholder="Signatory TIN" className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono" />
+                      </div>
                     </div>
                   </div>
 

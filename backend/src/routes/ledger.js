@@ -330,21 +330,24 @@ async function build2307(docs) {
 
   const byAtc = {};
   for (const d of docs) {
-    if (d.ewtAmount == null) continue; // only income subject to EWT
-    const base = d.ewtBase != null ? d.ewtBase : (d.vatableAmount != null ? d.vatableAmount : d.amountPhp);
+    const base = d.ewtBase != null ? d.ewtBase
+      : (d.vatableAmount != null ? d.vatableAmount
+      : (d.amountPhp != null ? +(d.amountPhp / 1.12).toFixed(2) : 0));
+    const rate = d.ewtRate;
+    const tax = d.ewtAmount != null ? d.ewtAmount : (rate ? +((base * rate) / 100).toFixed(2) : 0);
     const atc = d.atcCode || '(no ATC)';
     const dt = new Date(d.payoutDate || d.processedAt || d.docDate);
     const mi = dt.getMonth() - startMonth;
-    if (mi < 0 || mi > 2) continue;
-    if (!byAtc[atc]) byAtc[atc] = { atc, desc: atcMap[atc] || '', rate: d.ewtRate, income: [0, 0, 0], tax: [0, 0, 0] };
+    if (isNaN(mi) || mi < 0 || mi > 2) continue;
+    if (!byAtc[atc]) byAtc[atc] = { atc, desc: atcMap[atc] || '', rate, income: [0, 0, 0], tax: [0, 0, 0] };
     byAtc[atc].income[mi] += base || 0;
-    byAtc[atc].tax[mi] += d.ewtAmount || 0;
+    byAtc[atc].tax[mi] += tax || 0;
   }
   const rows = Object.values(byAtc).map(r => ({ ...r, incomeTotal: r.income.reduce((a, b) => a + b, 0), taxTotal: r.tax.reduce((a, b) => a + b, 0) }));
   const grandIncome = rows.reduce((a, r) => a + r.incomeTotal, 0);
   const grandTax = rows.reduce((a, r) => a + r.taxTotal, 0);
 
-  const payor = { name: org?.companyName || '', tin: org?.tin || '', address: org?.companyAddress || '', zip: org?.companyZip || '', signatory: org?.signatoryName || '', title: org?.signatoryTitle || '' };
+  const payor = { name: org?.companyName || '', tin: org?.tin || '', address: org?.companyAddress || '', zip: org?.companyZip || '', signatory: org?.signatoryName || '', title: org?.signatoryTitle || '', signatoryTin: org?.signatoryTin || '' };
   const first = docs[0] || {};
   const payee = { name: first.vendorName || '', tin: first.vendorTin || '', address: '', zip: '' };
   try {
@@ -441,7 +444,7 @@ async function fill2307Pdf(d) {
   put(COORD.col.tot, COORD.totalVc, money(t1 + t2 + t3));
   put(COORD.col.tax, COORD.totalVc, money(tt));
 
-  const sig = [d.payor?.signatory, d.payor?.title, d.payor?.tin ? `TIN ${d.payor.tin}` : ''].filter(Boolean).join('  -  ');
+  const sig = [d.payor?.signatory, d.payor?.title, d.payor?.signatoryTin ? `TIN ${d.payor.signatoryTin}` : ''].filter(Boolean).join('  -  ');
   put(COORD.signC, COORD.signVc, sig);
 
   return await pdf.save();

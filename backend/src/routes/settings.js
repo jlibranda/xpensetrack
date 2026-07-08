@@ -69,7 +69,7 @@ router.patch('/', authenticate, async (req, res) => {
             primaryColor, categories, expenseTypes, categoryGlCodes, categoryTypes, defaultPassword, darkMode,
             wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates,
             loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds, emailNotificationsEnabled, timezone, approvalFollowUpDays, vendors,
-            companyAddress, companyZip, signatoryName, signatoryTitle, atcCodes } = req.body;
+            companyAddress, companyZip, signatoryName, signatoryTitle, signatoryTin, atcCodes } = req.body;
     const s = await getOrCreate();
     // Field-level permission: apply each group only if the user is allowed.
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
@@ -127,6 +127,7 @@ router.patch('/', authenticate, async (req, res) => {
         companyZip: canManage && companyZip !== undefined ? (companyZip || null) : undefined,
         signatoryName: canManage && signatoryName !== undefined ? (signatoryName || null) : undefined,
         signatoryTitle: canManage && signatoryTitle !== undefined ? (signatoryTitle || null) : undefined,
+        signatoryTin: canManage && signatoryTin !== undefined ? (signatoryTin || null) : undefined,
         atcCodes: (canApAr || canManage) && atcCodes !== undefined ? JSON.stringify(Array.isArray(atcCodes) ? atcCodes.filter(a => a && a.code).map(a => ({ code: String(a.code).trim(), description: a.description ? String(a.description).trim() : '', rate: Number(a.rate) || 0 })) : []) : undefined,
       },
     });

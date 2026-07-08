@@ -359,6 +359,7 @@ export default function SettingsPage() {
         companyZip: s.companyZip ?? settings?.companyZip,
         signatoryName: s.signatoryName ?? settings?.signatoryName,
         signatoryTitle: s.signatoryTitle ?? settings?.signatoryTitle,
+        signatoryTin: s.signatoryTin ?? settings?.signatoryTin,
         atcCodes: Array.isArray(s?.atcCodes) ? s.atcCodes : (settings?.atcCodes || []),
       };
       const updated = await api.patch('/settings', payload);
@@ -481,6 +482,11 @@ export default function SettingsPage() {
                 <label className="block text-xs text-gray-500 mb-1">Signatory title</label>
                 <input value={s?.signatoryTitle||''} placeholder="Finance Officer" onChange={e=>set('signatoryTitle', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Signatory TIN <span className="text-gray-400">(2307 — signatory's own TIN)</span></label>
+                <input value={s?.signatoryTin||''} placeholder="000-000-000-000" onChange={e=>set('signatoryTin', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
               </div>
             </div>
             <div>
