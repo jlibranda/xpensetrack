@@ -25,11 +25,14 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        skipWaiting: true,          // new SW activates immediately instead of waiting
+        clientsClaim: true,         // new SW takes control of open pages right away
+        cleanupOutdatedCaches: true,// delete old precaches so stale bundles can't be served
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\/api\//,
             handler: 'NetworkFirst',
-            options: { cacheName: 'api-cache', expiration: { maxEntries: 100, maxAgeSeconds: 300 } },
+            options: { cacheName: 'api-cache', networkTimeoutSeconds: 10, expiration: { maxEntries: 100, maxAgeSeconds: 60 } },
           },
         ],
       },
