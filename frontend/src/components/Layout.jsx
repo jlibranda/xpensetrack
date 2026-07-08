@@ -198,7 +198,7 @@ export default function Layout() {
                   {settings?.companyName?.[0] || 'X'}
                 </div>
             }
-            <AutoFitText text={settings?.companyName || 'Cashalo'} color="#ffffff" max={14} min={8} weight="semibold" className="flex-1" />
+            <span className="flex-1 min-w-0 font-semibold text-white text-sm leading-tight break-words">{settings?.companyName || 'Cashalo'}</span>
           </div>
         </div>
 
