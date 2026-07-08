@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'XpenseTrack',
-        short_name: 'XpenseTrack',
+        name: 'Cashalo',
+        short_name: 'Cashalo',
         description: 'Company expense management',
         theme_color: '#1D9E75',
         background_color: '#ffffff',

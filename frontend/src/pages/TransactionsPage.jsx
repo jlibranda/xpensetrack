@@ -298,13 +298,14 @@ export default function TransactionsPage() {
   }) }));
   const openGen2307Selected = async () => {
     if (!selected.length) return;
-    const first = visibleRows.find(r => selected.includes(r.id)) || {};
-    setGen2307(first); setGen2307Data(null); setGen2307Loading(true);
+    setGen2307Loading(true);
     try {
       const data = await api.get(`/ledger/2307/prepare?ids=${encodeURIComponent(selected.join(','))}`);
       if (!data.rows || !data.rows.length) data.rows = [{ desc: '', atc: '', rate: '', m1: 0, m2: 0, m3: 0, tax: 0 }];
+      const first = visibleRows.find(r => selected.includes(r.id)) || {};
       setGen2307Data(data);
-    } catch (e) { toast.error(e?.response?.data?.error || 'Cannot prepare 2307'); setGen2307(null); }
+      setGen2307(first); // open only once data is ready → form shows directly, no intermediate window
+    } catch (e) { toast.error(e?.response?.data?.error || 'Cannot prepare 2307'); }
     finally { setGen2307Loading(false); }
   };
   const setField2307 = (path, val) => setGen2307Data(d => {
@@ -326,10 +327,10 @@ export default function TransactionsPage() {
         </div>
         <div className="flex items-center gap-2">
           {source === 'ledger' && (
-            <button onClick={openGen2307Selected} disabled={selected.length === 0}
+            <button onClick={openGen2307Selected} disabled={selected.length === 0 || gen2307Loading}
               className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: '#dc2626' }}>
-              📄 Generate 2307{selected.length ? ` (${selected.length})` : ''}
+              {gen2307Loading ? 'Preparing…' : `📄 Generate 2307${selected.length ? ` (${selected.length})` : ''}`}
             </button>
           )}
           {isAdmin && (

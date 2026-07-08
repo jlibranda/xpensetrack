@@ -186,7 +186,7 @@ export default function Layout() {
                   {settings?.companyName?.[0] || 'X'}
                 </div>
             }
-            <span className="font-semibold text-white text-sm truncate">{settings?.companyName || 'XpenseTrack'}</span>
+            <span className="font-semibold text-white text-sm truncate">{settings?.companyName || 'Cashalo'}</span>
           </div>
         </div>
 

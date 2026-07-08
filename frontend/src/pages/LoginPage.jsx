@@ -9,7 +9,7 @@ const readDark = () => {
   try { const v = localStorage.getItem('personal_dark'); return v === 'true'; } catch { return false; }
 };
 
-const DEFAULT_BRANDING = { companyName:'XpenseTrack', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null };
+const DEFAULT_BRANDING = { companyName:'Cashalo', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null };
 // Read the last-known branding so the page shows the real logo/colors instantly,
 // instead of flashing the default green "X" until the network fetch returns.
 const readCachedBranding = () => {
@@ -116,7 +116,7 @@ export default function LoginPage() {
             </div>
           )}
           <h1 className="text-xl font-semibold" style={{ color: headTitle }}>
-            {branding.companyName || 'XpenseTrack'}
+            {branding.companyName || 'Cashalo'}
           </h1>
           <p className="text-sm mt-1" style={{ color: headSub }}>
             Sign in to your account

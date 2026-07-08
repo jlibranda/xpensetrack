@@ -5,11 +5,19 @@ import { useAuth } from './AuthContext';
 
 const OrgContext = createContext(null);
 
+// Read the last-known branding (cached by the login page from /settings/public)
+// so that right after sign-in we render the REAL company name + brand color
+// instead of flashing the generic default.
+const readCachedBranding = () => {
+  try { const v = localStorage.getItem('cached_branding'); return v ? JSON.parse(v) : null; } catch { return null; }
+};
+const CACHED = readCachedBranding();
+
 const DEFAULT = {
-  companyName: 'XpenseTrack',
-  primaryColor: '#1D9E75',
-  logoUrl: null,
-  wallpaperUrl: null,
+  companyName: CACHED?.companyName || 'Cashalo',
+  primaryColor: CACHED?.primaryColor || '#1D9E75',
+  logoUrl: CACHED?.logoUrl || null,
+  wallpaperUrl: CACHED?.wallpaperUrl || null,
   darkMode: false,
   categories: ['Cleaning','Education and Training','Entertainment/Meals','Equipment','Facility Maintenance and Repair','Furniture and Fixtures','General Office Expense','Hardware','Miscellaneous','Mobile Device','Non-Capital Small Tools Equipment and Furniture','Office Rent','Parking','Printing','Recruiting','Travel - Air Ticket (International)','Travel - Air Ticket (Domestic)','Travel - Others','Travel - Hotel (Domestic)'],
   expenseTypes: ['REIMBURSEMENT','CASH_ADVANCE'],
@@ -102,10 +110,13 @@ export function OrgProvider({ children }) {
   // after logging in instead of only after a manual page refresh.
   useEffect(() => {
     if (user) {
+      // Apply the cached brand color/wallpaper instantly so there's no green
+      // flash between sign-in and the /settings fetch resolving.
+      if (CACHED) applyThemeToDOM(CACHED);
       load();
     } else {
       // Logged out (or on the login screen): clear any applied theme/wallpaper
-      applyThemeToDOM({ darkMode: false, primaryColor: '#1D9E75', wallpaperUrl: null });
+      applyThemeToDOM({ darkMode: false, primaryColor: CACHED?.primaryColor || '#1D9E75', wallpaperUrl: null });
       setSettings(DEFAULT);
       setLoaded(false);
     }
