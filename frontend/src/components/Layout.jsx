@@ -203,7 +203,7 @@ export default function Layout() {
           ))}
 
           {/* AP & AR Invoice — grouped with Add Expense, gated like before */}
-          {navVisible({ perm:'manage_ap_ar', feature:'apAr' }) && (
+          {navVisible({ perm:'manage_ap_ar' }) && (
             <NavLink to="/payables" className={navLinkClass}
               style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
               <span className="w-4 text-center text-sm">+</span>
@@ -239,7 +239,7 @@ export default function Layout() {
                   <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">{(pendingCounts.myPending || 0) + (pendingCounts.myReturned || 0)}</span>
                 )}
               </NavLink>
-              {navVisible({ perm:'manage_ap_ar', feature:'apAr' }) && (
+              {navVisible({ perm:'manage_ap_ar' }) && (
                 <NavLink to="/ap-ar" className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
                   <span className="w-4 text-center text-sm">📑</span>
@@ -416,7 +416,7 @@ export default function Layout() {
                   className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow-lg border border-gray-100">
                   🧾 New Expense
                 </button>
-                {navVisible({ perm:'manage_ap_ar', feature:'apAr' }) && (
+                {navVisible({ perm:'manage_ap_ar' }) && (
                   <button onClick={() => { setFabOpen(false); navigate('/payables'); }}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow-lg border border-gray-100">
                     📑 New AP / AR

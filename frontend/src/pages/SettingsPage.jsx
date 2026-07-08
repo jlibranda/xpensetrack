@@ -183,18 +183,6 @@ function AccessControlTab({ settings, navigate, refresh }) {
         </button>
       </div>
 
-      {acIsAdmin && (
-        <div className="mb-4 p-3 rounded-xl border border-amber-200 bg-amber-50">
-          <p className="text-xs font-semibold text-amber-800 mb-1">In-development modules</p>
-          <p className="text-[11px] text-amber-700 mb-2">When off, the module is visible to Admins only (for development). Turn on to release it to roles granted its permission.</p>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={!!features.apAr}
-              onChange={(e) => setFeatures(f => ({ ...f, apAr: e.target.checked }))} />
-            Payables &amp; Receivables {features.apAr ? <span className="text-green-600 text-xs">(live)</span> : <span className="text-gray-400 text-xs">(admin-only)</span>}
-          </label>
-        </div>
-      )}
-
       <div className="overflow-x-auto rounded-xl border border-gray-100">
         <table className="w-full text-xs">
           <thead>
