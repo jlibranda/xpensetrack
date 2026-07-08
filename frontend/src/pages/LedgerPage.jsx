@@ -270,7 +270,7 @@ export default function LedgerPage({ mode = 'manage' }) {
             )}
           </Field></div>
           {!isGovt && <Field label="Vendor TIN"><input className="inp" value={editing.vendorTin} onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value })} /></Field>}
-          {!isGovt && <Field label="Doc / OR number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>}
+          {!isGovt && <Field label="Doc/Invoice number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>}
           {!isGovt && <Field label="PO number"><input className="inp" value={editing.poNumber} onChange={(e) => setEditing({ ...editing, poNumber: e.target.value })} /></Field>}
           <Field label="Category"><select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} className="inp">
             <option value="">—</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -545,7 +545,7 @@ export default function LedgerPage({ mode = 'manage' }) {
             <ViewRow label="Client" value={viewing.client?.name} />
             <ViewRow label="Vendor TIN" value={viewing.vendorTin} />
             <ViewRow label="Business style" value={viewing.businessStyle} />
-            <ViewRow label="Doc / OR number" value={viewing.docNumber} />
+            <ViewRow label="Doc/Invoice number" value={viewing.docNumber} />
             <ViewRow label="PO number" value={viewing.poNumber} />
             <ViewRow label="Document date" value={fmtDate(viewing.docDate)} />
             <ViewRow label="Due date" value={fmtDate(viewing.dueDate)} />

@@ -367,6 +367,16 @@ export default function Layout() {
           </div>
         </header>
 
+        {/* Mobile quick action: New AP/AR (desktop uses the sidebar link) */}
+        {navVisible({ perm:'manage_ap_ar', feature:'apAr' }) && (
+          <button onClick={() => navigate('/payables')}
+            className="md:hidden fixed bottom-5 right-5 z-40 flex items-center gap-1.5 px-4 py-3 rounded-full text-white text-sm font-semibold shadow-lg active:scale-95 transition-transform"
+            style={{ backgroundColor: brandColor }}
+            aria-label="New AP / AR invoice">
+            + New AP / AR
+          </button>
+        )}
+
         <main className="flex-1 overflow-y-auto p-4 md:p-6"
           style={hasWallpaper
             ? { backgroundColor: 'transparent' }
