@@ -10,31 +10,31 @@ const COLORS = ['#1D9E75','#3B82F6','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14
 export default function AnalyticsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState('month');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [activeRange, setActiveRange] = useState('month'); // default: this month
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger'
   const { format } = useCurrency();
   const { settings } = useOrg();
   const brandColor = settings?.primaryColor || '#1D9E75';
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [range, source]);
+  // Initialise to "this month" on first mount.
+  useEffect(() => { setQuickRange('month'); /* eslint-disable-next-line */ }, []);
+  // Reload when the source toggles (keeps current date range).
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [source]);
 
-  const load = async () => {
+  const load = async (f = from, t = to) => {
     setLoading(true);
     try {
-      const now = new Date();
-      let from;
-      if (range === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1);
-      else if (range === 'quarter') from = new Date(now.getFullYear(), Math.floor(now.getMonth()/3)*3, 1);
-      else from = new Date(now.getFullYear(), 0, 1);
-      const fromS = from.toISOString().split('T')[0];
-      const toS = now.toISOString().split('T')[0];
-
+      const params = new URLSearchParams();
+      if (f) params.append('from', f);
+      if (t) params.append('to', t);
       if (source === 'ledger') {
-        const rows = await api.get(`/ledger?from=${fromS}&to=${toS}`);
+        const rows = await api.get(`/ledger?${params}`);
         setData({ ledger: Array.isArray(rows) ? rows : [] });
       } else {
         const [summary, expenses] = await Promise.all([
-          api.get(`/reports/summary?from=${fromS}&to=${toS}`),
+          api.get(`/reports/summary?${params}`),
           api.get(`/expenses?limit=1000`),
         ]);
         setData({ summary, expenses: expenses.expenses || [] });
@@ -43,7 +43,27 @@ export default function AnalyticsPage() {
     finally { setLoading(false); }
   };
 
-  if (loading) return <div className="py-16 text-center text-sm text-gray-400">Loading analytics...</div>;
+  // Quick-range presets (same behaviour as the Reports module).
+  const setQuickRange = (mode) => {
+    if (mode === 'all') { setFrom(''); setTo(''); setActiveRange('all'); load('', ''); return; }
+    const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    let end = new Date();
+    let start;
+    if (mode === 'week') {
+      start = new Date(); start.setDate(start.getDate() - start.getDay());
+      end = new Date(start); end.setDate(start.getDate() + 6);
+    } else if (mode === 'month') {
+      start = new Date(end.getFullYear(), end.getMonth(), 1);
+    } else if (mode === 'quarter') {
+      start = new Date(end.getFullYear(), Math.floor(end.getMonth() / 3) * 3, 1);
+    } else if (mode === 'year') {
+      start = new Date(end.getFullYear(), 0, 1);
+    } else { // number of months back
+      start = new Date(); start.setMonth(start.getMonth() - mode + 1); start.setDate(1);
+    }
+    const f = ymd(start), t = ymd(end);
+    setFrom(f); setTo(t); setActiveRange(mode); load(f, t);
+  };
 
   const { summary = {}, expenses = [] } = data || {};
 
@@ -211,18 +231,10 @@ export default function AnalyticsPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-medium text-gray-900">Analytics</h1>
           <p className="text-sm text-gray-500 mt-0.5">Spending insights and trends</p>
-        </div>
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-          {[['month','This month'],['quarter','This quarter'],['year','This year']].map(([val, label]) => (
-            <button key={val} onClick={() => setRange(val)}
-              className={`px-3 py-1.5 rounded-md text-xs transition-colors ${range===val ? 'bg-white font-medium shadow-sm' : 'text-gray-500'}`}>
-              {label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -236,7 +248,35 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {source === 'ledger' ? ledgerBody : (<>
+      {/* Flexible date filter (mirrors the Reports module) */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
+        <div className="flex flex-wrap gap-2 mb-3">
+          {[['This week', 'week'], ['This month', 'month'], ['This quarter', 'quarter'], ['Last 3 months', 3], ['Last 6 months', 6], ['This year', 'year'], ['All dates', 'all']].map(([label, m]) => (
+            <button key={label} onClick={() => setQuickRange(m)}
+              className={`px-3 py-1 rounded-full text-xs border transition-colors ${activeRange === m ? 'bg-brand-400 text-white border-brand-400 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">From</label>
+            <input type="date" value={from} onChange={e => { setFrom(e.target.value); setActiveRange(null); }}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">To</label>
+            <input type="date" value={to} onChange={e => { setTo(e.target.value); setActiveRange(null); }}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+          </div>
+          <button onClick={() => load()} className="px-4 py-2 bg-brand-400 text-white rounded-lg text-sm font-medium hover:bg-brand-600">
+            Apply
+          </button>
+        </div>
+      </div>
+
+      {loading ? <div className="py-16 text-center text-sm text-gray-400">Loading analytics...</div> : (
+      source === 'ledger' ? ledgerBody : (<>
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
@@ -321,7 +361,8 @@ export default function AnalyticsPage() {
           ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
         </div>
       </div>
-      </>)}
+      </>)
+      )}
     </div>
   );
 }

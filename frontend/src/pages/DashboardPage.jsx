@@ -27,6 +27,7 @@ export default function DashboardPage() {
   };
   const [expenses, setExpenses] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [ledger, setLedger] = useState(null); // null = not permitted / not loaded; array = AP/AR rows
   const [loading, setLoading] = useState(true);
   const { format } = useCurrency();
   const navigate = useNavigate();
@@ -66,9 +67,12 @@ export default function DashboardPage() {
     Promise.all([
       api.get(`/expenses?limit=8&scope=${scope}`),
       api.get(`/reports/summary?from=${from}&to=${to}&scope=${scope}`).catch(() => null),
-    ]).then(([exp, sum]) => {
+      // AP/AR for this month — silently null if the user can't view the ledger.
+      api.get(`/ledger?from=${from}&to=${to}&scope=${scope}`).catch(() => null),
+    ]).then(([exp, sum, led]) => {
       setExpenses(exp.expenses || []);
       setSummary(sum);
+      setLedger(Array.isArray(led) ? led : null);
     }).finally(() => setLoading(false));
   }, [scope]);
 
@@ -78,6 +82,15 @@ export default function DashboardPage() {
 
   const pending = expenses.filter(e => e.status === 'PENDING').reduce((s, e) => s + e.amountPhp, 0);
   const approved = expenses.filter(e => e.status === 'APPROVED').reduce((s, e) => s + e.amountPhp, 0);
+
+  // AP/AR this-month metrics (only when the ledger was fetched successfully).
+  const apArAllowed = Array.isArray(ledger);
+  const apRows = (ledger || []).filter(d => d.docType !== 'AR_INVOICE');
+  const arRows = (ledger || []).filter(d => d.docType === 'AR_INVOICE');
+  const apActive = apRows.filter(d => ['APPROVED', 'PROCESSED'].includes(d.status)).reduce((s, d) => s + (d.amountPhp || 0), 0);
+  const arActive = arRows.filter(d => ['APPROVED', 'PROCESSED'].includes(d.status)).reduce((s, d) => s + (d.amountPhp || 0), 0);
+  const apArPending = (ledger || []).filter(d => d.status === 'PENDING').length;
+  const apArApproved = (ledger || []).filter(d => ['APPROVED', 'PROCESSED'].includes(d.status)).reduce((s, d) => s + (d.amountPhp || 0), 0);
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -118,6 +131,30 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* AP & AR — this month (only shown to users who can view the ledger) */}
+      {apArAllowed && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-gray-700">AP &amp; AR — this month</p>
+            <button onClick={() => navigate('/ap-ar')} className="text-xs text-brand-400 hover:text-brand-600">View all →</button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Payables (AP)', value: format(apActive), sub: `${apRows.length} invoice(s)`, accent: 'text-red-500' },
+              { label: 'Receivables (AR)', value: format(arActive), sub: `${arRows.length} invoice(s)`, accent: 'text-green-600' },
+              { label: 'Approved / processed', value: format(apArApproved), sub: `${(ledger || []).length} total`, accent: 'text-blue-600' },
+              { label: 'Pending', value: `${apArPending}`, sub: 'awaiting approval', accent: 'text-amber-600' },
+            ].map((m, i) => (
+              <div key={i} className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs text-gray-600 font-medium uppercase tracking-wide mb-1">{m.label}</p>
+                <p className={`text-xl font-medium ${m.accent || 'text-gray-900'}`}>{loading ? '—' : m.value}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{m.sub}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {/* Chart — spending summary is for Finance/Admin only */}
         {canViewSpending && (
@@ -149,6 +186,7 @@ export default function DashboardPage() {
             {[
               { label: 'Add a new expense', sub: 'Scan receipt or enter manually', action: () => navigate('/expenses/new'), icon: '+' },
               { label: 'View all expenses', sub: 'Your expense history', action: () => navigate('/expenses'), icon: '🧾' },
+              ...(apArAllowed ? [{ label: 'View AP & AR', sub: 'Payables & receivables', action: () => navigate('/ap-ar'), icon: '📑' }] : []),
               ...(canExport ? [{ label: 'Download report', sub: 'Export this month to Excel', action: exportReport, icon: '⬇' }] : []),
             ].map((a, i) => (
               <button key={i} onClick={a.action}
