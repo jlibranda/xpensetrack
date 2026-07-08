@@ -51,7 +51,8 @@ export default function LedgerPage({ mode = 'manage' }) {
   const scopeTabs = user?.role === 'ADMIN' ? []
     : user?.role === 'FINANCE' ? [['self', 'Self'], ['team', 'Team'], ['all', 'All']]
     : [['self', 'Self'], ['team', 'Team']];
-  const [scope, setScope] = useState(user?.role === 'ADMIN' ? 'all' : 'self');
+  // FINANCE & ADMIN manage company-wide AP/AR, so default to All; others to Self.
+  const [scope, setScope] = useState(['FINANCE', 'ADMIN'].includes(user?.role) ? 'all' : 'self');
   const _catTypes = settings?.categoryTypes || {};
   const categories = (settings?.categories || []).filter(c => ['AP_AR','BOTH'].includes(_catTypes[c] || 'BOTH'));
   const vendors = Array.isArray(settings?.vendors) ? settings.vendors : [];

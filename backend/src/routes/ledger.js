@@ -102,10 +102,13 @@ router.get('/', authenticate, requirePermission(PERM, FALLBACK), async (req, res
       let requested = scope;
       if (requested === 'all' && !['FINANCE', 'ADMIN'].includes(req.user.role)) requested = 'team';
       if (requested === 'self') {
-        where.createdById = req.user.id;
+        // Own OR assigned to me — so nothing you're responsible for disappears
+        // (e.g. after an invoice is returned/rejected back to you).
+        where.AND = [{ OR: [{ createdById: req.user.id }, { assignedToId: req.user.id }] }];
       } else if (requested === 'team') {
         const team = await teamMemberIds(req.user.id);
-        where.createdById = { in: team.length ? team : ['__none__'] };
+        const ids = [req.user.id, ...team];
+        where.AND = [{ OR: [{ createdById: { in: ids } }, { assignedToId: { in: ids } }] }];
       } // 'all' -> no owner filter
     }
     if (docType) {
