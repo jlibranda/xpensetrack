@@ -355,6 +355,11 @@ export default function SettingsPage() {
         loginMaxAttempts: s.loginMaxAttempts ?? settings?.loginMaxAttempts,
         loginLockoutMinutes: s.loginLockoutMinutes ?? settings?.loginLockoutMinutes,
         vendors: Array.isArray(s?.vendors) ? s.vendors : (settings?.vendors || []),
+        companyAddress: s.companyAddress ?? settings?.companyAddress,
+        companyZip: s.companyZip ?? settings?.companyZip,
+        signatoryName: s.signatoryName ?? settings?.signatoryName,
+        signatoryTitle: s.signatoryTitle ?? settings?.signatoryTitle,
+        atcCodes: Array.isArray(s?.atcCodes) ? s.atcCodes : (settings?.atcCodes || []),
       };
       const updated = await api.patch('/settings', payload);
       applyTheme(updated);
@@ -454,6 +459,29 @@ export default function SettingsPage() {
                 }}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
               <p className="text-xs text-gray-400 mt-1">Format: XXX-XXX-XXX-XXX (auto-formatted as you type). Shown at the top of the app.</p>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Registered address <span className="text-gray-400">(for BIR 2307 — Payor)</span></label>
+              <input value={s?.companyAddress||''} placeholder="Unit/Bldg, Street, Barangay, City/Municipality, Province"
+                onChange={e=>set('companyAddress', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">ZIP code</label>
+                <input value={s?.companyZip||''} placeholder="1600" onChange={e=>set('companyZip', e.target.value.replace(/\D/g,'').slice(0,4))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Signatory name <span className="text-gray-400">(2307)</span></label>
+                <input value={s?.signatoryName||''} placeholder="Juan Dela Cruz" onChange={e=>set('signatoryName', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Signatory title</label>
+                <input value={s?.signatoryTitle||''} placeholder="Finance Officer" onChange={e=>set('signatoryTitle', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+              </div>
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Default currency</label>
@@ -719,6 +747,40 @@ export default function SettingsPage() {
                 ))}
               </div>
               <p className="text-xs text-gray-400 mt-2">These appear in the AP/AR "Add Document" Vendor/Payee dropdown. Type controls which fields show (Government hides Vendor TIN, Doc/OR no., and PO no.). Users can still pick "Others" to type a name manually. Remember to click Save.</p>
+
+              {/* ATC codes for BIR 2307 / EWT */}
+              {(() => {
+                const alist = Array.isArray(s?.atcCodes) ? s.atcCodes : (settings?.atcCodes || []);
+                const aupd = (i, key, val) => set('atcCodes', alist.map((a, idx) => idx === i ? { ...a, [key]: val } : a));
+                return (
+                  <div className="mt-8 pt-6 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-sm font-medium text-gray-700">ATC codes &amp; EWT rates <span className="text-gray-400 font-normal">(for BIR 2307)</span></h2>
+                      <button onClick={() => set('atcCodes', [...alist, { code: '', description: '', rate: 0 }])}
+                        className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">+ Add ATC</button>
+                    </div>
+                    {alist.length === 0 && <p className="text-xs text-gray-400 mb-2">Add the ATCs your company uses (e.g. WC158 — goods 1%, WC160 — services 2%). These populate the ATC dropdown on AP invoices and auto-fill the EWT rate.</p>}
+                    <div className="space-y-2">
+                      {alist.map((a, i) => (
+                        <div key={i} className="flex flex-wrap items-center gap-2 border border-gray-100 rounded-lg p-2">
+                          <input value={a.code || ''} onChange={e => aupd(i, 'code', e.target.value.toUpperCase())} placeholder="ATC (e.g. WC160)"
+                            className="w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
+                          <input value={a.description || ''} onChange={e => aupd(i, 'description', e.target.value)} placeholder="Description (e.g. Services — regular supplier)"
+                            className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+                          <div className="flex items-center gap-1">
+                            <input type="number" step="0.01" value={a.rate ?? ''} onChange={e => aupd(i, 'rate', e.target.value === '' ? '' : Number(e.target.value))} placeholder="Rate"
+                              className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+                            <span className="text-sm text-gray-400">%</span>
+                          </div>
+                          <button onClick={() => set('atcCodes', alist.filter((_, idx) => idx !== i))}
+                            className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">⚠️ Verify the exact ATC codes and rates with your accountant/BIR. Common under RR 11-2018: goods 1%, services 2% for regular suppliers.</p>
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}

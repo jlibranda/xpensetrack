@@ -42,6 +42,8 @@ function parseSettings(s) {
   try { payoutReversalUserIds = JSON.parse(s.payoutReversalUserIds || '[]'); } catch(e) {}
   let vendors = [];
   try { vendors = JSON.parse(s.vendors || '[]'); } catch(e) {}
+  let atcCodes = [];
+  try { atcCodes = JSON.parse(s.atcCodes || '[]'); } catch(e) {}
   return {
     ...s,
     categories: s.categories.split(',').map(c => c.trim()).filter(Boolean),
@@ -52,6 +54,7 @@ function parseSettings(s) {
     emailTemplates,
     payoutReversalUserIds,
     vendors,
+    atcCodes,
   };
 }
 
@@ -65,7 +68,8 @@ router.patch('/', authenticate, async (req, res) => {
     const { companyName, defaultCurrency, receiptRequiredAbove, approvalLevels,
             primaryColor, categories, expenseTypes, categoryGlCodes, categoryTypes, defaultPassword, darkMode,
             wallpaperStyle, autoReapplyApprovalFlow, tin, accessControl, emailTemplates,
-            loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds, emailNotificationsEnabled, timezone, approvalFollowUpDays, vendors } = req.body;
+            loginMaxAttempts, loginLockoutMinutes, payoutReversalUserIds, emailNotificationsEnabled, timezone, approvalFollowUpDays, vendors,
+            companyAddress, companyZip, signatoryName, signatoryTitle, atcCodes } = req.body;
     const s = await getOrCreate();
     // Field-level permission: apply each group only if the user is allowed.
     const canCats = await hasPermission(req.user, 'edit_categories', ['FINANCE', 'ADMIN']);
@@ -119,6 +123,11 @@ router.patch('/', authenticate, async (req, res) => {
         timezone: canManage && timezone ? timezone : undefined,
         approvalFollowUpDays: canManage && approvalFollowUpDays !== undefined ? Math.max(0, parseInt(approvalFollowUpDays, 10) || 0) : undefined,
         vendors: (canApAr || canManage) && vendors !== undefined ? JSON.stringify(Array.isArray(vendors) ? vendors.filter(v => v && v.name).map(v => ({ name: String(v.name).trim(), tin: v.tin ? String(v.tin).trim() : undefined, type: ['COMPANY','GOVERNMENT','LGU'].includes(v.type) ? v.type : 'COMPANY', address: v.address ? String(v.address).trim() : undefined })) : []) : undefined,
+        companyAddress: canManage && companyAddress !== undefined ? (companyAddress || null) : undefined,
+        companyZip: canManage && companyZip !== undefined ? (companyZip || null) : undefined,
+        signatoryName: canManage && signatoryName !== undefined ? (signatoryName || null) : undefined,
+        signatoryTitle: canManage && signatoryTitle !== undefined ? (signatoryTitle || null) : undefined,
+        atcCodes: (canApAr || canManage) && atcCodes !== undefined ? JSON.stringify(Array.isArray(atcCodes) ? atcCodes.filter(a => a && a.code).map(a => ({ code: String(a.code).trim(), description: a.description ? String(a.description).trim() : '', rate: Number(a.rate) || 0 })) : []) : undefined,
       },
     });
     res.json(parseSettings(updated));

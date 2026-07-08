@@ -135,6 +135,10 @@ model LedgerDoc {
   amountPhp     Float     @default(0)
   vatableAmount Float?
   vatAmount     Float?
+  atcCode       String?   // BIR ATC (for 2307)
+  ewtRate       Float?    // expanded withholding tax rate (%)
+  ewtBase       Float?    // income payment subject to EWT
+  ewtAmount     Float?    // tax withheld
   category      String?
   frequency     String?   // ONE_TIME | WEEKLY | MONTHLY | QUARTERLY | ANNUALLY
   notes         String?
@@ -227,6 +231,11 @@ model OrgSettings {
   usdPhpRateUpdatedAt  DateTime?
   autoReapplyApprovalFlow Boolean @default(false)
   tin                  String?
+  companyAddress       String?
+  companyZip           String?
+  signatoryName        String?
+  signatoryTitle       String?
+  atcCodes             String   @default("[]")  // JSON: [{code, description, rate}]
   categories           String   @default("Cleaning,Education and Training,Entertainment/Meals,Equipment,Facility Maintenance and Repair,Furniture and Fixtures,General Office Expense,Hardware,Miscellaneous,Mobile Device,Non-Capital Small Tools Equipment and Furniture,Office Rent,Parking,Printing,Recruiting,Travel - Air Ticket (International),Travel - Air Ticket (Domestic),Travel - Others,Travel - Hotel (Domestic)")
   categoryGlCodes      String   @default("{}")
   categoryTypes        String   @default("{}")  // JSON: {categoryName: "EXPENSE"|"AP_AR"}

@@ -34,7 +34,8 @@ const FREQ = [['ONE_TIME','One-time'],['WEEKLY','Weekly'],['MONTHLY','Monthly'],
 const emptyDoc = (defaults = {}) => ({
   docType: 'AP_INVOICE', clientId: '', vendorName: '', vendorTin: '', businessStyle: '',
   docNumber: '', poNumber: '', docDate: '', dueDate: '', amount: '', currency: 'PHP',
-  category: '', notes: '', remarks: '', assignedToId: '', status: 'DRAFT', frequency: 'ONE_TIME', receiptId: '', ...defaults,
+  category: '', notes: '', remarks: '', assignedToId: '', status: 'DRAFT', frequency: 'ONE_TIME', receiptId: '',
+  atcCode: '', ewtRate: '', ewtBase: '', ewtAmount: '', ...defaults,
 });
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -290,6 +291,41 @@ export default function LedgerPage({ mode = 'manage' }) {
             <select value={editing.currency} onChange={(e) => setEditing({ ...editing, currency: e.target.value })} className="inp w-20"><option>PHP</option><option>USD</option></select>
           </div></Field>
           <div className="sm:col-span-2"><Field label="Remarks"><input className="inp" value={editing.remarks} onChange={(e) => setEditing({ ...editing, remarks: e.target.value })} placeholder="Notes visible in the list" /></Field></div>
+
+          {['AP_INVOICE', 'AP_RECEIPT'].includes(editing.docType) && (() => {
+            const atcList = settings?.atcCodes || [];
+            const netDefault = (() => { const a = Number(editing.amount) || 0; return a ? +(a / 1.12).toFixed(2) : 0; })();
+            const setEwt = (patch) => {
+              const next = { ...editing, ...patch };
+              if (!('ewtAmount' in patch)) {
+                const base = Number(next.ewtBase), rate = Number(next.ewtRate);
+                if (!isNaN(base) && !isNaN(rate)) next.ewtAmount = +((base * rate) / 100).toFixed(2);
+              }
+              setEditing(next);
+            };
+            return (
+              <div className="sm:col-span-2 mt-1 p-3 rounded-lg border border-gray-100 bg-gray-50">
+                <p className="text-xs font-semibold text-gray-600 mb-2">Expanded Withholding Tax <span className="font-normal text-gray-400">(for BIR 2307)</span></p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="ATC code">
+                    <select className="inp" value={editing.atcCode || ''} onChange={(e) => {
+                      const code = e.target.value;
+                      const atc = atcList.find(a => a.code === code);
+                      const base = (editing.ewtBase === '' || editing.ewtBase == null) ? netDefault : editing.ewtBase;
+                      setEwt({ atcCode: code, ewtRate: atc ? atc.rate : (editing.ewtRate ?? ''), ewtBase: base });
+                    }}>
+                      <option value="">— none / not subject to EWT —</option>
+                      {atcList.map(a => <option key={a.code} value={a.code}>{a.code}{a.description ? ` — ${a.description}` : ''} ({a.rate}%)</option>)}
+                    </select>
+                  </Field>
+                  <Field label="EWT rate (%)"><input type="number" step="0.01" className="inp" value={editing.ewtRate ?? ''} onChange={(e) => setEwt({ ewtRate: e.target.value })} /></Field>
+                  <Field label="Income payment (base)"><input type="number" step="0.01" className="inp" value={editing.ewtBase ?? ''} placeholder={netDefault ? `default ${netDefault}` : ''} onChange={(e) => setEwt({ ewtBase: e.target.value })} /></Field>
+                  <Field label="Tax withheld"><input type="number" step="0.01" className="inp" value={editing.ewtAmount ?? ''} onChange={(e) => setEditing({ ...editing, ewtAmount: e.target.value })} /></Field>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">Auto-computes tax withheld = base × rate; you can override any field. Base defaults to the amount net of 12% VAT. Manage ATC codes in Settings → Vendors/Payees.</p>
+              </div>
+            );
+          })()}
         </div>
         <p className="text-xs text-gray-400 mt-2">VAT (12% inclusive) is computed automatically from the amount.</p>
         {editing.receiptId && (
@@ -358,6 +394,7 @@ export default function LedgerPage({ mode = 'manage' }) {
     docDate: d.docDate ? d.docDate.slice(0, 10) : '', dueDate: d.dueDate ? d.dueDate.slice(0, 10) : '', amount: String(d.amount ?? ''),
     currency: d.currency || 'PHP', category: d.category || '', notes: d.notes || '', remarks: d.remarks || '',
     assignedToId: d.assignedToId || '', status: d.status, receiptId: d.receiptId || '', frequency: d.frequency || 'ONE_TIME',
+    atcCode: d.atcCode || '', ewtRate: d.ewtRate ?? '', ewtBase: d.ewtBase ?? '', ewtAmount: d.ewtAmount ?? '',
   });
 
   return (
@@ -467,6 +504,9 @@ export default function LedgerPage({ mode = 'manage' }) {
               <div className="space-y-2 text-xs mb-4">
                 <div className="flex justify-between"><span className="text-gray-500">Amount</span><span className="font-medium">{format(viewing.amountPhp || 0)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">VATable / VAT</span><span>{format(viewing.vatableAmount || 0)} / {format(viewing.vatAmount || 0)}</span></div>
+                {viewing.ewtAmount != null && (
+                  <div className="flex justify-between"><span className="text-gray-500">EWT{viewing.atcCode ? ` (${viewing.atcCode}${viewing.ewtRate != null ? ` · ${viewing.ewtRate}%` : ''})` : ''}</span><span>{format(viewing.ewtAmount || 0)}</span></div>
+                )}
                 <div className="flex justify-between"><span className="text-gray-500">Document date</span><span>{fmtDate(viewing.docDate)}</span></div>
                 {viewing.dueDate && <div className="flex justify-between"><span className="text-gray-500">Due date</span><span>{fmtDate(viewing.dueDate)}</span></div>}
                 <div className="flex justify-between"><span className="text-gray-500">Category</span><span>{viewing.category || '—'}</span></div>
