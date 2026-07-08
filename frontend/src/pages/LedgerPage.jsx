@@ -38,7 +38,8 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { month: 'sho
 const initials = (u) => u ? `${(u.firstName || '')[0] || ''}${(u.lastName || '')[0] || ''}`.toUpperCase() : '';
 const fullName = (u) => u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : '';
 
-export default function LedgerPage() {
+export default function LedgerPage({ mode = 'manage' }) {
+  const isAddMode = mode === 'add';
   const { format } = useCurrency();
   const { settings } = useOrg();
   const _catTypes = settings?.categoryTypes || {};
@@ -96,16 +97,22 @@ export default function LedgerPage() {
   };
 
   useEffect(() => { loadClients(); loadUsers(); }, []);
-  useEffect(() => { if (tab !== 'CLIENTS') load(); /* eslint-disable-next-line */ }, [tab, clientFilter, statusFilter]);
+  useEffect(() => { if (!isAddMode && tab !== 'CLIENTS') load(); /* eslint-disable-next-line */ }, [tab, clientFilter, statusFilter]);
+  // In add mode the page IS the form — keep a fresh document loaded in it.
+  useEffect(() => { if (isAddMode && !editing) setEditing(emptyDoc({ docType: 'AP_INVOICE', clientId: defaultClientId() })); /* eslint-disable-next-line */ }, [isAddMode, clients]);
 
   const defaultClientId = () => (clients.find(c => c.isDefault) || {}).id || '';
+  const initAddForm = () => setEditing(emptyDoc({ docType: 'AP_INVOICE', clientId: defaultClientId() }));
+  // After save/submit: in add mode reset to a fresh form; in manage mode close + reload.
+  const afterSave = () => { if (isAddMode) initAddForm(); else { setEditing(null); load(); } };
+  const cancelForm = () => { if (isAddMode) initAddForm(); else setEditing(null); };
 
   // ---- single doc ----
   const saveDoc = async () => {
     const f = editing;
     try {
       if (f.id) await api.patch(`/ledger/${f.id}`, f); else await api.post('/ledger', f);
-      setEditing(null); load();
+      afterSave();
     } catch (err) { alert(err.error || 'Save failed'); }
   };
   const saveAndSubmitDoc = async () => {
@@ -114,9 +121,9 @@ export default function LedgerPage() {
       let id = f.id;
       if (id) await api.patch(`/ledger/${id}`, f);
       else { const created = await api.post('/ledger', f); id = created?.id; }
-      if (!id) { setEditing(null); load(); alert('Saved, but could not submit automatically.'); return; }
+      if (!id) { afterSave(); alert('Saved, but could not submit automatically.'); return; }
       const r = await api.post(`/ledger/${id}/submit`);
-      setEditing(null); load();
+      afterSave();
       alert(r?.doc?.status === 'APPROVED' ? 'Saved \u2014 auto-approved (no approver in the creator\u2019s flow).' : 'Saved & submitted for approval.');
     } catch (err) { alert(err.error || 'Failed'); }
   };
@@ -223,13 +230,105 @@ export default function LedgerPage() {
 
   const tabs = [['ALL', 'All'], ['AP_INVOICE', 'AP Invoices'], ['AR_INVOICE', 'AR Invoices'], ['ARCHIVED', 'Archived'], ['CLIENTS', 'Clients']];
 
+  // Shared document form — used inline on the "Add" page and inside the edit modal.
+  const renderDocForm = () => {
+    if (!editing) return null;
+    const _vSel = vendors.find(v => v.name === editing.vendorName);
+    const isGovt = (editing._vendorType || (_vSel && _vSel.type)) === 'GOVERNMENT';
+    return (
+      <>
+        {!editing.id && (
+          <label className="block mb-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-center cursor-pointer hover:bg-gray-50 text-gray-600">
+            {scanning ? '✨ Reading…' : '📷 Scan a receipt/invoice to auto-fill'}
+            <input type="file" accept="image/*,application/pdf" className="hidden" disabled={scanning}
+              onChange={(e) => { scanInto(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Type"><select value={editing.docType} onChange={(e) => setEditing({ ...editing, docType: e.target.value })} className="inp">
+            <option value="AP_INVOICE">AP Invoice (payable)</option><option value="AR_INVOICE">AR Invoice (receivable)</option>
+          </select></Field>
+          <Field label="Frequency"><select value={editing.frequency || 'ONE_TIME'} onChange={(e) => setEditing({ ...editing, frequency: e.target.value })} className="inp">
+            {FREQ.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select></Field>
+          <div className="col-span-2"><Field label="Vendor / Payee">
+            <select
+              value={(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) ? '__OTHER__' : (editing.vendorName || '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '__OTHER__') setEditing({ ...editing, _vendorOther: true, vendorName: '', vendorTin: '', _vendorType: 'COMPANY' });
+                else { const v = vendors.find(x => x.name === val); setEditing({ ...editing, _vendorOther: false, vendorName: val, vendorTin: (v && v.tin) || '', _vendorType: (v && v.type) || 'COMPANY' }); }
+              }}
+              className="inp">
+              <option value="">— select vendor / payee —</option>
+              {vendors.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+              <option value="__OTHER__">Others (type manually)</option>
+            </select>
+            {(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) && (
+              <input className="inp mt-2" placeholder="Enter vendor / payee name" value={editing.vendorName}
+                onChange={(e) => setEditing({ ...editing, _vendorOther: true, vendorName: e.target.value })} />
+            )}
+          </Field></div>
+          {!isGovt && <Field label="Vendor TIN"><input className="inp" value={editing.vendorTin} onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value })} /></Field>}
+          {!isGovt && <Field label="Doc / OR number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>}
+          {!isGovt && <Field label="PO number"><input className="inp" value={editing.poNumber} onChange={(e) => setEditing({ ...editing, poNumber: e.target.value })} /></Field>}
+          <Field label="Category"><select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} className="inp">
+            <option value="">—</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select></Field>
+          <Field label="Document date"><input type="date" className="inp" value={editing.docDate} onChange={(e) => setEditing({ ...editing, docDate: e.target.value })} /></Field>
+          <Field label="Due date"><input type="date" className="inp" value={editing.dueDate} onChange={(e) => setEditing({ ...editing, dueDate: e.target.value })} /></Field>
+          <Field label="Amount"><div className="flex gap-1">
+            <input type="number" step="0.01" className="inp" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value })} />
+            <select value={editing.currency} onChange={(e) => setEditing({ ...editing, currency: e.target.value })} className="inp w-20"><option>PHP</option><option>USD</option></select>
+          </div></Field>
+          <div className="col-span-2"><Field label="Remarks"><input className="inp" value={editing.remarks} onChange={(e) => setEditing({ ...editing, remarks: e.target.value })} placeholder="Notes visible in the list" /></Field></div>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">VAT (12% inclusive) is computed automatically from the amount.</p>
+        {editing.receiptId && (
+          <a href={`${API_BASE}/ocr/receipt/${editing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline mt-1 inline-block" style={{ color: BRAND }}>📎 View attached file</a>
+        )}
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={cancelForm} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">{isAddMode ? 'Clear' : 'Cancel'}</button>
+          <button onClick={saveDoc} className="px-4 py-2 text-sm rounded-lg font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">Save {isAddMode ? 'as draft' : ''}</button>
+          <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Submit for approval</button>
+        </div>
+      </>
+    );
+  };
+
+  // ---- ADD MODE: form-first page (like Add Expense); list lives in "My AP & AR Invoices" ----
+  if (isAddMode) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="mb-5">
+          <h1 className="text-2xl font-semibold text-gray-900">Add AP &amp; AR Invoice</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Capture a vendor invoice or receivable, then save as draft or submit for approval. View all invoices in <span className="font-medium">My AP &amp; AR Invoices</span>.</p>
+        </div>
+        {/* Drag & drop scan */}
+        <label
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); openDocWithScan(e.dataTransfer.files); }}
+          className={`block mb-5 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center px-6 py-6 ${dragging ? 'bg-emerald-50 border-emerald-400 scale-[1.01]' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+          <input type="file" accept="image/*,application/pdf" className="hidden"
+            onChange={(e) => { openDocWithScan(e.target.files); e.target.value = ''; }} />
+          <div className="text-2xl mb-1">🧾</div>
+          <p className="text-sm font-medium text-gray-700">Drop an invoice here, or <span style={{ color: BRAND }}>browse</span> to auto-fill</p>
+        </label>
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          {renderDocForm()}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">AP &amp; AR Invoice</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Capture vendor invoices &amp; receipts, assign owners, and track what's paid.</p>
+          <h1 className="text-2xl font-semibold text-gray-900">My AP &amp; AR Invoices</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Track vendor invoices &amp; receivables, submit for approval, and see what's paid.</p>
         </div>
         {isDocTab && !isArchived && (
           <button onClick={() => setEditing(emptyDoc({ clientId: clientFilter || defaultClientId(), docType: ['AP_INVOICE','AP_RECEIPT','AR_INVOICE'].includes(tab) ? tab : 'AP_INVOICE' }))}
@@ -385,70 +484,12 @@ export default function LedgerPage() {
         </>
       )}
 
-      {/* Add/edit modal */}
-      {editing && (() => {
-        const _vSel = vendors.find(v => v.name === editing.vendorName);
-        const isGovt = (editing._vendorType || (_vSel && _vSel.type)) === 'GOVERNMENT';
-        return (
+      {/* Add/edit modal (manage mode only — in add mode the form is inline) */}
+      {!isAddMode && editing && (
         <Modal title={editing.id ? 'Edit document' : 'Add document'} onClose={() => setEditing(null)}>
-          {!editing.id && (
-            <label className="block mb-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-center cursor-pointer hover:bg-gray-50 text-gray-600">
-              {scanning ? '✨ Reading…' : '📷 Scan a receipt/invoice to auto-fill'}
-              <input type="file" accept="image/*,application/pdf" className="hidden" disabled={scanning}
-                onChange={(e) => { scanInto(e.target.files?.[0]); e.target.value = ''; }} />
-            </label>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Type"><select value={editing.docType} onChange={(e) => setEditing({ ...editing, docType: e.target.value })} className="inp">
-              <option value="AP_INVOICE">AP Invoice (payable)</option><option value="AR_INVOICE">AR Invoice (receivable)</option>
-            </select></Field>
-            <Field label="Frequency"><select value={editing.frequency || 'ONE_TIME'} onChange={(e) => setEditing({ ...editing, frequency: e.target.value })} className="inp">
-              {FREQ.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select></Field>
-            <div className="col-span-2"><Field label="Vendor / Payee">
-              <select
-                value={(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) ? '__OTHER__' : (editing.vendorName || '')}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '__OTHER__') setEditing({ ...editing, _vendorOther: true, vendorName: '', vendorTin: '', _vendorType: 'COMPANY' });
-                  else { const v = vendors.find(x => x.name === val); setEditing({ ...editing, _vendorOther: false, vendorName: val, vendorTin: (v && v.tin) || '', _vendorType: (v && v.type) || 'COMPANY' }); }
-                }}
-                className="inp">
-                <option value="">— select vendor / payee —</option>
-                {vendors.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
-                <option value="__OTHER__">Others (type manually)</option>
-              </select>
-              {(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) && (
-                <input className="inp mt-2" placeholder="Enter vendor / payee name" value={editing.vendorName}
-                  onChange={(e) => setEditing({ ...editing, _vendorOther: true, vendorName: e.target.value })} />
-              )}
-            </Field></div>
-            {!isGovt && <Field label="Vendor TIN"><input className="inp" value={editing.vendorTin} onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value })} /></Field>}
-            {!isGovt && <Field label="Doc / OR number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>}
-            {!isGovt && <Field label="PO number"><input className="inp" value={editing.poNumber} onChange={(e) => setEditing({ ...editing, poNumber: e.target.value })} /></Field>}
-            <Field label="Category"><select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} className="inp">
-              <option value="">—</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select></Field>
-            <Field label="Document date"><input type="date" className="inp" value={editing.docDate} onChange={(e) => setEditing({ ...editing, docDate: e.target.value })} /></Field>
-            <Field label="Due date"><input type="date" className="inp" value={editing.dueDate} onChange={(e) => setEditing({ ...editing, dueDate: e.target.value })} /></Field>
-            <Field label="Amount"><div className="flex gap-1">
-              <input type="number" step="0.01" className="inp" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value })} />
-              <select value={editing.currency} onChange={(e) => setEditing({ ...editing, currency: e.target.value })} className="inp w-20"><option>PHP</option><option>USD</option></select>
-            </div></Field>
-            <div className="col-span-2"><Field label="Remarks"><input className="inp" value={editing.remarks} onChange={(e) => setEditing({ ...editing, remarks: e.target.value })} placeholder="Notes visible in the list" /></Field></div>
-          </div>
-          <p className="text-xs text-gray-400 mt-2">VAT (12% inclusive) is computed automatically from the amount.</p>
-          {editing.receiptId && (
-            <a href={`${API_BASE}/ocr/receipt/${editing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline mt-1 inline-block" style={{ color: BRAND }}>📎 View attached file</a>
-          )}
-          <div className="flex justify-end gap-2 mt-4">
-            <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-            <button onClick={saveDoc} className="px-4 py-2 text-sm rounded-lg font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">Save</button>
-            <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Submit for approval</button>
-          </div>
+          {renderDocForm()}
         </Modal>
-        );
-      })()}
+      )}
 
       {/* Bulk review modal */}
       {bulk && (
