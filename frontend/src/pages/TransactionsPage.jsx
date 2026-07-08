@@ -253,28 +253,12 @@ export default function TransactionsPage() {
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
   const exportExcel = () => {
+    if (selected.length === 0) { toast.error('Please tick the row(s) you want to export first.'); return; }
     const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
     const token = localStorage.getItem('token');
     const params = new URLSearchParams({ token });
-    // If rows are ticked, export ONLY those (selection wins over the filters).
-    if (selected.length > 0) {
-      params.set('ids', selected.join(','));
-      window.open(`${base}/${source === 'ledger' ? 'ledger' : 'reports'}/export?${params.toString()}`, '_blank');
-      return;
-    }
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
-    if (payoutFilter) params.set('payoutDate', payoutFilter);
-    if (source === 'ledger') {
-      if (status === 'FOR_PROCESS') params.set('status', 'APPROVED');
-      else if (status) params.set('status', status);
-      window.open(`${base}/ledger/export?${params.toString()}`, '_blank');
-      return;
-    }
-    if (status === 'PROCESSED') params.set('processed', 'yes');
-    else if (status === 'FOR_PROCESS') { params.set('status', 'APPROVED'); params.set('processed', 'no'); }
-    else if (status) params.set('status', status);
-    window.open(`${base}/reports/export?${params.toString()}`, '_blank');
+    params.set('ids', selected.join(','));
+    window.open(`${base}/${source === 'ledger' ? 'ledger' : 'reports'}/export?${params.toString()}`, '_blank');
   };
 
   const generate2307Pdf = async () => {
@@ -353,7 +337,9 @@ export default function TransactionsPage() {
               {deleting ? 'Deleting…' : `🗑 Delete selected${selected.length ? ` (${selected.length})` : ''}`}
             </button>
           )}
-          <button onClick={exportExcel} className="px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: '#16a34a' }}>
+          <button onClick={exportExcel}
+            className="px-3 py-2 rounded-lg text-sm font-semibold text-white"
+            style={{ backgroundColor: '#16a34a' }}>
             ⬇ {selected.length > 0 ? `Export selected (${selected.length})` : 'Export Excel'}
           </button>
         </div>

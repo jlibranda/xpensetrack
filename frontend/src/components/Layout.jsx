@@ -1,5 +1,5 @@
 // src/components/Layout.jsx
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
@@ -24,33 +24,45 @@ const ADMIN_NAV = [
 
 // Mobile header brand: auto-shrinks the company name so the FULL name fits the
 // available middle space (no truncation). Measures on mount, name change, resize.
-function AutoFitBrand({ name, dark, onClick }) {
+// Auto-fit the company name into the available width by shrinking the font size
+// until the WHOLE name fits (never truncated). Re-fits when the web font finishes
+// loading and whenever the container resizes — the earlier version measured before
+// the bold font loaded, so long names were being clipped.
+function AutoFitText({ text, color, onClick, max = 20, min = 9, weight = 'bold', className = '' }) {
   const wrapRef = useRef(null);
   const textRef = useRef(null);
-  const [size, setSize] = useState(20);
-  useEffect(() => {
+  const [size, setSize] = useState(max);
+  useLayoutEffect(() => {
     const fit = () => {
       const wrap = wrapRef.current, txt = textRef.current;
-      if (!wrap || !txt || !name) return;
-      const MAX = 20, MIN = 10;
-      txt.style.fontSize = MAX + 'px';
-      const avail = wrap.clientWidth - 4;
-      const need = txt.scrollWidth;
-      let s = MAX;
-      if (need > avail && need > 0) s = Math.max(MIN, Math.floor(MAX * (avail / need)));
+      if (!wrap || !txt || !text) return;
+      const avail = wrap.clientWidth - 2;
+      if (avail <= 0) return;
+      let s = max;
+      txt.style.fontSize = s + 'px';
+      // Shrink one px at a time, measuring the real rendered width each step,
+      // so kerning/rounding can't leave the last characters clipped.
+      while (s > min && txt.scrollWidth > avail) { s -= 1; txt.style.fontSize = s + 'px'; }
       setSize(s);
     };
     fit();
+    let ro;
+    if (typeof ResizeObserver !== 'undefined' && wrapRef.current) {
+      ro = new ResizeObserver(fit);
+      ro.observe(wrapRef.current);
+    }
+    // Re-fit once the brand/web font is ready (fallback-font width differs).
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit).catch(() => {});
     window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
-  }, [name]);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', fit); };
+  }, [text, max, min]);
   return (
-    <div ref={wrapRef} className="flex-1 min-w-0 flex justify-center md:justify-start overflow-hidden">
-      {name && (
+    <div ref={wrapRef} className={`min-w-0 overflow-hidden ${className}`}>
+      {text && (
         <span ref={textRef} onClick={onClick}
-          className="md:hidden font-bold whitespace-nowrap cursor-pointer leading-none"
-          style={{ fontSize: size, color: dark ? '#f1f5f9' : '#111827' }}>
-          {name}
+          className={`whitespace-nowrap leading-none ${weight === 'bold' ? 'font-bold' : 'font-semibold'} ${onClick ? 'cursor-pointer' : ''}`}
+          style={{ fontSize: size, color }}>
+          {text}
         </span>
       )}
     </div>
@@ -186,7 +198,7 @@ export default function Layout() {
                   {settings?.companyName?.[0] || 'X'}
                 </div>
             }
-            <span className="font-semibold text-white text-sm truncate">{settings?.companyName || 'Cashalo'}</span>
+            <AutoFitText text={settings?.companyName || 'Cashalo'} color="#ffffff" max={14} min={8} weight="semibold" className="flex-1" />
           </div>
         </div>
 
@@ -339,7 +351,9 @@ export default function Layout() {
           </div>
 
           {/* Center (mobile): company name auto-fit into the vacant middle space */}
-          <AutoFitBrand name={loaded ? (settings?.companyName || '') : ''} dark={darkMode} onClick={() => navigate('/')} />
+          <AutoFitText text={loaded ? (settings?.companyName || '') : ''} color={darkMode ? '#f1f5f9' : '#111827'}
+            onClick={() => navigate('/')} max={20} min={11}
+            className="flex-1 flex justify-center md:justify-start md:hidden" />
 
           <div className="flex items-center gap-3 shrink-0">
           {/* Dark/Light toggle */}
