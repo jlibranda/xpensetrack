@@ -62,6 +62,7 @@ export default function TransactionsPage() {
   const [deleting, setDeleting] = useState(false);
   const [selected, setSelected] = useState([]);
   const [detail, setDetail] = useState(null);
+  const [gen2307, setGen2307] = useState(null);
 
 
   const load = async () => {
@@ -75,6 +76,9 @@ export default function TransactionsPage() {
           id: doc.id,
           _isLedger: true,
           merchant: doc.vendorName || 'AP/AR document',
+          vendorName: doc.vendorName || '',
+          ewtAmount: doc.ewtAmount,
+          docDate: doc.docDate,
           title: doc.docNumber ? `${doc.vendorName || 'AP/AR'} — ${doc.docNumber}` : (doc.vendorName || 'AP/AR document'),
           description: doc.notes || '',
           amountPhp: doc.amountPhp != null ? doc.amountPhp : doc.amount,
@@ -225,6 +229,25 @@ export default function TransactionsPage() {
     else if (status === 'FOR_PROCESS') { params.set('status', 'APPROVED'); params.set('processed', 'no'); }
     else if (status) params.set('status', status);
     window.open(`${base}/reports/export?${params.toString()}`, '_blank');
+  };
+
+  const download2307 = (row, scope, format) => {
+    const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams({ token, format });
+    if (scope === 'invoice') {
+      params.set('invoiceId', row.id);
+    } else {
+      const dt = new Date(row.payoutDate || row.processedAt || row.docDate || Date.now());
+      params.set('vendor', row.vendorName || row.merchant || '');
+      params.set('year', String(dt.getFullYear()));
+      params.set('quarter', String(Math.floor(dt.getMonth() / 3) + 1));
+    }
+    window.open(`${base}/ledger/2307?${params.toString()}`, '_blank');
+  };
+  const quarterLabel = (row) => {
+    const dt = new Date(row?.payoutDate || row?.processedAt || row?.docDate || Date.now());
+    return `Q${Math.floor(dt.getMonth() / 3) + 1} ${dt.getFullYear()}`;
   };
 
   const showChecks = canProcess; // Finance/Admin can select rows
@@ -394,9 +417,15 @@ export default function TransactionsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {canUndo && e.processedAt && ['APPROVED', 'PROCESSED'].includes(e.status)
-                      ? <button onClick={() => unmarkProcessed(e.id)} className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50">Undo</button>
-                      : <span className="text-xs text-gray-300">—</span>}
+                    <div className="flex items-center gap-1">
+                      {source === 'ledger' && e.processedAt && (
+                        <button onClick={() => setGen2307(e)} title="Generate BIR 2307"
+                          className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">📄 2307</button>
+                      )}
+                      {canUndo && e.processedAt && ['APPROVED', 'PROCESSED'].includes(e.status)
+                        ? <button onClick={() => unmarkProcessed(e.id)} className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50">Undo</button>
+                        : (source === 'ledger' && e.processedAt ? null : <span className="text-xs text-gray-300">—</span>)}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -480,10 +509,50 @@ export default function TransactionsPage() {
                 )}
               </div>
               )}
+              {source === 'ledger' && e.processedAt && (
+                <div className="pt-2">
+                  <button onClick={() => { setGen2307(e); setDetail(null); }}
+                    className="w-full py-2 border border-gray-200 rounded-lg text-xs text-gray-700 hover:bg-gray-50">📄 Generate BIR Form 2307</button>
+                </div>
+              )}
             </div>
           </div>
         );
       })()}
+
+      {/* BIR 2307 generator chooser */}
+      {gen2307 && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setGen2307(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-5" onClick={ev => ev.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-medium text-gray-900">Generate BIR Form 2307</p>
+              <button onClick={() => setGen2307(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Payee: <span className="font-medium text-gray-700">{gen2307.vendorName || gen2307.merchant}</span></p>
+
+            <div className="space-y-4">
+              <div className="border border-gray-100 rounded-xl p-3">
+                <p className="text-xs font-semibold text-gray-700 mb-1">This invoice only</p>
+                <p className="text-xs text-gray-400 mb-2">Certificate covering just this one AP transaction.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => download2307(gen2307, 'invoice', 'pdf')} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#dc2626' }}>📄 PDF</button>
+                  <button onClick={() => download2307(gen2307, 'invoice', 'xlsx')} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#16a34a' }}>📊 Excel</button>
+                </div>
+              </div>
+
+              <div className="border border-gray-100 rounded-xl p-3">
+                <p className="text-xs font-semibold text-gray-700 mb-1">Vendor's full quarter — {quarterLabel(gen2307)}</p>
+                <p className="text-xs text-gray-400 mb-2">All PROCESSED AP for this vendor in the quarter, grouped by ATC with monthly breakdown (BIR-standard).</p>
+                <div className="flex gap-2">
+                  <button onClick={() => download2307(gen2307, 'quarter', 'pdf')} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#dc2626' }}>📄 PDF</button>
+                  <button onClick={() => download2307(gen2307, 'quarter', 'xlsx')} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#16a34a' }}>📊 Excel</button>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-4">System-generated layout — verify against the official BIR Form 2307 (Jan 2018) before filing. Tax figures come from the EWT fields on each invoice.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
