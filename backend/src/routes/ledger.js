@@ -10,7 +10,9 @@ const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
 const { sendApprovalRequestEmail, sendStatusUpdateEmail } = require('../lib/email');
 const XLSX = require('xlsx');
-const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const { signReceiptToken } = require('../lib/receipt-token');
 const prisma = new PrismaClient();
 
@@ -332,135 +334,124 @@ async function build2307(docs) {
   const org = await prisma.orgSettings.findFirst();
   const payor = { name: org?.companyName || '', tin: org?.tin || '', address: org?.companyAddress || '', zip: org?.companyZip || '', signatory: org?.signatoryName || '', title: org?.signatoryTitle || '' };
   const first = docs[0] || {};
-  const payee = { name: first.vendorName || '', tin: first.vendorTin || '', address: '' };
+  const payee = { name: first.vendorName || '', tin: first.vendorTin || '', address: '', zip: '' };
   try {
     const vendors = JSON.parse(org?.vendors || '[]');
     const v = vendors.find(x => x.name === payee.name);
-    if (v) { payee.address = v.address || ''; if (!payee.tin) payee.tin = v.tin || ''; }
+    if (v) { payee.address = v.address || ''; payee.zip = v.zip || ''; if (!payee.tin) payee.tin = v.tin || ''; }
   } catch (e) { /* ignore */ }
 
   return { y, q, monthLabels, periodFrom, periodTo, rows, grandIncome, grandTax, payor, payee };
 }
 
-function fmtD(d) { return d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: '2-digit', day: '2-digit' }) : ''; }
+// Build editable JSON for the 2307 form (period, payee, payor, income rows).
+function toISO(d) { const x = new Date(d); return isNaN(x) ? '' : `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
 
-function build2307Xlsx(data) {
-  const aoa = [];
-  aoa.push(['BIR FORM 2307 — Certificate of Creditable Tax Withheld at Source']);
-  aoa.push([`For the Quarter: Q${data.q} ${data.y}`, '', `Period: ${fmtD(data.periodFrom)} to ${fmtD(data.periodTo)}`]);
-  aoa.push([]);
-  aoa.push(['PAYEE (Recipient)']);
-  aoa.push(['Name', data.payee.name, '', 'TIN', data.payee.tin]);
-  aoa.push(['Address', data.payee.address]);
-  aoa.push([]);
-  aoa.push(['PAYOR (Withholding Agent)']);
-  aoa.push(['Name', data.payor.name, '', 'TIN', data.payor.tin]);
-  aoa.push(['Address', `${data.payor.address}${data.payor.zip ? ' ' + data.payor.zip : ''}`]);
-  aoa.push([]);
-  aoa.push(['Income payments subject to Expanded Withholding Tax']);
-  aoa.push(['ATC', 'Rate %', `${data.monthLabels[0]}`, `${data.monthLabels[1]}`, `${data.monthLabels[2]}`, 'Total income', 'Tax withheld']);
-  for (const r of data.rows) {
-    aoa.push([r.atc, r.rate ?? '', +r.income[0].toFixed(2), +r.income[1].toFixed(2), +r.income[2].toFixed(2), +r.incomeTotal.toFixed(2), +r.taxTotal.toFixed(2)]);
-  }
-  aoa.push(['', '', '', '', 'TOTAL', +data.grandIncome.toFixed(2), +data.grandTax.toFixed(2)]);
-  aoa.push([]);
-  aoa.push(['We declare, under the penalties of perjury, that this certificate has been made in good faith, verified by us, and to the best of our knowledge and belief, is true and correct.']);
-  aoa.push([]);
-  aoa.push(['Payor / Authorized Representative', data.payor.signatory || '', '', 'Title', data.payor.title || '']);
-  aoa.push(['Payee / Authorized Representative']);
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'BIR 2307');
-  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+function prepare2307(data) {
+  return {
+    scopeQuarter: data.q, scopeYear: data.y,
+    periodFrom: toISO(data.periodFrom), periodTo: toISO(data.periodTo),
+    monthLabels: data.monthLabels,
+    payee: data.payee, payor: data.payor,
+    rows: data.rows.map(r => ({
+      atc: r.atc === '(no ATC)' ? '' : r.atc,
+      m1: +r.income[0].toFixed(2), m2: +r.income[1].toFixed(2), m3: +r.income[2].toFixed(2),
+      tax: +r.taxTotal.toFixed(2),
+    })),
+  };
 }
 
-function stream2307Pdf(res, data) {
-  const doc = new PDFDocument({ size: 'A4', margin: 40 });
-  doc.pipe(res);
-  const brand = '#1D9E75';
-  doc.fontSize(9).fillColor('#666').text('BIR FORM No. 2307', { align: 'right' });
-  doc.moveDown(0.2);
-  doc.fontSize(14).fillColor('#111').text('Certificate of Creditable Tax Withheld at Source', { align: 'center' });
-  doc.fontSize(9).fillColor('#666').text(`For the Quarter Q${data.q} ${data.y}  ·  Period: ${fmtD(data.periodFrom)} to ${fmtD(data.periodTo)}`, { align: 'center' });
-  doc.moveDown(0.8);
+// ---- Fill the official BIR 2307 template (Jan 2018 ENCS) with pdf-lib ----
+const TEMPLATE_2307 = path.join(__dirname, '..', 'templates', '2307_template.pdf');
+const H2307 = 936;
+const COORD = {
+  fromCells: [158,171,184.7,197.8,210.5,223.7,237.3,250.5],
+  toCells:   [405.5,418.7,432.3,445.5,458.2,471.4,485,498.1],
+  periodVc: 114,
+  payeeTin: [213.25,226.0,239.7, 264.9,277.65,291.25, 316.5,329.45,342.8, 368.7,383.45,399.0,414.45,428.65], payeeTinVc: 145,
+  payorTin: [213.85,226.35,240.2, 265.55,278.3,291.9, 317.2,330.2,343.6, 369.5,384.25,399.8,415.25,429.5], payorTinVc: 260.5,
+  zipCells: [548,560.6,573.9,586.25], payeeZipVc: 201, payorZipVc: 316,
+  payeeNameC: 313, payeeNameVc: 172, payeeAddrC: 285, payeeAddrVc: 201,
+  payorNameC: 313, payorNameVc: 287, payorAddrC: 285, payorAddrVc: 316,
+  rowVc: [371.65,385.35,399.05,412.75,426.45,440.1,453.75,467.45,481.15,494.85],
+  totalVc: 509.05,
+  col: { atc:198, m1:256, m2:330, m3:404, tot:478, tax:555 },
+  signC: 307, signVc: 745,
+};
+function money(n) { return (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
-  const box = (title, name, tin, addr) => {
-    const x = doc.x, y = doc.y;
-    doc.fontSize(9).fillColor(brand).text(title, { underline: false });
-    doc.fillColor('#111').fontSize(10).text(name || '—');
-    doc.fontSize(9).fillColor('#444').text(`TIN: ${tin || '—'}`);
-    doc.text(`Address: ${addr || '—'}`);
-    doc.moveDown(0.6);
+async function fill2307Pdf(d) {
+  const bytes = fs.readFileSync(TEMPLATE_2307);
+  const pdf = await PDFDocument.load(bytes);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const page = pdf.getPages()[0];
+  const black = rgb(0, 0, 0);
+  const put = (cx, vc, text, size = 8, align = 'center') => {
+    if (text == null || text === '') return;
+    const s = String(text);
+    const w = font.widthOfTextAtSize(s, size);
+    const x = align === 'center' ? cx - w / 2 : cx;
+    page.drawText(s, { x, y: H2307 - vc - size * 0.35, size, font, color: black });
   };
-  box('PAYEE (Recipient of income)', data.payee.name, data.payee.tin, data.payee.address);
-  box('PAYOR (Withholding agent)', data.payor.name, data.payor.tin, `${data.payor.address || ''}${data.payor.zip ? ' ' + data.payor.zip : ''}`);
+  const cellChars = (cells, vc, str, size = 9) => { const s = String(str || ''); for (let i = 0; i < cells.length && i < s.length; i++) put(cells[i], vc, s[i], size, 'center'); };
+  const digits = (iso) => { if (!iso) return ''; const [y, m, dd] = String(iso).split('-'); return `${m || ''}${dd || ''}${y || ''}`.replace(/\D/g, ''); };
 
-  doc.moveDown(0.2);
-  doc.fontSize(9).fillColor(brand).text('Income payments subject to Expanded Withholding Tax');
-  doc.moveDown(0.3);
+  cellChars(COORD.fromCells, COORD.periodVc, digits(d.periodFrom));
+  cellChars(COORD.toCells, COORD.periodVc, digits(d.periodTo));
+  cellChars(COORD.payeeTin, COORD.payeeTinVc, (d.payee?.tin || '').replace(/\D/g, ''));
+  put(COORD.payeeNameC, COORD.payeeNameVc, d.payee?.name || '');
+  put(COORD.payeeAddrC, COORD.payeeAddrVc, d.payee?.address || '');
+  cellChars(COORD.zipCells, COORD.payeeZipVc, (d.payee?.zip || '').replace(/\D/g, ''));
+  cellChars(COORD.payorTin, COORD.payorTinVc, (d.payor?.tin || '').replace(/\D/g, ''));
+  put(COORD.payorNameC, COORD.payorNameVc, d.payor?.name || '');
+  put(COORD.payorAddrC, COORD.payorAddrVc, d.payor?.address || '');
+  cellChars(COORD.zipCells, COORD.payorZipVc, (d.payor?.zip || '').replace(/\D/g, ''));
 
-  // table
-  const startX = 40;
-  const colW = [90, 40, 75, 75, 75, 75];
-  const headers = ['ATC', 'Rate', data.monthLabels[0].slice(0, 3), data.monthLabels[1].slice(0, 3), data.monthLabels[2].slice(0, 3), 'Tax withheld'];
-  let y = doc.y;
-  doc.fontSize(8).fillColor('#fff');
-  let cx = startX;
-  doc.rect(startX, y, colW.reduce((a, b) => a + b, 0), 16).fill(brand);
-  doc.fillColor('#fff');
-  headers.forEach((h, i) => { doc.text(h, cx + 3, y + 4, { width: colW[i] - 6, align: i === 0 ? 'left' : 'right' }); cx += colW[i]; });
-  y += 16;
-  doc.fillColor('#111').fontSize(8);
-  const drawRow = (cells, bold) => {
-    cx = startX;
-    if (bold) doc.font('Helvetica-Bold'); else doc.font('Helvetica');
-    cells.forEach((c, i) => { doc.text(c, cx + 3, y + 4, { width: colW[i] - 6, align: i === 0 ? 'left' : 'right' }); cx += colW[i]; });
-    doc.font('Helvetica');
-    doc.rect(startX, y, colW.reduce((a, b) => a + b, 0), 14).strokeColor('#e5e7eb').stroke();
-    y += 14;
-  };
-  for (const r of data.rows) {
-    drawRow([r.atc, r.rate != null ? `${r.rate}%` : '', peso(r.income[0]), peso(r.income[1]), peso(r.income[2]), peso(r.taxTotal)]);
-  }
-  drawRow(['TOTAL', '', peso(data.rows.reduce((a, r) => a + r.income[0], 0)), peso(data.rows.reduce((a, r) => a + r.income[1], 0)), peso(data.rows.reduce((a, r) => a + r.income[2], 0)), peso(data.grandTax)], true);
-  doc.y = y + 10;
-  doc.x = 40;
-  doc.fontSize(9).fillColor('#111').text(`Total income payments: PHP ${peso(data.grandIncome)}`);
-  doc.text(`Total tax withheld: PHP ${peso(data.grandTax)}`);
-  doc.moveDown(1);
-  doc.fontSize(7.5).fillColor('#666').text('We declare, under the penalties of perjury, that this certificate has been made in good faith, verified by us, and to the best of our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof.', { align: 'justify' });
-  doc.moveDown(1.5);
-  const sy = doc.y;
-  doc.fontSize(9).fillColor('#111').text(`${data.payor.signatory || '________________________'}`, 40, sy);
-  doc.fontSize(8).fillColor('#666').text(`Payor / Authorized Representative${data.payor.title ? ' — ' + data.payor.title : ''}`, 40);
-  doc.fontSize(9).fillColor('#111').text('________________________', 320, sy);
-  doc.fontSize(8).fillColor('#666').text('Payee / Authorized Representative', 320);
-  doc.moveDown(2);
-  doc.fontSize(7).fillColor('#999').text('Generated by Cashalo. This is a system-generated layout; verify against the official BIR Form 2307 (Jan 2018) before filing.', { align: 'center' });
-  doc.end();
+  const rows = (d.rows || []).slice(0, 10);
+  let t1 = 0, t2 = 0, t3 = 0, tt = 0;
+  rows.forEach((r, i) => {
+    const vc = COORD.rowVc[i];
+    put(COORD.col.atc, vc, r.atc || '');
+    if (Number(r.m1)) put(COORD.col.m1, vc, money(r.m1));
+    if (Number(r.m2)) put(COORD.col.m2, vc, money(r.m2));
+    if (Number(r.m3)) put(COORD.col.m3, vc, money(r.m3));
+    const rowTotal = (Number(r.m1) || 0) + (Number(r.m2) || 0) + (Number(r.m3) || 0);
+    if (rowTotal) put(COORD.col.tot, vc, money(rowTotal));
+    if (Number(r.tax)) put(COORD.col.tax, vc, money(r.tax));
+    t1 += Number(r.m1) || 0; t2 += Number(r.m2) || 0; t3 += Number(r.m3) || 0; tt += Number(r.tax) || 0;
+  });
+  put(COORD.col.m1, COORD.totalVc, money(t1));
+  put(COORD.col.m2, COORD.totalVc, money(t2));
+  put(COORD.col.m3, COORD.totalVc, money(t3));
+  put(COORD.col.tot, COORD.totalVc, money(t1 + t2 + t3));
+  put(COORD.col.tax, COORD.totalVc, money(tt));
+
+  const sig = [d.payor?.signatory, d.payor?.title, d.payor?.tin ? `TIN ${d.payor.tin}` : ''].filter(Boolean).join('  -  ');
+  put(COORD.signC, COORD.signVc, sig);
+
+  return await pdf.save();
 }
 
-router.get('/2307', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+router.get('/2307/prepare', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
-    const { invoiceId, vendor, year, quarter, format } = req.query;
+    const { invoiceId, vendor, year, quarter } = req.query;
     if (!invoiceId && !(vendor && year && quarter)) return res.status(400).json({ error: 'Provide invoiceId, or vendor+year+quarter' });
     const docs = await fetch2307Docs({ invoiceId, vendor, year, quarter });
     if (!docs.length) return res.status(404).json({ error: 'No matching AP invoices found' });
     const data = await build2307(docs);
-    const vName = (data.payee.name || 'payee').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-    const fname = `2307-${vName}-Q${data.q}-${data.y}`;
-    if (format === 'xlsx') {
-      const buf = build2307Xlsx(data);
-      res.setHeader('Content-Disposition', `attachment; filename="${fname}.xlsx"`);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-      return res.send(buf);
-    }
-    res.setHeader('Content-Disposition', `attachment; filename="${fname}.pdf"`);
+    res.json(prepare2307(data));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/2307/pdf', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+  try {
+    const d = req.body || {};
+    const buf = await fill2307Pdf(d);
+    const vName = (d.payee?.name || 'payee').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    res.setHeader('Content-Disposition', `attachment; filename="2307-${vName}-Q${d.scopeQuarter || ''}-${d.scopeYear || ''}.pdf"`);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-    return stream2307Pdf(res, data);
+    return res.send(Buffer.from(buf));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

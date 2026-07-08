@@ -292,42 +292,8 @@ export default function LedgerPage({ mode = 'manage' }) {
           </div></Field>
           <div className="sm:col-span-2"><Field label="Remarks"><input className="inp" value={editing.remarks} onChange={(e) => setEditing({ ...editing, remarks: e.target.value })} placeholder="Notes visible in the list" /></Field></div>
 
-          {['AP_INVOICE', 'AP_RECEIPT'].includes(editing.docType) && (() => {
-            const atcList = settings?.atcCodes || [];
-            const netDefault = (() => { const a = Number(editing.amount) || 0; return a ? +(a / 1.12).toFixed(2) : 0; })();
-            const setEwt = (patch) => {
-              const next = { ...editing, ...patch };
-              if (!('ewtAmount' in patch)) {
-                const base = Number(next.ewtBase), rate = Number(next.ewtRate);
-                if (!isNaN(base) && !isNaN(rate)) next.ewtAmount = +((base * rate) / 100).toFixed(2);
-              }
-              setEditing(next);
-            };
-            return (
-              <div className="sm:col-span-2 mt-1 p-3 rounded-lg border border-gray-100 bg-gray-50">
-                <p className="text-xs font-semibold text-gray-600 mb-2">Expanded Withholding Tax <span className="font-normal text-gray-400">(for BIR 2307)</span></p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="ATC code">
-                    <select className="inp" value={editing.atcCode || ''} onChange={(e) => {
-                      const code = e.target.value;
-                      const atc = atcList.find(a => a.code === code);
-                      const base = (editing.ewtBase === '' || editing.ewtBase == null) ? netDefault : editing.ewtBase;
-                      setEwt({ atcCode: code, ewtRate: atc ? atc.rate : (editing.ewtRate ?? ''), ewtBase: base });
-                    }}>
-                      <option value="">— none / not subject to EWT —</option>
-                      {atcList.map(a => <option key={a.code} value={a.code}>{a.code}{a.description ? ` — ${a.description}` : ''} ({a.rate}%)</option>)}
-                    </select>
-                  </Field>
-                  <Field label="EWT rate (%)"><input type="number" step="0.01" className="inp" value={editing.ewtRate ?? ''} onChange={(e) => setEwt({ ewtRate: e.target.value })} /></Field>
-                  <Field label="Income payment (base)"><input type="number" step="0.01" className="inp" value={editing.ewtBase ?? ''} placeholder={netDefault ? `default ${netDefault}` : ''} onChange={(e) => setEwt({ ewtBase: e.target.value })} /></Field>
-                  <Field label="Tax withheld"><input type="number" step="0.01" className="inp" value={editing.ewtAmount ?? ''} onChange={(e) => setEditing({ ...editing, ewtAmount: e.target.value })} /></Field>
-                </div>
-                <p className="text-xs text-gray-400 mt-2">Auto-computes tax withheld = base × rate; you can override any field. Base defaults to the amount net of 12% VAT. Manage ATC codes in Settings → Vendors/Payees.</p>
-              </div>
-            );
-          })()}
         </div>
-        <p className="text-xs text-gray-400 mt-2">VAT (12% inclusive) is computed automatically from the amount.</p>
+        <p className="text-xs text-gray-400 mt-2">VAT (12% inclusive) is computed automatically from the amount. Expanded Withholding Tax (for BIR 2307) is entered by Finance in the Transactions module once the invoice is processed.</p>
         {editing.receiptId && (
           <a href={`${API_BASE}/ocr/receipt/${editing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline mt-1 inline-block" style={{ color: BRAND }}>📎 View attached file</a>
         )}

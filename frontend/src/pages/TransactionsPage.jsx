@@ -63,6 +63,35 @@ export default function TransactionsPage() {
   const [selected, setSelected] = useState([]);
   const [detail, setDetail] = useState(null);
   const [gen2307, setGen2307] = useState(null);
+  const [gen2307Data, setGen2307Data] = useState(null);
+  const [gen2307Loading, setGen2307Loading] = useState(false);
+  const [ewtDraft, setEwtDraft] = useState(null);
+  const atcList = settings?.atcCodes || [];
+  useEffect(() => {
+    if (detail && detail._isLedger) setEwtDraft({ atcCode: detail.atcCode || '', ewtRate: detail.ewtRate ?? '', ewtBase: detail.ewtBase ?? '', ewtAmount: detail.ewtAmount ?? '' });
+    else setEwtDraft(null);
+  }, [detail]);
+  const setEwtField = (patch) => setEwtDraft(prev => {
+    const next = { ...(prev || {}), ...patch };
+    if (!('ewtAmount' in patch)) {
+      const base = Number(next.ewtBase), rate = Number(next.ewtRate);
+      if (!isNaN(base) && !isNaN(rate) && next.ewtBase !== '' && next.ewtRate !== '') next.ewtAmount = +((base * rate) / 100).toFixed(2);
+    }
+    return next;
+  });
+  const saveEwt = async (id) => {
+    try {
+      await api.patch(`/ledger/${id}`, {
+        atcCode: ewtDraft.atcCode || null,
+        ewtRate: ewtDraft.ewtRate === '' ? null : Number(ewtDraft.ewtRate),
+        ewtBase: ewtDraft.ewtBase === '' ? null : Number(ewtDraft.ewtBase),
+        ewtAmount: ewtDraft.ewtAmount === '' ? null : Number(ewtDraft.ewtAmount),
+      });
+      toast.success('Withholding tax saved');
+      await load();
+      setDetail(d => d ? { ...d, ...ewtDraft } : d);
+    } catch (e) { toast.error('Failed to save'); }
+  };
 
 
   const load = async () => {
@@ -77,6 +106,10 @@ export default function TransactionsPage() {
           _isLedger: true,
           merchant: doc.vendorName || 'AP/AR document',
           vendorName: doc.vendorName || '',
+          vendorTin: doc.vendorTin || '',
+          atcCode: doc.atcCode || '',
+          ewtRate: doc.ewtRate,
+          ewtBase: doc.ewtBase,
           ewtAmount: doc.ewtAmount,
           docDate: doc.docDate,
           title: doc.docNumber ? `${doc.vendorName || 'AP/AR'} — ${doc.docNumber}` : (doc.vendorName || 'AP/AR document'),
@@ -231,24 +264,54 @@ export default function TransactionsPage() {
     window.open(`${base}/reports/export?${params.toString()}`, '_blank');
   };
 
-  const download2307 = (row, scope, format) => {
-    const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
-    const token = localStorage.getItem('token');
-    const params = new URLSearchParams({ token, format });
-    if (scope === 'invoice') {
-      params.set('invoiceId', row.id);
-    } else {
-      const dt = new Date(row.payoutDate || row.processedAt || row.docDate || Date.now());
-      params.set('vendor', row.vendorName || row.merchant || '');
-      params.set('year', String(dt.getFullYear()));
-      params.set('quarter', String(Math.floor(dt.getMonth() / 3) + 1));
-    }
-    window.open(`${base}/ledger/2307?${params.toString()}`, '_blank');
-  };
   const quarterLabel = (row) => {
     const dt = new Date(row?.payoutDate || row?.processedAt || row?.docDate || Date.now());
     return `Q${Math.floor(dt.getMonth() / 3) + 1} ${dt.getFullYear()}`;
   };
+  const prepare2307 = async (row, scope) => {
+    setGen2307Loading(true);
+    try {
+      let qs;
+      if (scope === 'invoice') qs = `invoiceId=${encodeURIComponent(row.id)}`;
+      else {
+        const dt = new Date(row.payoutDate || row.processedAt || row.docDate || Date.now());
+        qs = `vendor=${encodeURIComponent(row.vendorName || row.merchant || '')}&year=${dt.getFullYear()}&quarter=${Math.floor(dt.getMonth() / 3) + 1}`;
+      }
+      const data = await api.get(`/ledger/2307/prepare?${qs}`);
+      // ensure at least one editable row
+      if (!data.rows || !data.rows.length) data.rows = [{ atc: '', m1: 0, m2: 0, m3: 0, tax: 0 }];
+      setGen2307Data(data);
+    } catch (e) { toast.error(e?.response?.data?.error || 'No data to prepare'); }
+    finally { setGen2307Loading(false); }
+  };
+  const generate2307Pdf = async () => {
+    const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${base}/ledger/2307/pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(gen2307Data),
+      });
+      if (!res.ok) { toast.error('Failed to generate PDF'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const vn = (gen2307Data.payee?.name || 'payee').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      a.download = `2307-${vn}-Q${gen2307Data.scopeQuarter || ''}-${gen2307Data.scopeYear || ''}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      toast.success('2307 generated');
+    } catch (e) { toast.error('Failed to generate PDF'); }
+  };
+  const setRow2307 = (i, key, val) => setGen2307Data(d => ({ ...d, rows: d.rows.map((r, idx) => idx === i ? { ...r, [key]: val } : r) }));
+  const setField2307 = (path, val) => setGen2307Data(d => {
+    const nd = { ...d };
+    if (path.startsWith('payee.')) nd.payee = { ...d.payee, [path.slice(6)]: val };
+    else if (path.startsWith('payor.')) nd.payor = { ...d.payor, [path.slice(6)]: val };
+    else nd[path] = val;
+    return nd;
+  });
 
   const showChecks = canProcess; // Finance/Admin can select rows
 
@@ -419,7 +482,7 @@ export default function TransactionsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       {source === 'ledger' && e.processedAt && (
-                        <button onClick={() => setGen2307(e)} title="Generate BIR 2307"
+                        <button onClick={() => { setGen2307(e); setGen2307Data(null); }} title="Generate BIR 2307"
                           className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">📄 2307</button>
                       )}
                       {canUndo && e.processedAt && ['APPROVED', 'PROCESSED'].includes(e.status)
@@ -509,9 +572,43 @@ export default function TransactionsPage() {
                 )}
               </div>
               )}
+              {source === 'ledger' && canProcess && ewtDraft && (() => {
+                const netDefault = (() => { const a = Number(e.amountPhp) || 0; return a ? +(a / 1.12).toFixed(2) : 0; })();
+                return (
+                  <div className="pt-3 mt-1 border-t border-gray-100">
+                    <p className="text-xs font-semibold text-gray-700 mb-2">Expanded Withholding Tax <span className="font-normal text-gray-400">(for BIR 2307)</span></p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-[11px] text-gray-500 mb-1">ATC code</label>
+                        <select className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white" value={ewtDraft.atcCode || ''}
+                          onChange={ev => { const code = ev.target.value; const atc = atcList.find(a => a.code === code); const base = (ewtDraft.ewtBase === '' || ewtDraft.ewtBase == null) ? netDefault : ewtDraft.ewtBase; setEwtField({ atcCode: code, ewtRate: atc ? atc.rate : (ewtDraft.ewtRate ?? ''), ewtBase: base }); }}>
+                          <option value="">— none / not subject to EWT —</option>
+                          {atcList.map(a => <option key={a.code} value={a.code}>{a.code}{a.description ? ` — ${a.description}` : ''} ({a.rate}%)</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-gray-500 mb-1">Rate (%)</label>
+                        <input type="number" step="0.01" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" value={ewtDraft.ewtRate ?? ''} onChange={ev => setEwtField({ ewtRate: ev.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-gray-500 mb-1">Income payment (base)</label>
+                        <input type="number" step="0.01" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" value={ewtDraft.ewtBase ?? ''} placeholder={netDefault ? `default ${netDefault}` : ''} onChange={ev => setEwtField({ ewtBase: ev.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-gray-500 mb-1">Tax withheld</label>
+                        <input type="number" step="0.01" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" value={ewtDraft.ewtAmount ?? ''} onChange={ev => setEwtField({ ewtAmount: ev.target.value })} />
+                      </div>
+                      <div className="flex items-end">
+                        <button onClick={() => saveEwt(e.id)} className="w-full py-1.5 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#1D9E75' }}>Save EWT</button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-2">Auto-computes withheld = base × rate; override any field. Base defaults to amount net of 12% VAT.</p>
+                  </div>
+                );
+              })()}
               {source === 'ledger' && e.processedAt && (
                 <div className="pt-2">
-                  <button onClick={() => { setGen2307(e); setDetail(null); }}
+                  <button onClick={() => { setGen2307(e); setGen2307Data(null); setDetail(null); }}
                     className="w-full py-2 border border-gray-200 rounded-lg text-xs text-gray-700 hover:bg-gray-50">📄 Generate BIR Form 2307</button>
                 </div>
               )}
@@ -521,38 +618,114 @@ export default function TransactionsPage() {
       })()}
 
       {/* BIR 2307 generator chooser */}
-      {gen2307 && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setGen2307(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-5" onClick={ev => ev.stopPropagation()}>
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-sm font-medium text-gray-900">Generate BIR Form 2307</p>
-              <button onClick={() => setGen2307(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">Payee: <span className="font-medium text-gray-700">{gen2307.vendorName || gen2307.merchant}</span></p>
-
-            <div className="space-y-4">
-              <div className="border border-gray-100 rounded-xl p-3">
-                <p className="text-xs font-semibold text-gray-700 mb-1">This invoice only</p>
-                <p className="text-xs text-gray-400 mb-2">Certificate covering just this one AP transaction.</p>
-                <div className="flex gap-2">
-                  <button onClick={() => download2307(gen2307, 'invoice', 'pdf')} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#dc2626' }}>📄 PDF</button>
-                  <button onClick={() => download2307(gen2307, 'invoice', 'xlsx')} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#16a34a' }}>📊 Excel</button>
-                </div>
+      {gen2307 && (() => {
+        const close = () => { setGen2307(null); setGen2307Data(null); };
+        const d = gen2307Data;
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={close}>
+            <div className="bg-white rounded-2xl w-full max-w-2xl p-5 max-h-[90vh] overflow-y-auto" onClick={ev => ev.stopPropagation()}>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-sm font-medium text-gray-900">Generate BIR Form 2307</p>
+                <button onClick={close} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
               </div>
+              <p className="text-xs text-gray-500 mb-4">Payee: <span className="font-medium text-gray-700">{gen2307.vendorName || gen2307.merchant}</span></p>
 
-              <div className="border border-gray-100 rounded-xl p-3">
-                <p className="text-xs font-semibold text-gray-700 mb-1">Vendor's full quarter — {quarterLabel(gen2307)}</p>
-                <p className="text-xs text-gray-400 mb-2">All PROCESSED AP for this vendor in the quarter, grouped by ATC with monthly breakdown (BIR-standard).</p>
-                <div className="flex gap-2">
-                  <button onClick={() => download2307(gen2307, 'quarter', 'pdf')} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#dc2626' }}>📄 PDF</button>
-                  <button onClick={() => download2307(gen2307, 'quarter', 'xlsx')} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#16a34a' }}>📊 Excel</button>
+              {!d ? (
+                <div className="space-y-3">
+                  {gen2307Loading && <p className="text-xs text-gray-400">Preparing…</p>}
+                  <button disabled={gen2307Loading} onClick={() => prepare2307(gen2307, 'invoice')}
+                    className="w-full text-left border border-gray-100 rounded-xl p-3 hover:bg-gray-50">
+                    <p className="text-xs font-semibold text-gray-700">This invoice only</p>
+                    <p className="text-xs text-gray-400">Certificate covering just this one AP transaction.</p>
+                  </button>
+                  <button disabled={gen2307Loading} onClick={() => prepare2307(gen2307, 'quarter')}
+                    className="w-full text-left border border-gray-100 rounded-xl p-3 hover:bg-gray-50">
+                    <p className="text-xs font-semibold text-gray-700">Vendor's full quarter — {quarterLabel(gen2307)}</p>
+                    <p className="text-xs text-gray-400">All PROCESSED AP for this vendor in the quarter, grouped by ATC (BIR-standard).</p>
+                  </button>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Period — editable */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-700 mb-1">Period covered</p>
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <label className="block text-[11px] text-gray-500">From</label>
+                        <input type="date" value={d.periodFrom || ''} onChange={e => setField2307('periodFrom', e.target.value)}
+                          className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-gray-500">To</label>
+                        <input type="date" value={d.periodTo || ''} onChange={e => setField2307('periodTo', e.target.value)}
+                          className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payee / Payor — editable, prefilled */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="border border-gray-100 rounded-lg p-2 space-y-1">
+                      <p className="text-[11px] font-semibold text-gray-600">PAYEE</p>
+                      <input value={d.payee?.name || ''} onChange={e => setField2307('payee.name', e.target.value)} placeholder="Name" className="w-full px-2 py-1 border border-gray-200 rounded text-xs" />
+                      <input value={d.payee?.tin || ''} onChange={e => setField2307('payee.tin', e.target.value)} placeholder="TIN" className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono" />
+                      <input value={d.payee?.address || ''} onChange={e => setField2307('payee.address', e.target.value)} placeholder="Address" className="w-full px-2 py-1 border border-gray-200 rounded text-xs" />
+                      <input value={d.payee?.zip || ''} onChange={e => setField2307('payee.zip', e.target.value)} placeholder="ZIP" className="w-full px-2 py-1 border border-gray-200 rounded text-xs" />
+                    </div>
+                    <div className="border border-gray-100 rounded-lg p-2 space-y-1">
+                      <p className="text-[11px] font-semibold text-gray-600">PAYOR</p>
+                      <input value={d.payor?.name || ''} onChange={e => setField2307('payor.name', e.target.value)} placeholder="Name" className="w-full px-2 py-1 border border-gray-200 rounded text-xs" />
+                      <input value={d.payor?.tin || ''} onChange={e => setField2307('payor.tin', e.target.value)} placeholder="TIN" className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono" />
+                      <input value={d.payor?.address || ''} onChange={e => setField2307('payor.address', e.target.value)} placeholder="Address" className="w-full px-2 py-1 border border-gray-200 rounded text-xs" />
+                      <input value={d.payor?.zip || ''} onChange={e => setField2307('payor.zip', e.target.value)} placeholder="ZIP" className="w-full px-2 py-1 border border-gray-200 rounded text-xs" />
+                    </div>
+                  </div>
+
+                  {/* Income payments subject to EWT — editable */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-semibold text-gray-700">Income Payments Subject to Expanded Withholding Tax</p>
+                      <button onClick={() => setGen2307Data(x => ({ ...x, rows: [...x.rows, { atc: '', m1: 0, m2: 0, m3: 0, tax: 0 }] }))}
+                        className="text-xs px-2 py-1 border border-gray-200 rounded-lg hover:bg-gray-50">+ Row</button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead><tr className="text-gray-400">
+                          <th className="text-left font-medium p-1">ATC</th>
+                          <th className="text-right font-medium p-1">{d.monthLabels?.[0] || '1st Mo'}</th>
+                          <th className="text-right font-medium p-1">{d.monthLabels?.[1] || '2nd Mo'}</th>
+                          <th className="text-right font-medium p-1">{d.monthLabels?.[2] || '3rd Mo'}</th>
+                          <th className="text-right font-medium p-1">Tax withheld</th>
+                          <th></th>
+                        </tr></thead>
+                        <tbody>
+                          {d.rows.map((r, i) => (
+                            <tr key={i}>
+                              <td className="p-1"><input value={r.atc || ''} onChange={e => setRow2307(i, 'atc', e.target.value.toUpperCase())} className="w-20 px-1 py-1 border border-gray-200 rounded font-mono" /></td>
+                              <td className="p-1"><input type="number" step="0.01" value={r.m1 ?? ''} onChange={e => setRow2307(i, 'm1', e.target.value === '' ? '' : Number(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-right" /></td>
+                              <td className="p-1"><input type="number" step="0.01" value={r.m2 ?? ''} onChange={e => setRow2307(i, 'm2', e.target.value === '' ? '' : Number(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-right" /></td>
+                              <td className="p-1"><input type="number" step="0.01" value={r.m3 ?? ''} onChange={e => setRow2307(i, 'm3', e.target.value === '' ? '' : Number(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-right" /></td>
+                              <td className="p-1"><input type="number" step="0.01" value={r.tax ?? ''} onChange={e => setRow2307(i, 'tax', e.target.value === '' ? '' : Number(e.target.value))} className="w-24 px-1 py-1 border border-gray-200 rounded text-right" /></td>
+                              <td className="p-1"><button onClick={() => setGen2307Data(x => ({ ...x, rows: x.rows.filter((_, idx) => idx !== i) }))} className="text-red-400 hover:text-red-600">✕</button></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-1">Max 10 ATC rows fit on the form. Amounts auto-total on the PDF.</p>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => setGen2307Data(null)} className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50">← Back</button>
+                    <button onClick={generate2307Pdf} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#dc2626' }}>📄 Generate PDF</button>
+                  </div>
+                  <p className="text-[11px] text-gray-400">Fills the official BIR 2307 (Jan 2018 ENCS). Verify figures before issuing to the payee.</p>
+                </div>
+              )}
             </div>
-            <p className="text-xs text-gray-400 mt-4">System-generated layout — verify against the official BIR Form 2307 (Jan 2018) before filing. Tax figures come from the EWT fields on each invoice.</p>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

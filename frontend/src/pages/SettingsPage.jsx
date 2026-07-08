@@ -742,7 +742,9 @@ export default function SettingsPage() {
                     <button onClick={() => set('vendors', vlist.filter((_, idx) => idx !== i))}
                       className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
                     <input value={v.address || ''} onChange={e => upd(i, 'address', e.target.value)} placeholder="Registered address (for BIR 2307)"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+                      className="flex-1 min-w-[200px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+                    <input value={v.zip || ''} onChange={e => upd(i, 'zip', e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="ZIP"
+                      className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
                   </div>
                 ))}
               </div>
