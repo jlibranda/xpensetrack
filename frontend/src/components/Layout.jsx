@@ -284,8 +284,21 @@ export default function Layout() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 gap-3 shrink-0 z-10"
+        <header className="relative h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 gap-3 shrink-0 z-10"
           style={darkMode ? { backgroundColor: '#1e293b', borderColor: '#334155' } : {}}>
+
+          {/* Mobile: company name, centered (desktop shows branding in the sidebar) */}
+          {settings?.companyName && (() => {
+            const coName = settings.companyName;
+            const sizeClass = coName.length > 26 ? 'text-sm' : coName.length > 18 ? 'text-base' : 'text-lg';
+            return (
+              <span onClick={() => navigate('/')}
+                className={`md:hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold truncate max-w-[56vw] text-center cursor-pointer ${sizeClass}`}
+                style={{ color: darkMode ? '#f1f5f9' : '#111827' }}>
+                {coName}
+              </span>
+            );
+          })()}
 
           {/* Left: hamburger (mobile) + employer TIN */}
           <div className="flex items-center gap-3 min-w-0">
@@ -295,18 +308,6 @@ export default function Layout() {
               aria-label="Open menu">
               ☰
             </button>
-            {/* Mobile branding — company name only (desktop shows it in the sidebar) */}
-            {(() => {
-              const coName = settings?.companyName || 'XpenseTrack';
-              const sizeClass = coName.length > 22 ? 'text-[11px]' : coName.length > 14 ? 'text-xs' : 'text-sm';
-              return (
-                <span onClick={() => navigate('/')}
-                  className={`md:hidden font-semibold truncate max-w-[52vw] cursor-pointer ${sizeClass}`}
-                  style={{ color: darkMode ? '#f1f5f9' : '#111827' }}>
-                  {coName}
-                </span>
-              );
-            })()}
             {settings?.tin && (
               <span className="hidden md:inline text-sm font-medium whitespace-nowrap"
                 style={{ color: darkMode ? '#cbd5e1' : '#475569' }}>
