@@ -17,6 +17,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   const SENSITIVE_PERMS = ['manage_password', 'reset_passwords', 'send_credentials', 'manage_receipt_storage', 'upload_branding', 'change_branding', 'impersonate_user'];
   const DEFAULT_PERMS = {
     view_approvals: ['MANAGER','FINANCE','ADMIN'],
+    approve_on_behalf: ['ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],
     view_analytics: ['FINANCE','ADMIN'],
     export_reports: ['MANAGER','FINANCE','ADMIN'],
@@ -40,6 +41,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
 
   const PERM_LABELS = {
     view_approvals: 'Access My Approvals',
+    approve_on_behalf: 'Approve on behalf of approvers (unblock stuck approvals)',
     view_reports: 'View reports',
     view_analytics: 'View analytics',
     export_reports: 'Export Excel reports',

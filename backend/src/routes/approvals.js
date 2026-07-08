@@ -1,7 +1,15 @@
 // src/routes/approvals.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, requireRole, requirePermission } = require('../middleware/auth');
+const { authenticate, requireRole, requirePermission, hasPermission } = require('../middleware/auth');
+
+// A user can act on approvals that aren't theirs (approve/reject/return on behalf
+// of the assigned approver, and see all pending) if they are ADMIN or have been
+// granted the `approve_on_behalf` permission via Access Control.
+async function canApproveOnBehalf(user) {
+  if (user.role === 'ADMIN') return true;
+  return hasPermission(user, 'approve_on_behalf', ['ADMIN']);
+}
 const { sendStatusUpdateEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
@@ -67,7 +75,8 @@ async function chainModeForExpense(expense) {
 
 router.get('/pending', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
-    const baseWhere = req.user.role === 'ADMIN'
+    const onBehalf = await canApproveOnBehalf(req.user);
+    const baseWhere = onBehalf
       ? { status: 'PENDING', expenseId: { not: null } }
       : { approverId: req.user.id, status: 'PENDING', expenseId: { not: null } };
 
@@ -85,7 +94,7 @@ router.get('/pending', authenticate, requirePermission('view_approvals', ['MANAG
       const steps = summarizeSteps(all);
       const thisStep = steps.find(s => s.stepOrder === ap.stepOrder);
       if (thisStep && (thisStep.satisfied || thisStep.blocked)) continue; // step already resolved
-      if (req.user.role === 'ADMIN') { visible.push(ap); seenExpenses.add(ap.expenseId); continue; }
+      if (onBehalf) { visible.push(ap); seenExpenses.add(ap.expenseId); continue; }
       const mode = await chainModeForExpense(ap.expense);
       if (isActionable(ap, all, mode)) { visible.push(ap); seenExpenses.add(ap.expenseId); }
     }
@@ -95,7 +104,8 @@ router.get('/pending', authenticate, requirePermission('view_approvals', ['MANAG
 
 router.get('/history', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
-    const where = req.user.role === 'ADMIN'
+    const onBehalf = await canApproveOnBehalf(req.user);
+    const where = onBehalf
       ? { status: { not: 'PENDING' }, expenseId: { not: null } }
       : { approverId: req.user.id, status: { not: 'PENDING' }, expenseId: { not: null } };
     const approvals = await prisma.approval.findMany({
@@ -110,19 +120,20 @@ router.get('/history', authenticate, requirePermission('view_approvals', ['MANAG
 
 router.post('/:id/approve', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
+    const onBehalf = await canApproveOnBehalf(req.user);
     const { notes } = req.body;
     const approval = await prisma.approval.findUnique({
       where: { id: req.params.id },
       include: { expense: { include: { submittedBy: true } } },
     });
     if (!approval) return res.status(404).json({ error: 'Not found' });
-    if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
+    if (approval.approverId !== req.user.id && !onBehalf) return res.status(403).json({ error: 'Not your approval' });
     if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
 
     const all = await loadApprovals(approval.expenseId);
     const mode = await chainModeForExpense(approval.expense);
 
-    if (req.user.role !== 'ADMIN' && !isActionable(approval, all, mode)) {
+    if (!onBehalf && !isActionable(approval, all, mode)) {
       return res.status(400).json({ error: 'An earlier approval step is still pending.' });
     }
 
@@ -187,13 +198,14 @@ router.post('/:id/approve', authenticate, requirePermission('view_approvals', ['
 
 router.post('/:id/reject', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
+    const onBehalf = await canApproveOnBehalf(req.user);
     const { notes } = req.body;
     const approval = await prisma.approval.findUnique({
       where: { id: req.params.id },
       include: { expense: { include: { submittedBy: true } } },
     });
     if (!approval) return res.status(404).json({ error: 'Not found' });
-    if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
+    if (approval.approverId !== req.user.id && !onBehalf) return res.status(403).json({ error: 'Not your approval' });
     if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
     if (!notes || !notes.trim()) return res.status(400).json({ error: 'A reason is required when rejecting' });
 
@@ -214,6 +226,7 @@ router.post('/:id/reject', authenticate, requirePermission('view_approvals', ['M
 
 router.post('/:id/return', authenticate, requirePermission('view_approvals', ['MANAGER','FINANCE','ADMIN']), async (req, res) => {
   try {
+    const onBehalf = await canApproveOnBehalf(req.user);
     const { notes } = req.body;
     if (!notes) return res.status(400).json({ error: 'Comment required when returning' });
     const approval = await prisma.approval.findUnique({
@@ -221,7 +234,7 @@ router.post('/:id/return', authenticate, requirePermission('view_approvals', ['M
       include: { expense: { include: { submittedBy: true } } },
     });
     if (!approval) return res.status(404).json({ error: 'Not found' });
-    if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
+    if (approval.approverId !== req.user.id && !onBehalf) return res.status(403).json({ error: 'Not your approval' });
     await prisma.$transaction([
       // Mark this approver's decision as returned, and clear all OTHER pending
       // approvals on the expense so it leaves everyone's approval queue.
@@ -278,7 +291,8 @@ const nm = (u) => `${u?.firstName || ''} ${u?.lastName || ''}`.trim();
 
 router.get('/ledger/pending', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
-    const baseWhere = req.user.role === 'ADMIN'
+    const onBehalf = await canApproveOnBehalf(req.user);
+    const baseWhere = onBehalf
       ? { status: 'PENDING', ledgerDocId: { not: null } }
       : { approverId: req.user.id, status: 'PENDING', ledgerDocId: { not: null } };
     const approvals = await prisma.approval.findMany({
@@ -294,7 +308,7 @@ router.get('/ledger/pending', authenticate, requirePermission('view_approvals', 
       const steps = summarizeSteps(all);
       const thisStep = steps.find(s => s.stepOrder === ap.stepOrder);
       if (thisStep && (thisStep.satisfied || thisStep.blocked)) continue;
-      if (req.user.role === 'ADMIN') { visible.push(ap); seen.add(ap.ledgerDocId); continue; }
+      if (onBehalf) { visible.push(ap); seen.add(ap.ledgerDocId); continue; }
       const mode = await chainModeForLedger(ap.ledgerDoc);
       if (isActionable(ap, all, mode)) { visible.push(ap); seen.add(ap.ledgerDocId); }
     }
@@ -304,7 +318,8 @@ router.get('/ledger/pending', authenticate, requirePermission('view_approvals', 
 
 router.get('/ledger/pending-count', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
-    const baseWhere = req.user.role === 'ADMIN'
+    const onBehalf = await canApproveOnBehalf(req.user);
+    const baseWhere = onBehalf
       ? { status: 'PENDING', ledgerDocId: { not: null } }
       : { approverId: req.user.id, status: 'PENDING', ledgerDocId: { not: null } };
     const approvals = await prisma.approval.findMany({ where: baseWhere, include: { ledgerDoc: true }, orderBy: { createdAt: 'desc' } });
@@ -315,7 +330,7 @@ router.get('/ledger/pending-count', authenticate, requirePermission('view_approv
       const steps = summarizeSteps(all);
       const thisStep = steps.find(s => s.stepOrder === ap.stepOrder);
       if (thisStep && (thisStep.satisfied || thisStep.blocked)) continue;
-      if (req.user.role === 'ADMIN') { count++; seen.add(ap.ledgerDocId); continue; }
+      if (onBehalf) { count++; seen.add(ap.ledgerDocId); continue; }
       const mode = await chainModeForLedger(ap.ledgerDoc);
       if (isActionable(ap, all, mode)) { count++; seen.add(ap.ledgerDocId); }
     }
@@ -325,7 +340,8 @@ router.get('/ledger/pending-count', authenticate, requirePermission('view_approv
 
 router.get('/ledger/history', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
-    const where = req.user.role === 'ADMIN'
+    const onBehalf = await canApproveOnBehalf(req.user);
+    const where = onBehalf
       ? { status: { not: 'PENDING' }, ledgerDocId: { not: null } }
       : { approverId: req.user.id, status: { not: 'PENDING' }, ledgerDocId: { not: null } };
     const approvals = await prisma.approval.findMany({
@@ -337,16 +353,17 @@ router.get('/ledger/history', authenticate, requirePermission('view_approvals', 
 
 router.post('/ledger/:id/approve', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
+    const onBehalf = await canApproveOnBehalf(req.user);
     const { notes } = req.body;
     const approval = await prisma.approval.findUnique({ where: { id: req.params.id }, include: { ledgerDoc: true } });
     if (!approval || !approval.ledgerDocId) return res.status(404).json({ error: 'Not found' });
-    if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
+    if (approval.approverId !== req.user.id && !onBehalf) return res.status(403).json({ error: 'Not your approval' });
     if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
 
     const all = await loadLedgerApprovals(approval.ledgerDocId);
     const creator = approval.ledgerDoc.createdById ? await prisma.user.findUnique({ where: { id: approval.ledgerDoc.createdById } }) : null;
     const mode = creator?.approvalMode || 'SEQUENTIAL';
-    if (req.user.role !== 'ADMIN' && !isActionable(approval, all, mode)) return res.status(400).json({ error: 'An earlier approval step is still pending.' });
+    if (!onBehalf && !isActionable(approval, all, mode)) return res.status(400).json({ error: 'An earlier approval step is still pending.' });
 
     const g = groupId(approval);
     const isAnyStep = (approval.stepRule || 'ANY') !== 'ALL';
@@ -387,11 +404,12 @@ router.post('/ledger/:id/approve', authenticate, requirePermission('view_approva
 
 router.post('/ledger/:id/reject', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
+    const onBehalf = await canApproveOnBehalf(req.user);
     const { notes } = req.body;
     if (!notes || !notes.trim()) return res.status(400).json({ error: 'A reason is required when rejecting' });
     const approval = await prisma.approval.findUnique({ where: { id: req.params.id }, include: { ledgerDoc: true } });
     if (!approval || !approval.ledgerDocId) return res.status(404).json({ error: 'Not found' });
-    if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
+    if (approval.approverId !== req.user.id && !onBehalf) return res.status(403).json({ error: 'Not your approval' });
     if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
     const creator = approval.ledgerDoc.createdById ? await prisma.user.findUnique({ where: { id: approval.ledgerDoc.createdById } }) : null;
     await prisma.$transaction([
@@ -409,11 +427,12 @@ router.post('/ledger/:id/reject', authenticate, requirePermission('view_approval
 
 router.post('/ledger/:id/return', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
+    const onBehalf = await canApproveOnBehalf(req.user);
     const { notes } = req.body;
     if (!notes || !notes.trim()) return res.status(400).json({ error: 'Comment required when returning' });
     const approval = await prisma.approval.findUnique({ where: { id: req.params.id }, include: { ledgerDoc: true } });
     if (!approval || !approval.ledgerDocId) return res.status(404).json({ error: 'Not found' });
-    if (approval.approverId !== req.user.id && req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not your approval' });
+    if (approval.approverId !== req.user.id && !onBehalf) return res.status(403).json({ error: 'Not your approval' });
     const creator = approval.ledgerDoc.createdById ? await prisma.user.findUnique({ where: { id: approval.ledgerDoc.createdById } }) : null;
     await prisma.$transaction([
       prisma.approval.update({ where: { id: approval.id }, data: { status: 'REJECTED', notes: `[RETURNED] ${notes}` } }),
