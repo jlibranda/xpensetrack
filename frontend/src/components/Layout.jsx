@@ -30,6 +30,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const [showNotif, setShowNotif] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
   const notifRef = useRef();
 
   const canApprove = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
@@ -360,22 +361,38 @@ export default function Layout() {
           </button>
 
           <button onClick={() => navigate('/expenses/new')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
             style={{ backgroundColor: brandColor }}>
             + New Expense
           </button>
           </div>
         </header>
 
-        {/* Mobile quick action: New AP/AR (desktop uses the sidebar link) */}
-        {navVisible({ perm:'manage_ap_ar', feature:'apAr' }) && (
-          <button onClick={() => navigate('/payables')}
-            className="md:hidden fixed bottom-5 right-5 z-40 flex items-center gap-1.5 px-4 py-3 rounded-full text-white text-sm font-semibold shadow-lg active:scale-95 transition-transform"
-            style={{ backgroundColor: brandColor }}
-            aria-label="New AP / AR invoice">
-            + New AP / AR
-          </button>
-        )}
+        {/* Mobile speed-dial: one “+” that lets you pick Expense or AP/AR */}
+        <div className="md:hidden">
+          {fabOpen && <div className="fixed inset-0 z-30" onClick={() => setFabOpen(false)} />}
+          <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
+            {fabOpen && (
+              <>
+                <button onClick={() => { setFabOpen(false); navigate('/expenses/new'); }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow-lg border border-gray-100">
+                  🧾 New Expense
+                </button>
+                {navVisible({ perm:'manage_ap_ar', feature:'apAr' }) && (
+                  <button onClick={() => { setFabOpen(false); navigate('/payables'); }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow-lg border border-gray-100">
+                    📑 New AP / AR
+                  </button>
+                )}
+              </>
+            )}
+            <button onClick={() => setFabOpen(o => !o)}
+              className="w-14 h-14 rounded-full text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+              style={{ backgroundColor: brandColor }} aria-label="Quick add">
+              <span className={`text-3xl leading-none transition-transform ${fabOpen ? 'rotate-45' : ''}`}>+</span>
+            </button>
+          </div>
+        </div>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6"
           style={hasWallpaper

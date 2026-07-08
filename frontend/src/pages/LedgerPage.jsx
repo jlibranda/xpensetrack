@@ -230,28 +230,21 @@ export default function LedgerPage({ mode = 'manage' }) {
 
   const tabs = [['ALL', 'All'], ['AP_INVOICE', 'AP Invoices'], ['AR_INVOICE', 'AR Invoices'], ['ARCHIVED', 'Archived'], ['CLIENTS', 'Clients']];
 
-  // Shared document form — used inline on the "Add" page and inside the edit modal.
-  const renderDocForm = () => {
+  // Shared document FIELDS — used inline on the "Add" page and inside the edit modal.
+  const renderDocFields = () => {
     if (!editing) return null;
     const _vSel = vendors.find(v => v.name === editing.vendorName);
     const isGovt = (editing._vendorType || (_vSel && _vSel.type)) === 'GOVERNMENT';
     return (
       <>
-        {!editing.id && (
-          <label className="block mb-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-center cursor-pointer hover:bg-gray-50 text-gray-600">
-            {scanning ? '✨ Reading…' : '📷 Scan a receipt/invoice to auto-fill'}
-            <input type="file" accept="image/*,application/pdf" className="hidden" disabled={scanning}
-              onChange={(e) => { scanInto(e.target.files?.[0]); e.target.value = ''; }} />
-          </label>
-        )}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Type"><select value={editing.docType} onChange={(e) => setEditing({ ...editing, docType: e.target.value })} className="inp">
             <option value="AP_INVOICE">AP Invoice (payable)</option><option value="AR_INVOICE">AR Invoice (receivable)</option>
           </select></Field>
           <Field label="Frequency"><select value={editing.frequency || 'ONE_TIME'} onChange={(e) => setEditing({ ...editing, frequency: e.target.value })} className="inp">
             {FREQ.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select></Field>
-          <div className="col-span-2"><Field label="Vendor / Payee">
+          <div className="sm:col-span-2"><Field label="Vendor / Payee">
             <select
               value={(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) ? '__OTHER__' : (editing.vendorName || '')}
               onChange={(e) => {
@@ -281,42 +274,61 @@ export default function LedgerPage({ mode = 'manage' }) {
             <input type="number" step="0.01" className="inp" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value })} />
             <select value={editing.currency} onChange={(e) => setEditing({ ...editing, currency: e.target.value })} className="inp w-20"><option>PHP</option><option>USD</option></select>
           </div></Field>
-          <div className="col-span-2"><Field label="Remarks"><input className="inp" value={editing.remarks} onChange={(e) => setEditing({ ...editing, remarks: e.target.value })} placeholder="Notes visible in the list" /></Field></div>
+          <div className="sm:col-span-2"><Field label="Remarks"><input className="inp" value={editing.remarks} onChange={(e) => setEditing({ ...editing, remarks: e.target.value })} placeholder="Notes visible in the list" /></Field></div>
         </div>
         <p className="text-xs text-gray-400 mt-2">VAT (12% inclusive) is computed automatically from the amount.</p>
         {editing.receiptId && (
           <a href={`${API_BASE}/ocr/receipt/${editing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline mt-1 inline-block" style={{ color: BRAND }}>📎 View attached file</a>
         )}
-        <div className="flex justify-end gap-2 mt-4">
-          <button onClick={cancelForm} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">{isAddMode ? 'Clear' : 'Cancel'}</button>
-          <button onClick={saveDoc} className="px-4 py-2 text-sm rounded-lg font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">Save {isAddMode ? 'as draft' : ''}</button>
-          <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Submit for approval</button>
-        </div>
       </>
     );
   };
 
-  // ---- ADD MODE: form-first page (like Add Expense); list lives in "My AP & AR Invoices" ----
+  // ---- ADD MODE: form-first page — matches the Add Expense window (layout + buttons) ----
   if (isAddMode) {
+    const hasFile = !!editing?.receiptId;
     return (
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto">
         <div className="mb-5">
-          <h1 className="text-2xl font-semibold text-gray-900">Add AP &amp; AR Invoice</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Capture a vendor invoice or receivable, then save as draft or submit for approval. View all invoices in <span className="font-medium">My AP &amp; AR Invoices</span>.</p>
+          <h1 className="text-xl font-medium text-gray-900">Add AP &amp; AR invoice</h1>
+          <p className="text-sm text-gray-500 mt-0.5">View all invoices in <span className="font-medium">My AP &amp; AR Invoices</span>.</p>
         </div>
-        {/* Drag & drop scan */}
-        <label
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setDragging(false); openDocWithScan(e.dataTransfer.files); }}
-          className={`block mb-5 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center px-6 py-6 ${dragging ? 'bg-emerald-50 border-emerald-400 scale-[1.01]' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-          <input type="file" accept="image/*,application/pdf" className="hidden"
-            onChange={(e) => { openDocWithScan(e.target.files); e.target.value = ''; }} />
-          <div className="text-2xl mb-1">🧾</div>
-          <p className="text-sm font-medium text-gray-700">Drop an invoice here, or <span style={{ color: BRAND }}>browse</span> to auto-fill</p>
-        </label>
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          {renderDocForm()}
+
+        {/* Invoice / receipt (matches expense Receipt card) */}
+        <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-sm font-medium text-gray-700">Invoice / receipt</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: BRAND }}>✨ AI auto-fill</span>
+          </div>
+          {hasFile ? (
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-green-700">{scanning ? '✨ Reading…' : '✓ File attached'}</p>
+              <a href={`${API_BASE}/ocr/receipt/${editing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline" style={{ color: BRAND }}>View</a>
+            </div>
+          ) : (
+            <label className="block w-full border-2 border-dashed border-gray-200 rounded-xl py-5 text-center hover:bg-gray-50 transition-colors cursor-pointer">
+              <p className="text-xl mb-1">📷</p>
+              <p className="text-sm font-medium text-gray-700">{scanning ? '✨ Reading…' : 'Scan or upload invoice'}</p>
+              <p className="text-xs text-gray-400 mt-0.5">AI fills in the form automatically</p>
+              <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" disabled={scanning}
+                onChange={(e) => { scanInto(e.target.files?.[0]); e.target.value = ''; }} />
+            </label>
+          )}
+        </div>
+
+        {/* Details */}
+        <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
+          <fieldset disabled={scanning} className={scanning ? 'opacity-50 pointer-events-none' : ''}>
+            {renderDocFields()}
+          </fieldset>
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={saveAndSubmitDoc}
+            className="flex-1 py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90"
+            style={{ backgroundColor: BRAND }}>📤 Submit for approval</button>
+          <button onClick={saveDoc}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">💾 Draft</button>
         </div>
       </div>
     );
@@ -487,7 +499,19 @@ export default function LedgerPage({ mode = 'manage' }) {
       {/* Add/edit modal (manage mode only — in add mode the form is inline) */}
       {!isAddMode && editing && (
         <Modal title={editing.id ? 'Edit document' : 'Add document'} onClose={() => setEditing(null)}>
-          {renderDocForm()}
+          {!editing.id && (
+            <label className="block mb-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-center cursor-pointer hover:bg-gray-50 text-gray-600">
+              {scanning ? '✨ Reading…' : '📷 Scan a receipt/invoice to auto-fill'}
+              <input type="file" accept="image/*,application/pdf" className="hidden" disabled={scanning}
+                onChange={(e) => { scanInto(e.target.files?.[0]); e.target.value = ''; }} />
+            </label>
+          )}
+          {renderDocFields()}
+          <div className="flex justify-end gap-2 mt-4">
+            <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button onClick={saveDoc} className="px-4 py-2 text-sm rounded-lg font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">Save</button>
+            <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Submit for approval</button>
+          </div>
         </Modal>
       )}
 
