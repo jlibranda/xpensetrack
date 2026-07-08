@@ -285,7 +285,16 @@ router.get('/export', authenticate, requirePermission(PERM, FALLBACK), async (re
 // ---- BIR Form 2307 generation (PDF + Excel) ----
 const peso = (n) => (Number(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-async function fetch2307Docs({ invoiceId, vendor, year, quarter }) {
+async function fetch2307Docs({ invoiceId, ids, vendor, year, quarter }) {
+  if (ids) {
+    const idList = Array.isArray(ids) ? ids : String(ids).split(',').map(s => s.trim()).filter(Boolean);
+    if (idList.length) {
+      const docs = await prisma.ledgerDoc.findMany({ where: { id: { in: idList } } });
+      // keep the caller's order roughly by created/doc date
+      return docs.sort((a, b) => new Date(a.payoutDate || a.processedAt || a.docDate || 0) - new Date(b.payoutDate || b.processedAt || b.docDate || 0));
+    }
+    return [];
+  }
   if (invoiceId) {
     const d = await prisma.ledgerDoc.findUnique({ where: { id: invoiceId } });
     return d ? [d] : [];
@@ -359,6 +368,7 @@ function prepare2307(data) {
     rows: data.rows.map(r => ({
       desc: r.desc || '',
       atc: r.atc === '(no ATC)' ? '' : r.atc,
+      rate: r.rate != null ? r.rate : '',
       m1: +r.income[0].toFixed(2), m2: +r.income[1].toFixed(2), m3: +r.income[2].toFixed(2),
       tax: +r.taxTotal.toFixed(2),
     })),
@@ -439,10 +449,12 @@ async function fill2307Pdf(d) {
 
 router.get('/2307/prepare', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
-    const { invoiceId, vendor, year, quarter } = req.query;
-    if (!invoiceId && !(vendor && year && quarter)) return res.status(400).json({ error: 'Provide invoiceId, or vendor+year+quarter' });
-    const docs = await fetch2307Docs({ invoiceId, vendor, year, quarter });
+    const { invoiceId, ids, vendor, year, quarter } = req.query;
+    if (!invoiceId && !ids && !(vendor && year && quarter)) return res.status(400).json({ error: 'Provide invoiceId, ids, or vendor+year+quarter' });
+    const docs = await fetch2307Docs({ invoiceId, ids, vendor, year, quarter });
     if (!docs.length) return res.status(404).json({ error: 'No matching AP invoices found' });
+    const vendorNames = [...new Set(docs.map(d => d.vendorName || '').filter(Boolean))];
+    if (vendorNames.length > 1) return res.status(400).json({ error: `Selected invoices belong to different payees (${vendorNames.join(', ')}). A 2307 is per payee — please select invoices for one vendor only.` });
     const data = await build2307(docs);
     res.json(prepare2307(data));
   } catch (err) { res.status(500).json({ error: err.message }); }
