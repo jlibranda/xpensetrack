@@ -295,6 +295,13 @@ export default function Layout() {
               aria-label="Open menu">
               ☰
             </button>
+            {/* Mobile branding (desktop shows it in the sidebar) */}
+            <div className="flex items-center gap-2 md:hidden cursor-pointer min-w-0" onClick={() => navigate('/')}>
+              {settings?.logoUrl
+                ? <img src={settings.logoUrl} alt="Logo" className="w-7 h-7 rounded-lg object-cover shrink-0" />
+                : <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ backgroundColor: brandColor }}>{settings?.companyName?.[0] || 'X'}</div>}
+              <span className="font-semibold text-sm truncate" style={{ color: darkMode ? '#f1f5f9' : '#111827' }}>{settings?.companyName || 'XpenseTrack'}</span>
+            </div>
             {settings?.tin && (
               <span className="hidden md:inline text-sm font-medium whitespace-nowrap"
                 style={{ color: darkMode ? '#cbd5e1' : '#475569' }}>
