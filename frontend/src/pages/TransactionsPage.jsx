@@ -264,26 +264,6 @@ export default function TransactionsPage() {
     window.open(`${base}/reports/export?${params.toString()}`, '_blank');
   };
 
-  const quarterLabel = (row) => {
-    const dt = new Date(row?.payoutDate || row?.processedAt || row?.docDate || Date.now());
-    return `Q${Math.floor(dt.getMonth() / 3) + 1} ${dt.getFullYear()}`;
-  };
-  const prepare2307 = async (row, scope) => {
-    setGen2307Loading(true);
-    try {
-      let qs;
-      if (scope === 'invoice') qs = `invoiceId=${encodeURIComponent(row.id)}`;
-      else {
-        const dt = new Date(row.payoutDate || row.processedAt || row.docDate || Date.now());
-        qs = `vendor=${encodeURIComponent(row.vendorName || row.merchant || '')}&year=${dt.getFullYear()}&quarter=${Math.floor(dt.getMonth() / 3) + 1}`;
-      }
-      const data = await api.get(`/ledger/2307/prepare?${qs}`);
-      // ensure at least one editable row
-      if (!data.rows || !data.rows.length) data.rows = [{ desc: '', atc: '', rate: '', m1: 0, m2: 0, m3: 0, tax: 0 }];
-      setGen2307Data(data);
-    } catch (e) { toast.error(e?.response?.data?.error || 'No data to prepare'); }
-    finally { setGen2307Loading(false); }
-  };
   const generate2307Pdf = async () => {
     const base = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
     const token = localStorage.getItem('token');
@@ -510,10 +490,6 @@ export default function TransactionsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      {source === 'ledger' && e.processedAt && (
-                        <button onClick={() => { setGen2307(e); setGen2307Data(null); }} title="Generate BIR 2307"
-                          className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">📄 2307</button>
-                      )}
                       {canUndo && e.processedAt && ['APPROVED', 'PROCESSED'].includes(e.status)
                         ? <button onClick={() => unmarkProcessed(e.id)} className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50">Undo</button>
                         : (source === 'ledger' && e.processedAt ? null : <span className="text-xs text-gray-300">—</span>)}
@@ -635,12 +611,6 @@ export default function TransactionsPage() {
                   </div>
                 );
               })()}
-              {source === 'ledger' && e.processedAt && (
-                <div className="pt-2">
-                  <button onClick={() => { setGen2307(e); setGen2307Data(null); setDetail(null); }}
-                    className="w-full py-2 border border-gray-200 rounded-lg text-xs text-gray-700 hover:bg-gray-50">📄 Generate BIR Form 2307</button>
-                </div>
-              )}
             </div>
           </div>
         );
@@ -660,18 +630,8 @@ export default function TransactionsPage() {
               <p className="text-xs text-gray-500 mb-4">Payee: <span className="font-medium text-gray-700">{gen2307.vendorName || gen2307.merchant}</span></p>
 
               {!d ? (
-                <div className="space-y-3">
-                  {gen2307Loading && <p className="text-xs text-gray-400">Preparing…</p>}
-                  <button disabled={gen2307Loading} onClick={() => prepare2307(gen2307, 'invoice')}
-                    className="w-full text-left border border-gray-100 rounded-xl p-3 hover:bg-gray-50">
-                    <p className="text-xs font-semibold text-gray-700">This invoice only</p>
-                    <p className="text-xs text-gray-400">Certificate covering just this one AP transaction.</p>
-                  </button>
-                  <button disabled={gen2307Loading} onClick={() => prepare2307(gen2307, 'quarter')}
-                    className="w-full text-left border border-gray-100 rounded-xl p-3 hover:bg-gray-50">
-                    <p className="text-xs font-semibold text-gray-700">Vendor's full quarter — {quarterLabel(gen2307)}</p>
-                    <p className="text-xs text-gray-400">All PROCESSED AP for this vendor in the quarter, grouped by ATC (BIR-standard).</p>
-                  </button>
+                <div className="py-8 text-center">
+                  <p className="text-xs text-gray-400">Preparing 2307…</p>
                 </div>
               ) : (
                 <div className="space-y-4">
