@@ -53,6 +53,9 @@ export default function LedgerPage({ mode = 'manage' }) {
     : [['self', 'Self'], ['team', 'Team']];
   // FINANCE & ADMIN manage company-wide AP/AR, so default to All; others to Self.
   const [scope, setScope] = useState(['FINANCE', 'ADMIN'].includes(user?.role) ? 'all' : 'self');
+  // Full manage rights (create/edit/delete/submit). Approvers with only
+  // view_approvals get read-only access so they can still see invoices they handled.
+  const canManageApAr = user?.role === 'ADMIN' || (settings?.accessControl?.manage_ap_ar || ['FINANCE', 'ADMIN']).includes(user?.role);
   const _catTypes = settings?.categoryTypes || {};
   const categories = (settings?.categories || []).filter(c => ['AP_AR','BOTH'].includes(_catTypes[c] || 'BOTH'));
   const vendors = Array.isArray(settings?.vendors) ? settings.vendors : [];
@@ -361,11 +364,19 @@ export default function LedgerPage({ mode = 'manage' }) {
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-medium text-gray-900">My AP &amp; AR invoices</h1>
-        <button onClick={() => navigate('/payables')}
-          className="px-3 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90" style={{ backgroundColor: BRAND }}>
-          + Add AP &amp; AR invoice
-        </button>
+        {canManageApAr && (
+          <button onClick={() => navigate('/payables')}
+            className="px-3 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90" style={{ backgroundColor: BRAND }}>
+            + Add AP &amp; AR invoice
+          </button>
+        )}
       </div>
+
+      {!canManageApAr && (
+        <div className="mb-4 px-3 py-2 rounded-lg text-xs bg-amber-50 border border-amber-100 text-amber-700">
+          You have view-only access to AP &amp; AR invoices (you can review invoices you approved). Editing requires the “Manage payables &amp; receivables” permission.
+        </div>
+      )}
 
       {/* Scope toggle: Self / Team / All (mirrors My Expenses) */}
       {scopeTabs.length > 0 && (
@@ -409,7 +420,7 @@ export default function LedgerPage({ mode = 'manage' }) {
           ) : docs.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-gray-400 text-sm">No invoices found.</p>
-              <button onClick={() => navigate('/payables')} className="mt-2 text-sm hover:opacity-70" style={{ color: BRAND }}>Add AP &amp; AR invoice →</button>
+              {canManageApAr && <button onClick={() => navigate('/payables')} className="mt-2 text-sm hover:opacity-70" style={{ color: BRAND }}>Add AP &amp; AR invoice →</button>}
             </div>
           ) : (
             <div>
@@ -508,15 +519,17 @@ export default function LedgerPage({ mode = 'manage' }) {
                 </div>
               )}
 
-              <div className="flex flex-col gap-2 border-t border-gray-50 pt-3">
-                {!['PENDING', 'APPROVED', 'PROCESSED', 'PAID'].includes(viewing.status) && (
-                  <button onClick={() => submitDoc(viewing)} className="w-full py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: BRAND }}>📤 Submit for approval</button>
-                )}
-                <button onClick={() => { const d = viewing; setViewing(null); openEdit(d); }} className="w-full py-2 border border-gray-200 text-gray-700 rounded-lg text-xs hover:bg-gray-50">✏️ Edit</button>
-                {['DRAFT', 'RETURNED', 'REJECTED'].includes(viewing.status) && (
-                  <button onClick={() => { removeDoc(viewing); setViewing(null); }} className="w-full py-2 border border-red-100 text-red-600 rounded-lg text-xs hover:bg-red-50">🗑️ Delete permanently</button>
-                )}
-              </div>
+              {canManageApAr && (
+                <div className="flex flex-col gap-2 border-t border-gray-50 pt-3">
+                  {!['PENDING', 'APPROVED', 'PROCESSED', 'PAID'].includes(viewing.status) && (
+                    <button onClick={() => submitDoc(viewing)} className="w-full py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: BRAND }}>📤 Submit for approval</button>
+                  )}
+                  <button onClick={() => { const d = viewing; setViewing(null); openEdit(d); }} className="w-full py-2 border border-gray-200 text-gray-700 rounded-lg text-xs hover:bg-gray-50">✏️ Edit</button>
+                  {['DRAFT', 'RETURNED', 'REJECTED'].includes(viewing.status) && (
+                    <button onClick={() => { removeDoc(viewing); setViewing(null); }} className="w-full py-2 border border-red-100 text-red-600 rounded-lg text-xs hover:bg-red-50">🗑️ Delete permanently</button>
+                  )}
+                </div>
+              )}
             </div>
           </>
         ) : (

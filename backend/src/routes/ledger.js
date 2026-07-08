@@ -3,7 +3,7 @@
 // attached file and the OCR /scan endpoint for extraction (done client-side).
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, requirePermission, requireRole } = require('../middleware/auth');
+const { authenticate, requirePermission, requireRole, hasPermission } = require('../middleware/auth');
 const { getUsdPhpRate } = require('../lib/fxrate');
 const { getFlowSteps, buildRowsFromSteps } = require('../lib/approvalChain');
 const { createNotification } = require('../lib/notifications');
@@ -53,6 +53,17 @@ function ledgerAsExpense(doc, creator) {
 
 const PERM = 'manage_ap_ar';
 const FALLBACK = ['FINANCE', 'ADMIN'];
+// Viewing the AP/AR list is allowed for managers of AP/AR OR approvers (view_approvals),
+// so people who approved an invoice can still review it after it's rejected/returned.
+// Mutations keep the stricter manage_ap_ar check.
+const canViewLedger = async (req, res, next) => {
+  try {
+    const ok = (await hasPermission(req.user, PERM, FALLBACK)) ||
+               (await hasPermission(req.user, 'view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']));
+    if (!ok) return res.status(403).json({ error: 'Insufficient permissions' });
+    next();
+  } catch (err) { return res.status(500).json({ error: err.message }); }
+};
 const DOC_TYPES = ['AP_INVOICE', 'AP_RECEIPT', 'AR_INVOICE'];
 // Expense-aligned statuses (Phase 2) + legacy stages kept for backward compatibility.
 const STAGES = ['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'RETURNED', 'PROCESSED', 'FOR_VERIFICATION', 'FOR_APPROVAL', 'PAID'];
@@ -90,7 +101,7 @@ function normalizeType(t) {
 
 // ---- list + summary ------------------------------------------------------
 
-router.get('/', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+router.get('/', authenticate, canViewLedger, async (req, res) => {
   try {
     const { docType, status, clientId, q, from, to, archived, assignedToId, scope } = req.query;
     const where = {};
@@ -138,7 +149,7 @@ router.get('/', authenticate, requirePermission(PERM, FALLBACK), async (req, res
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/summary', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+router.get('/summary', authenticate, canViewLedger, async (req, res) => {
   try {
     const { clientId } = req.query;
     const base = clientId ? { clientId, archived: false } : { archived: false };

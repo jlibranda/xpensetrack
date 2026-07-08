@@ -239,7 +239,7 @@ export default function Layout() {
                   <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">{(pendingCounts.myPending || 0) + (pendingCounts.myReturned || 0)}</span>
                 )}
               </NavLink>
-              {navVisible({ perm:'manage_ap_ar' }) && (
+              {(navVisible({ perm:'manage_ap_ar' }) || navVisible({ perm:'view_approvals' })) && (
                 <NavLink to="/ap-ar" className={navLinkClass}
                   style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
                   <span className="w-4 text-center text-sm">📑</span>
