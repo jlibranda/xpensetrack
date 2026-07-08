@@ -8,6 +8,7 @@ const { getUsdPhpRate } = require('../lib/fxrate');
 const { getFlowSteps, buildRowsFromSteps } = require('../lib/approvalChain');
 const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
+const { sendApprovalRequestEmail, sendStatusUpdateEmail } = require('../lib/email');
 const XLSX = require('xlsx');
 const { signReceiptToken } = require('../lib/receipt-token');
 const prisma = new PrismaClient();
@@ -29,6 +30,25 @@ async function teamMemberIds(userId) {
     }
   }
   return [...ids];
+}
+
+const nm = (u) => `${u?.firstName || ''} ${u?.lastName || ''}`.trim();
+// Shape a LedgerDoc like an expense so the shared email templates work (matches approvals.js).
+function ledgerAsExpense(doc, creator) {
+  return {
+    id: doc.id,
+    title: `${doc.vendorName || 'AP/AR document'}${doc.docNumber ? ` \u2014 ${doc.docNumber}` : ''}`,
+    amount: doc.amount != null ? doc.amount : (doc.amountPhp || 0),
+    currency: doc.currency || 'PHP',
+    expenseDate: doc.docDate || doc.createdAt || new Date(),
+    category: doc.category || '',
+    description: doc.notes || '',
+    remarks: doc.remarks || '',
+    payoutDate: doc.payoutDate || doc.processedAt || null,
+    processedAt: doc.processedAt || null,
+    submittedBy: creator || null,
+    submittedById: doc.createdById || null,
+  };
 }
 
 const PERM = 'manage_ap_ar';
@@ -451,12 +471,15 @@ router.post('/:id/submit', authenticate, requirePermission(PERM, FALLBACK), asyn
       } })),
     ]);
 
-    // Notify the currently-actionable approvers (in-app). Email is added in 2b.
+    // Notify the currently-actionable approvers — in-app + email (mirrors expenses).
     const notify = mode === 'ANY_ORDER' ? rows : rows.filter(r => r.stepOrder === 1);
     const label = `${doc.vendorName || 'AP/AR document'}${doc.docNumber ? ` (${doc.docNumber})` : ''}`;
+    const pseudo = ledgerAsExpense(doc, creator);
     for (const approverId of [...new Set(notify.map(r => r.approverId))]) {
       await createNotification(approverId, 'APPROVAL_REQUEST', 'New AP/AR invoice to approve',
         `An AP/AR invoice "${label}" needs your approval`, '/approvals').catch(() => {});
+      const apu = await prisma.user.findUnique({ where: { id: approverId } }).catch(() => null);
+      if (apu?.email) await sendApprovalRequestEmail(apu.email, nm(apu), pseudo, creator).catch(() => {});
     }
     res.json({ message: 'Submitted', doc: await prisma.ledgerDoc.findUnique({ where: { id: doc.id }, include }) });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -474,6 +497,12 @@ router.post('/bulk-mark-processed', authenticate, requirePermission(PERM, FALLBA
     for (const d of eligible) {
       await prisma.ledgerDoc.update({ where: { id: d.id }, data: { status: 'PROCESSED', processedAt: when, payoutDate: when, paidAt: when } });
       count++;
+      // Email the creator that their AP/AR invoice was processed (paid out) — mirrors expenses.
+      const creator = d.createdById ? await prisma.user.findUnique({ where: { id: d.createdById } }).catch(() => null) : null;
+      if (creator?.email) {
+        const pseudo = ledgerAsExpense({ ...d, status: 'PROCESSED', processedAt: when, payoutDate: when }, creator);
+        await sendStatusUpdateEmail(creator.email, nm(creator), pseudo, 'PROCESSED', creator).catch(() => {});
+      }
     }
     await logAudit(req.user, 'LEDGER_BULK_PROCESSED', { targetType: 'LEDGER_DOC', details: `Marked ${count} AP/AR invoice(s) processed` });
     res.json({ message: `Marked ${count} invoice(s) processed`, count, skipped: ids.length - count });
@@ -487,6 +516,9 @@ router.post('/:id/unmark-processed', authenticate, requirePermission(PERM, FALLB
     if (!d) return res.status(404).json({ error: 'Not found' });
     if (d.status !== 'PROCESSED') return res.status(400).json({ error: 'Not a processed invoice' });
     await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'APPROVED', processedAt: null, payoutDate: null, paidAt: null } });
+    // Notify creator the payout was reverted (mirrors expense reprocessing email).
+    const creator = d.createdById ? await prisma.user.findUnique({ where: { id: d.createdById } }).catch(() => null) : null;
+    if (creator?.email) await sendStatusUpdateEmail(creator.email, nm(creator), ledgerAsExpense(d, creator), 'REPROCESSING', creator).catch(() => {});
     await logAudit(req.user, 'LEDGER_PAYOUT_REVERSED', { targetType: 'LEDGER_DOC', targetId: req.params.id, details: `Reversed payout for "${d.vendorName || 'AP/AR document'}${d.docNumber ? ` (${d.docNumber})` : ''}"` });
     res.json({ message: 'Unmarked' });
   } catch (err) { res.status(500).json({ error: err.message }); }

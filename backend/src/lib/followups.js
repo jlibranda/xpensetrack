@@ -87,6 +87,56 @@ async function runFollowups() {
       }
     } catch (e) { console.error('Follow-ups: expense', exp.id, 'failed:', e.message); }
   }
+
+  // ---- AP/AR (LedgerDoc) pending approvals — same nudging logic as expenses ----
+  let ledgers = [];
+  try {
+    ledgers = await prisma.ledgerDoc.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        createdBy: true,
+        approvals: { include: { approver: { select: { id: true, firstName: true, lastName: true, email: true } } } },
+      },
+    });
+  } catch (e) { console.error('Follow-ups: ledger load failed:', e.message); ledgers = []; }
+
+  for (const doc of ledgers) {
+    try {
+      const approvals = [...(doc.approvals || [])].sort((a, b) => a.stepOrder - b.stepOrder);
+      if (approvals.length === 0) continue;
+      const steps = summarizeSteps(approvals);
+      const mode = doc.createdBy?.approvalMode || 'SEQUENTIAL';
+      let pendingRows = [];
+      let activeSince = new Date(doc.createdAt).getTime();
+      if (mode === 'ANY_ORDER') {
+        pendingRows = approvals.filter(a => a.status === 'PENDING');
+      } else {
+        const activeStep = steps.find(s => !s.satisfied && !s.blocked);
+        if (!activeStep) continue;
+        pendingRows = activeStep.rows.filter(r => r.status === 'PENDING');
+        const priorApproved = approvals.filter(a => a.status === 'APPROVED' && a.stepOrder < activeStep.stepOrder);
+        const priorMax = priorApproved.reduce((m, a) => Math.max(m, new Date(a.updatedAt).getTime()), 0);
+        activeSince = Math.max(new Date(doc.createdAt).getTime(), priorMax);
+      }
+      if (pendingRows.length === 0) continue;
+      if (now - activeSince < thresholdMs) continue;
+      const daysWaiting = Math.floor((now - activeSince) / DAY_MS);
+      const emailExpense = {
+        title: `${doc.vendorName || 'AP/AR document'}${doc.docNumber ? ` \u2014 ${doc.docNumber}` : ''}`,
+        amount: doc.amount != null ? doc.amount : (doc.amountPhp || 0),
+        currency: doc.currency || 'PHP',
+        submittedBy: doc.createdBy || null,
+        submittedById: doc.createdById || null,
+      };
+      for (const r of pendingRows) {
+        if (r.lastFollowUpAt && (now - new Date(r.lastFollowUpAt).getTime()) < thresholdMs) continue;
+        const ap = r.approver;
+        if (!ap?.email) continue;
+        await sendApprovalReminderEmail(ap.email, `${ap.firstName || ''} ${ap.lastName || ''}`.trim(), emailExpense, doc.createdBy, daysWaiting).catch(() => {});
+        await prisma.approval.update({ where: { id: r.id }, data: { lastFollowUpAt: new Date() } }).catch(() => {});
+      }
+    } catch (e) { console.error('Follow-ups: ledger', doc.id, 'failed:', e.message); }
+  }
 }
 
 let timer = null;
