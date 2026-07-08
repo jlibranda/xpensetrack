@@ -12,6 +12,25 @@ const XLSX = require('xlsx');
 const { signReceiptToken } = require('../lib/receipt-token');
 const prisma = new PrismaClient();
 
+// Team = users who report to / are approved by this user (mirrors expenses + reports).
+async function teamMemberIds(userId) {
+  const everyone = await prisma.user.findMany({ select: { id: true, managerId: true, approverIds: true, approvalFlowJson: true } });
+  const ids = new Set();
+  for (const u of everyone) {
+    if (u.id === userId) continue;
+    if (u.managerId === userId) { ids.add(u.id); continue; }
+    const additional = (u.approverIds || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (additional.includes(userId)) { ids.add(u.id); continue; }
+    if (u.approvalFlowJson) {
+      try {
+        const steps = JSON.parse(u.approvalFlowJson);
+        if (Array.isArray(steps) && steps.some(s => (s.approvers || []).includes(userId))) ids.add(u.id);
+      } catch (e) { /* ignore */ }
+    }
+  }
+  return [...ids];
+}
+
 const PERM = 'manage_ap_ar';
 const FALLBACK = ['FINANCE', 'ADMIN'];
 const DOC_TYPES = ['AP_INVOICE', 'AP_RECEIPT', 'AR_INVOICE'];
@@ -53,9 +72,22 @@ function normalizeType(t) {
 
 router.get('/', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
-    const { docType, status, clientId, q, from, to, archived, assignedToId } = req.query;
+    const { docType, status, clientId, q, from, to, archived, assignedToId, scope } = req.query;
     const where = {};
     where.archived = archived === '1' || archived === 'true';
+    // Scope toggle (mirrors My Expenses): self | team | all. Owner = createdById.
+    // Only applied when a scope is explicitly requested, so Transactions/Reports/
+    // Analytics (which don't pass scope) keep seeing everything they're allowed to.
+    if (scope) {
+      let requested = scope;
+      if (requested === 'all' && !['FINANCE', 'ADMIN'].includes(req.user.role)) requested = 'team';
+      if (requested === 'self') {
+        where.createdById = req.user.id;
+      } else if (requested === 'team') {
+        const team = await teamMemberIds(req.user.id);
+        where.createdById = { in: team.length ? team : ['__none__'] };
+      } // 'all' -> no owner filter
+    }
     if (docType) {
       if (docType === 'AP') where.docType = { in: ['AP_INVOICE', 'AP_RECEIPT'] };
       else if (docType === 'AR') where.docType = 'AR_INVOICE';

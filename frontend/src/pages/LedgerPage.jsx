@@ -4,6 +4,7 @@ import api from '../lib/api';
 import ReceiptImage from '../components/ReceiptImage';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
+import { useAuth } from '../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
 const BRAND = 'var(--brand-color,#1D9E75)';
@@ -45,6 +46,12 @@ export default function LedgerPage({ mode = 'manage' }) {
   const navigate = useNavigate();
   const { format } = useCurrency();
   const { settings } = useOrg();
+  const { user } = useAuth();
+  // Self / Team scope toggle (mirrors My Expenses). Admin sees all; Finance also gets All.
+  const scopeTabs = user?.role === 'ADMIN' ? []
+    : user?.role === 'FINANCE' ? [['self', 'Self'], ['team', 'Team'], ['all', 'All']]
+    : [['self', 'Self'], ['team', 'Team']];
+  const [scope, setScope] = useState(user?.role === 'ADMIN' ? 'all' : 'self');
   const _catTypes = settings?.categoryTypes || {};
   const categories = (settings?.categories || []).filter(c => ['AP_AR','BOTH'].includes(_catTypes[c] || 'BOTH'));
   const vendors = Array.isArray(settings?.vendors) ? settings.vendors : [];
@@ -89,6 +96,7 @@ export default function LedgerPage({ mode = 'manage' }) {
       if (isArchived) params.set('archived', '1');
       if (clientFilter) params.set('clientId', clientFilter);
       if (statusFilter) params.set('status', statusFilter);
+      if (!isAddMode && scope) params.set('scope', scope);
       if (q.trim()) params.set('q', q.trim());
       const [d, s] = await Promise.all([
         api.get(`/ledger?${params.toString()}`),
@@ -100,7 +108,7 @@ export default function LedgerPage({ mode = 'manage' }) {
   };
 
   useEffect(() => { loadClients(); loadUsers(); }, []);
-  useEffect(() => { if (!isAddMode && tab !== 'CLIENTS') load(); /* eslint-disable-next-line */ }, [tab, clientFilter, statusFilter]);
+  useEffect(() => { if (!isAddMode && tab !== 'CLIENTS') load(); /* eslint-disable-next-line */ }, [tab, clientFilter, statusFilter, scope]);
   // In add mode the page IS the form — keep a fresh document loaded in it.
   useEffect(() => { if (isAddMode && !editing) setEditing(emptyDoc({ docType: 'AP_INVOICE', clientId: defaultClientId() })); /* eslint-disable-next-line */ }, [isAddMode, clients]);
 
@@ -358,7 +366,20 @@ export default function LedgerPage({ mode = 'manage' }) {
         </button>
       </div>
 
-      {/* Type toggle (mirrors the scope toggle in My Expenses) */}
+      {/* Scope toggle: Self / Team / All (mirrors My Expenses) */}
+      {scopeTabs.length > 0 && (
+        <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+          {scopeTabs.map(([val, label]) => (
+            <button key={val} onClick={() => { setScope(val); setViewing(null); }}
+              className={`px-3 py-1.5 rounded-md text-xs transition-colors ${scope === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+              style={scope === val ? { backgroundColor: BRAND } : {}}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Type toggle (AP / AR) */}
       <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
         {typeTabs.map(([val, label]) => (
           <button key={val} onClick={() => { setTab(val); setViewing(null); }}
@@ -398,6 +419,9 @@ export default function LedgerPage({ mode = 'manage' }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{d.vendorName || '—'}</p>
                     {d.docNumber && <p className="text-xs text-gray-400">Doc/Invoice: {d.docNumber}</p>}
+                    {scope !== 'self' && d.createdBy && (
+                      <p className="text-xs text-gray-500 mt-0.5">👤 {fullName(d.createdBy) || '—'}</p>
+                    )}
                     <p className="text-xs text-gray-400 mt-0.5">{fmtDate(d.docDate)} · {(d.category || '').toLowerCase() || '—'}</p>
                   </div>
                   <div className="text-right shrink-0">
