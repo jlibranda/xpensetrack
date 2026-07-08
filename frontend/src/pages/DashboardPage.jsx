@@ -92,6 +92,15 @@ export default function DashboardPage() {
   const arActive = arRows.filter(d => ['APPROVED', 'PROCESSED'].includes(d.status)).reduce((s, d) => s + (d.amountPhp || 0), 0);
   const apArPending = (ledger || []).filter(d => d.status === 'PENDING').length;
   const apArApproved = (ledger || []).filter(d => ['APPROVED', 'PROCESSED'].includes(d.status)).reduce((s, d) => s + (d.amountPhp || 0), 0);
+  // AP/AR by category (for the chart that mirrors "Spending by category").
+  const titleCase = (s) => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  const apArCatMap = {};
+  (ledger || []).filter(d => ['APPROVED', 'PROCESSED'].includes(d.status)).forEach(d => {
+    const c = titleCase(d.category || 'Uncategorized');
+    apArCatMap[c] = (apArCatMap[c] || 0) + (d.amountPhp || 0);
+  });
+  const apArCatData = Object.entries(apArCatMap).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a, b) => b.value - a.value);
+  const canManageApAr = ['FINANCE', 'ADMIN'].includes(role);
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -255,6 +264,52 @@ export default function DashboardPage() {
               <p className="text-xs text-gray-400 mt-0.5">{m.sub}</p>
             </div>
           ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* AP/AR by category — Finance/Admin only, mirrors the expense chart */}
+          {canViewSpending && (
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <h2 className="text-sm font-medium mb-3" style={{ color: axisColor }}>AP / AR by category</h2>
+            {apArCatData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={apArCatData} margin={{ top: 5, right: 10, left: -10, bottom: 40 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false}
+                    interval={0} angle={-35} textAnchor="end" height={50} />
+                  <YAxis tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} width={50} />
+                  <Tooltip formatter={(v) => format(v)}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${isDark ? '#334155' : '#e5e7eb'}`, backgroundColor: isDark ? '#1e293b' : '#ffffff', color: isDark ? '#f1f5f9' : '#111827' }}
+                    labelStyle={{ color: isDark ? '#f1f5f9' : '#111827' }}
+                    cursor={{ fill: isDark ? 'rgba(148,163,184,0.1)' : 'rgba(0,0,0,0.04)' }} />
+                  <Bar dataKey="value" fill="#1D9E75" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-44 flex items-center justify-center text-sm text-gray-400">No data yet</div>
+            )}
+          </div>
+          )}
+
+          {/* Quick actions */}
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <h2 className="text-sm font-medium text-gray-700 mb-3">Quick actions</h2>
+            <div className="space-y-2">
+              {[
+                { label: 'View AP & AR', sub: 'Payables & receivables', action: () => navigate('/ap-ar'), icon: '📑' },
+                ...(canManageApAr ? [{ label: 'Record AP / AR', sub: 'Add a payable or receivable', action: () => navigate('/payables'), icon: '+' }] : []),
+                ...(canManageApAr ? [{ label: 'Transactions', sub: 'Process & generate 2307', action: () => navigate('/transactions'), icon: '🧾' }] : []),
+              ].map((a, i) => (
+                <button key={i} onClick={a.action}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center text-brand-600 text-sm shrink-0">{a.icon}</div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{a.label}</p>
+                    <p className="text-xs text-gray-400">{a.sub}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
