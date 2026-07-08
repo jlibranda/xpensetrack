@@ -22,6 +22,41 @@ const ADMIN_NAV = [
   { to:'/settings', label:'Settings', icon:'⚙' },
 ];
 
+// Mobile header brand: auto-shrinks the company name so the FULL name fits the
+// available middle space (no truncation). Measures on mount, name change, resize.
+function AutoFitBrand({ name, dark, onClick }) {
+  const wrapRef = useRef(null);
+  const textRef = useRef(null);
+  const [size, setSize] = useState(20);
+  useEffect(() => {
+    const fit = () => {
+      const wrap = wrapRef.current, txt = textRef.current;
+      if (!wrap || !txt || !name) return;
+      const MAX = 20, MIN = 10;
+      txt.style.fontSize = MAX + 'px';
+      const avail = wrap.clientWidth - 4;
+      const need = txt.scrollWidth;
+      let s = MAX;
+      if (need > avail && need > 0) s = Math.max(MIN, Math.floor(MAX * (avail / need)));
+      setSize(s);
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [name]);
+  return (
+    <div ref={wrapRef} className="flex-1 min-w-0 flex justify-center md:justify-start overflow-hidden">
+      {name && (
+        <span ref={textRef} onClick={onClick}
+          className="md:hidden font-bold whitespace-nowrap cursor-pointer leading-none"
+          style={{ fontSize: size, color: dark ? '#f1f5f9' : '#111827' }}>
+          {name}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function Layout() {
   const { user, logout } = useAuth();
   const { currency, toggle } = useCurrency();
@@ -303,20 +338,8 @@ export default function Layout() {
             )}
           </div>
 
-          {/* Center (mobile): company name in the vacant middle space only */}
-          <div className="flex-1 min-w-0 flex justify-center md:justify-start">
-            {loaded && settings?.companyName && (() => {
-              const coName = settings.companyName;
-              const sizeClass = coName.length > 26 ? 'text-sm' : coName.length > 18 ? 'text-base' : 'text-lg';
-              return (
-                <span onClick={() => navigate('/')}
-                  className={`md:hidden font-bold truncate text-center cursor-pointer ${sizeClass}`}
-                  style={{ color: darkMode ? '#f1f5f9' : '#111827' }}>
-                  {coName}
-                </span>
-              );
-            })()}
-          </div>
+          {/* Center (mobile): company name auto-fit into the vacant middle space */}
+          <AutoFitBrand name={loaded ? (settings?.companyName || '') : ''} dark={darkMode} onClick={() => navigate('/')} />
 
           <div className="flex items-center gap-3 shrink-0">
           {/* Dark/Light toggle */}
