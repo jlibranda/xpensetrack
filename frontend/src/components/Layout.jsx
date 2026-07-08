@@ -360,8 +360,8 @@ export default function Layout() {
           {/* + New AP/AR Invoice (desktop; mobile uses the FAB) */}
           {canManageApAr && (
             <button onClick={() => navigate('/payables')}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-semibold hover:opacity-80 shrink-0"
-              style={darkMode ? { borderColor: brandColor, color: '#e2e8f0', backgroundColor: '#334155' } : { borderColor: brandColor, color: brandColor }}>
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
+              style={{ backgroundColor: brandColor }}>
               + New AP/AR Invoice
             </button>
           )}
