@@ -56,6 +56,10 @@ function ledgerAsExpense(doc, creator) {
 
 const PERM = 'manage_ap_ar';
 const FALLBACK = ['FINANCE', 'ADMIN'];
+const isAdminFinance = (u) => ['ADMIN', 'FINANCE'].includes(u.role);
+// A record is "approved" (locked to Finance/Admin) once any approver approved it,
+// or it reached a finalized status.
+const docIsApproved = (d) => !!d && (['APPROVED', 'PROCESSED', 'PAID'].includes(d.status) || (d.approvals || []).some(a => a.status === 'APPROVED'));
 // Viewing the AP/AR list is allowed for managers of AP/AR OR approvers (view_approvals),
 // so people who approved an invoice can still review it after it's rejected/returned.
 // Mutations keep the stricter manage_ap_ar check.
@@ -609,6 +613,13 @@ router.post('/bulk-action', authenticate, requirePermission(PERM, FALLBACK), asy
   try {
     const { ids, action, assignedToId, status } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'No rows selected' });
+    // Changing status or deleting an approved record is Finance/Admin-only.
+    if (['status', 'delete'].includes(action) && !isAdminFinance(req.user)) {
+      const targeted = await prisma.ledgerDoc.findMany({ where: { id: { in: ids } }, include: { approvals: true } });
+      if (targeted.some(docIsApproved)) {
+        return res.status(403).json({ error: 'Some selected records are locked after approval — only Finance or Admin can change or delete them.' });
+      }
+    }
     const where = { id: { in: ids } };
     let data;
     switch (action) {
@@ -634,6 +645,11 @@ router.post('/bulk-action', authenticate, requirePermission(PERM, FALLBACK), asy
 // Single-document status change.
 router.post('/:id/status', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
+    const cur = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id }, include: { approvals: true } });
+    if (!cur) return res.status(404).json({ error: 'Not found' });
+    if (docIsApproved(cur) && !isAdminFinance(req.user)) {
+      return res.status(403).json({ error: 'This AP/AR record is locked after approval — only Finance or Admin can change its status.' });
+    }
     const s = normStatus(req.body?.status);
     const doc = await prisma.ledgerDoc.update({
       where: { id: req.params.id },
@@ -644,7 +660,7 @@ router.post('/:id/status', authenticate, requirePermission(PERM, FALLBACK), asyn
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/:id/mark-paid', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+router.post('/:id/mark-paid', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
     const when = req.body?.paidAt ? new Date(req.body.paidAt) : new Date();
     const doc = await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'PAID', paidAt: when, lastEditedById: req.user.id }, include });
@@ -652,7 +668,7 @@ router.post('/:id/mark-paid', authenticate, requirePermission(PERM, FALLBACK), a
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/:id/mark-unpaid', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+router.post('/:id/mark-unpaid', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
     const doc = await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'FOR_APPROVAL', paidAt: null, lastEditedById: req.user.id }, include });
     res.json(doc);
@@ -661,6 +677,12 @@ router.post('/:id/mark-unpaid', authenticate, requirePermission(PERM, FALLBACK),
 
 router.delete('/:id', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
+    const d = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id }, include: { approvals: true } });
+    if (!d) return res.status(404).json({ error: 'Not found' });
+    if (!isAdminFinance(req.user) && (docIsApproved(d) || !['DRAFT', 'RETURNED', 'REJECTED', 'CANCELLED'].includes(d.status))) {
+      return res.status(403).json({ error: 'This AP/AR record is locked after approval — only Finance or Admin can delete it.' });
+    }
+    await prisma.approval.deleteMany({ where: { ledgerDocId: req.params.id } }).catch(() => {});
     await prisma.ledgerDoc.delete({ where: { id: req.params.id } });
     res.json({ message: 'Deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -738,7 +760,7 @@ router.post('/bulk-mark-processed', authenticate, requirePermission(PERM, FALLBA
 });
 
 // Undo a processed AP/AR payout (revert to APPROVED).
-router.post('/:id/unmark-processed', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+router.post('/:id/unmark-processed', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
     const d = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id } });
     if (!d) return res.status(404).json({ error: 'Not found' });

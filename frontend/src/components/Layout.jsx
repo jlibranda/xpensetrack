@@ -114,6 +114,7 @@ export default function Layout() {
   const showAdmin = canSettings || canUsers || canAudit;
   const isAdmin = ['ADMIN','FINANCE'].includes(user?.role);
   const brandColor = settings?.primaryColor || '#1D9E75';
+  const canManageApAr = user?.role === 'ADMIN' || (settings?.accessControl?.manage_ap_ar || ['FINANCE', 'ADMIN']).includes(user?.role);
   // Dark mode is a PERSONAL, per-device preference. If the user hasn't chosen,
   // fall back to the org default. Stored in localStorage so each user picks their own.
   const storedPref = (() => {
@@ -355,7 +356,22 @@ export default function Layout() {
             onClick={() => navigate('/')} max={20} min={11}
             className="flex-1 flex justify-center md:justify-start md:hidden" />
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 ml-auto">
+          {/* + New AP/AR Invoice (desktop; mobile uses the FAB) */}
+          {canManageApAr && (
+            <button onClick={() => navigate('/payables')}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-semibold hover:opacity-80 shrink-0"
+              style={darkMode ? { borderColor: brandColor, color: '#e2e8f0', backgroundColor: '#334155' } : { borderColor: brandColor, color: brandColor }}>
+              + New AP/AR Invoice
+            </button>
+          )}
+
+          <button onClick={() => navigate('/expenses/new')}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
+            style={{ backgroundColor: brandColor }}>
+            + New Expense
+          </button>
+
           {/* Dark/Light toggle */}
           <button onClick={toggleDarkMode}
             className="p-2 rounded-lg text-lg transition-colors"
@@ -410,12 +426,6 @@ export default function Layout() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors"
             style={darkMode ? { borderColor:'#475569', color:'#e2e8f0', backgroundColor:'#334155' } : { borderColor:'#e5e7eb', color:'#374151' }}>
             {currency === 'PHP' ? '₱ PHP' : '$ USD'} <span className="opacity-40 text-xs">↕</span>
-          </button>
-
-          <button onClick={() => navigate('/expenses/new')}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
-            style={{ backgroundColor: brandColor }}>
-            + New Expense
           </button>
           </div>
         </header>
