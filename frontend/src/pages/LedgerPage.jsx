@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
@@ -40,6 +41,7 @@ const fullName = (u) => u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : 
 
 export default function LedgerPage({ mode = 'manage' }) {
   const isAddMode = mode === 'add';
+  const navigate = useNavigate();
   const { format } = useCurrency();
   const { settings } = useOrg();
   const _catTypes = settings?.categoryTypes || {};
@@ -103,14 +105,6 @@ export default function LedgerPage({ mode = 'manage' }) {
 
   const defaultClientId = () => (clients.find(c => c.isDefault) || {}).id || '';
   const initAddForm = () => setEditing(emptyDoc({ docType: 'AP_INVOICE', clientId: defaultClientId() }));
-  // Excel export of the current AP/AR list (respects tab + status filter).
-  const exportExcel = () => {
-    const params = new URLSearchParams({ token: localStorage.getItem('token') || '' });
-    if (['AP_INVOICE', 'AR_INVOICE', 'AP_RECEIPT'].includes(tab)) params.set('docType', tab);
-    if (tab === 'ARCHIVED') params.set('archived', '1');
-    if (statusFilter) params.set('status', statusFilter);
-    window.open(`${API_BASE}/ledger/export?${params.toString()}`, '_blank');
-  };
   // After save/submit: in add mode reset to a fresh form; in manage mode close + reload.
   const afterSave = () => { if (isAddMode) initAddForm(); else { setEditing(null); load(); } };
   const cancelForm = () => { if (isAddMode) initAddForm(); else setEditing(null); };
@@ -342,179 +336,173 @@ export default function LedgerPage({ mode = 'manage' }) {
     );
   }
 
+  // ---- MANAGE MODE: list + detail panel, mirroring My Expenses ----
+  const typeTabs = [['ALL', 'All'], ['AP_INVOICE', 'AP (payables)'], ['AR_INVOICE', 'AR (receivables)']];
+  const statusTabs = [['', 'All'], ['DRAFT', 'Drafts'], ['PENDING', 'Pending'], ['APPROVED', 'Approved'], ['RETURNED', 'Returned'], ['REJECTED', 'Rejected'], ['PROCESSED', 'Processed']];
+  const openEdit = (d) => setEditing({
+    id: d.id, docType: d.docType, clientId: d.clientId || '', vendorName: d.vendorName || '', vendorTin: d.vendorTin || '',
+    businessStyle: d.businessStyle || '', docNumber: d.docNumber || '', poNumber: d.poNumber || '',
+    docDate: d.docDate ? d.docDate.slice(0, 10) : '', dueDate: d.dueDate ? d.dueDate.slice(0, 10) : '', amount: String(d.amount ?? ''),
+    currency: d.currency || 'PHP', category: d.category || '', notes: d.notes || '', remarks: d.remarks || '',
+    assignedToId: d.assignedToId || '', status: d.status, receiptId: d.receiptId || '', frequency: d.frequency || 'ONE_TIME',
+  });
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">My AP &amp; AR Invoices</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Track vendor invoices &amp; receivables, submit for approval, and see what's paid.</p>
-        </div>
-        {isDocTab && (
-          <div className="flex items-center gap-2">
-            <button onClick={exportExcel}
-              className="px-3 py-2.5 rounded-xl text-sm font-medium text-white shadow-sm hover:opacity-90" style={{ backgroundColor: '#16a34a' }}>
-              ⬇ Export Excel
-            </button>
-            {!isArchived && (
-              <button onClick={() => setEditing(emptyDoc({ clientId: clientFilter || defaultClientId(), docType: ['AP_INVOICE','AP_RECEIPT','AR_INVOICE'].includes(tab) ? tab : 'AP_INVOICE' }))}
-                className="px-4 py-2.5 text-white rounded-xl text-sm font-medium shadow-sm hover:opacity-90 transition" style={{ backgroundColor: BRAND }}>
-                + Add document
-              </button>
-            )}
-          </div>
-        )}
+    <div className="max-w-5xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-medium text-gray-900">My AP &amp; AR invoices</h1>
+        <button onClick={() => navigate('/payables')}
+          className="px-3 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90" style={{ backgroundColor: BRAND }}>
+          + Add AP &amp; AR invoice
+        </button>
       </div>
 
-      {/* Drag & drop upload zone — opens the Add Document window with the file scanned in */}
-      {isDocTab && !isArchived && (
-        <label
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setDragging(false); openDocWithScan(e.dataTransfer.files); }}
-          className={`block mb-5 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center px-6 py-8 ${dragging ? 'bg-emerald-50 border-emerald-400 scale-[1.01]' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-          <input type="file" accept="image/*,application/pdf" className="hidden"
-            onChange={(e) => { openDocWithScan(e.target.files); e.target.value = ''; }} />
-          <div className="text-3xl mb-1">🧾</div>
-          <p className="text-sm font-medium text-gray-700">Drop an invoice &amp; receipt here, or <span style={{ color: BRAND }}>browse</span></p>
-          <p className="text-xs text-gray-400 mt-1">PDF, PNG, JPEG up to ~10 MB · opens the Add Document window with details auto-filled</p>
-        </label>
-      )}
-
-      {/* Totals */}
-      {summary && isDocTab && !isArchived && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-          <SummaryCard label="Outstanding payables" value={format(summary.payablesOutstanding)} sub={`${summary.payablesOutstandingCount} unpaid`} accent="#b45309" />
-          <SummaryCard label="Outstanding receivables" value={format(summary.receivablesOutstanding)} sub={`${summary.receivablesOutstandingCount} unpaid`} accent="#0f766e" />
-          <SummaryCard label="Payables paid" value={format(summary.payablesPaid)} accent="#15803d" />
-          <SummaryCard label="Receivables paid" value={format(summary.receivablesPaid)} accent="#15803d" />
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-xl p-1 w-fit flex-wrap">
-        {tabs.map(([val, label]) => (
-          <button key={val} onClick={() => setTab(val)}
-            className={`px-3.5 py-1.5 rounded-lg text-sm transition-colors ${tab === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+      {/* Type toggle (mirrors the scope toggle in My Expenses) */}
+      <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+        {typeTabs.map(([val, label]) => (
+          <button key={val} onClick={() => { setTab(val); setViewing(null); }}
+            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${tab === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
             style={tab === val ? { backgroundColor: BRAND } : {}}>
             {label}
           </button>
         ))}
       </div>
 
-      {tab === 'CLIENTS' ? (
-        <ClientsView clients={clients} onAdd={() => setClientModal({ name: '', isDefault: false })}
-          onEdit={(c) => setClientModal({ id: c.id, name: c.name, isDefault: c.isDefault })} onDelete={removeClient} />
-      ) : (
-        <>
-          {/* Filters */}
-          <div className="flex gap-2 mb-3 flex-wrap">
-            <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && load()}
-              placeholder="Search vendor / doc no / PO / TIN" className="px-3 py-2 border border-gray-200 rounded-lg text-sm flex-1 min-w-[200px]" />
-            <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm">
-              <option value="">All clients</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            {!isArchived && (
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm">
-                <option value="">All statuses</option>
-                {STAGES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-              </select>
-            )}
-            <button onClick={load} className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Search</button>
-          </div>
+      {/* Status filter tabs */}
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">
+        {statusTabs.map(([val, label]) => (
+          <button key={label} onClick={() => setStatusFilter(val)}
+            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${statusFilter === val ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
-          {/* Bulk action bar */}
-          {sel.size > 0 && (
-            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-gray-900 text-white text-sm flex-wrap">
-              <span className="font-medium">{sel.size} selected</span>
-              <span className="opacity-40">|</span>
-              {!isArchived && <button onClick={() => setStatusModal({ ids: [...sel] })} className="hover:underline">Change status…</button>}
-              <button onClick={() => setAssignModal({ ids: [...sel] })} className="hover:underline">Assign…</button>
-              {isArchived
-                ? <button onClick={() => bulkAction('unarchive')} className="hover:underline">Unarchive</button>
-                : <button onClick={() => bulkAction('archive')} className="hover:underline">Archive</button>}
-              <button onClick={() => bulkAction('delete')} className="hover:underline text-red-300">Delete</button>
-              <button onClick={() => setSel(new Set())} className="ml-auto opacity-70 hover:opacity-100">Clear</button>
-            </div>
-          )}
-
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* List */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 overflow-hidden">
           {loading ? (
-            <p className="text-sm text-gray-400 py-10 text-center">Loading…</p>
+            <div className="py-16 text-center text-sm text-gray-400">Loading...</div>
           ) : docs.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
-              <div className="text-4xl mb-2">{isArchived ? '🗂️' : '📭'}</div>
-              <p className="text-sm text-gray-500 font-medium">{isArchived ? 'Nothing archived here.' : 'No documents yet.'}</p>
-              {!isArchived && <p className="text-xs text-gray-400 mt-1">Drop a file above or use “Add document”.</p>}
+            <div className="py-16 text-center">
+              <p className="text-gray-400 text-sm">No invoices found.</p>
+              <button onClick={() => navigate('/payables')} className="mt-2 text-sm hover:opacity-70" style={{ color: BRAND }}>Add AP &amp; AR invoice →</button>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
-                    <th className="pl-4 pr-1 py-3 w-8"><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
-                    <th className="px-3 py-3">Vendor / Payee</th>
-                    <th className="px-3 py-3">Type</th>
-                    <th className="px-3 py-3">Doc no.</th>
-                    <th className="px-3 py-3">Client</th>
-                    <th className="px-3 py-3">Assigned</th>
-                    <th className="px-3 py-3">Due</th>
-                    <th className="px-3 py-3 text-right">Amount</th>
-                    <th className="px-3 py-3">Status</th>
-                    <th className="px-3 py-3">Last edit</th>
-                    <th className="px-3 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {docs.map(d => (
-                    <tr key={d.id} className={`border-b border-gray-50 hover:bg-gray-50 ${sel.has(d.id) ? 'bg-emerald-50/40' : ''}`}>
-                      <td className="pl-4 pr-1 py-3"><input type="checkbox" checked={sel.has(d.id)} onChange={() => toggleOne(d.id)} /></td>
-                      <td className="px-3 py-3 font-medium text-gray-800">
-                        {d.vendorName || '—'}{d.receipt && <span title="Has attachment" className="ml-1 text-gray-300">📎</span>}
-                        {d.remarks && <span title={d.remarks} className="ml-1 text-amber-400">💬</span>}
-                      </td>
-                      <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-xs ${TYPE_BADGE[d.docType]}`}>{TYPE_LABEL[d.docType]}</span></td>
-                      <td className="px-3 py-3 text-gray-500">{d.docNumber || '—'}</td>
-                      <td className="px-3 py-3 text-gray-500">{d.client?.name || '—'}</td>
-                      <td className="px-3 py-3">
-                        {d.assignedTo
-                          ? <span title={fullName(d.assignedTo)} className="inline-flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-medium text-white" style={{ backgroundColor: BRAND }}>{initials(d.assignedTo)}</span>
-                          : <span className="text-gray-300 text-xs">—</span>}
-                      </td>
-                      <td className="px-3 py-3 text-gray-500">{fmtDate(d.dueDate)}</td>
-                      <td className="px-3 py-3 text-right font-medium text-gray-800">{format(d.amountPhp || 0)}</td>
-                      <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_BADGE[d.status] || 'bg-gray-100 text-gray-600'}`}>{statusLabel(d.status)}</span></td>
-                      <td className="px-3 py-3 text-gray-500 text-xs">{d.lastEditedBy ? fullName(d.lastEditedBy) : '—'}</td>
-                      <td className="px-3 py-3 text-right whitespace-nowrap">
-                        {!['PENDING','APPROVED','PROCESSED','PAID'].includes(d.status) && (
-                          <button onClick={() => submitDoc(d)} title="Submit for approval"
-                            className="text-xs font-medium mr-2 px-2 py-1 rounded-md text-white bg-brand-400 hover:bg-brand-600">Submit</button>
-                        )}
-                        <button onClick={() => setViewing(d)} title="View" className="text-base mr-1.5 hover:opacity-70">👁</button>
-                        <button onClick={() => setEditing({
-                          id: d.id, docType: d.docType, clientId: d.clientId || '', vendorName: d.vendorName || '',
-                          vendorTin: d.vendorTin || '', businessStyle: d.businessStyle || '', docNumber: d.docNumber || '',
-                          poNumber: d.poNumber || '', docDate: d.docDate ? d.docDate.slice(0, 10) : '', dueDate: d.dueDate ? d.dueDate.slice(0, 10) : '',
-                          amount: String(d.amount ?? ''), currency: d.currency || 'PHP', category: d.category || '', notes: d.notes || '',
-                          remarks: d.remarks || '', assignedToId: d.assignedToId || '', status: d.status, receiptId: d.receiptId || '',
-                        })} title="Edit" className="text-base mr-1.5 hover:opacity-70">✏️</button>
-                        {isArchived
-                          ? <button onClick={() => archiveDoc(d, false)} className="text-xs text-gray-500 hover:underline mr-1.5">Unarchive</button>
-                          : <button onClick={() => archiveDoc(d, true)} title="Archive" className="text-base mr-1.5 hover:opacity-70">🗄️</button>}
-                        <button onClick={() => removeDoc(d)} title="Delete" className="text-base hover:opacity-70">🗑️</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              {docs.map(d => (
+                <div key={d.id} onClick={() => setViewing(viewing?.id === d.id ? null : d)}
+                  className={`flex items-center gap-3 px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors ${viewing?.id === d.id ? 'border-l-4' : 'border-l-4 border-l-transparent'}`}
+                  style={viewing?.id === d.id ? { borderLeftColor: '#1D9E75', backgroundColor: 'rgba(29,158,117,0.12)' } : {}}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{d.vendorName || '—'}</p>
+                    {d.docNumber && <p className="text-xs text-gray-400">Doc/Invoice: {d.docNumber}</p>}
+                    <p className="text-xs text-gray-400 mt-0.5">{fmtDate(d.docDate)} · {(d.category || '').toLowerCase() || '—'}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-medium text-gray-900">{format(d.amountPhp || 0)}</p>
+                    <div className="flex items-center gap-1 justify-end mt-0.5">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_BADGE[d.docType]}`}>{d.docType === 'AR_INVOICE' ? 'AR' : 'AP'}</span>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[d.status] || 'bg-gray-100 text-gray-600'}`}>{statusLabel(d.status)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-        </>
-      )}
+        </div>
 
-      {/* Add/edit modal (manage mode only — in add mode the form is inline) */}
-      {!isAddMode && editing && (
-        <Modal title={editing.id ? 'Edit document' : 'Add document'} onClose={() => setEditing(null)}>
+        {/* Detail panel */}
+        {viewing ? (
+          <>
+            <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setViewing(null)} />
+            <div className="bg-white border border-gray-100 p-4 z-50 fixed bottom-0 left-0 right-0 rounded-t-2xl max-h-[85vh] overflow-y-auto lg:static lg:rounded-xl lg:max-h-none lg:h-fit lg:overflow-visible lg:z-auto">
+              <div className="flex items-start justify-between mb-3">
+                <h2 className="text-sm font-medium text-gray-900">{viewing.vendorName || 'Invoice'}</h2>
+                <button onClick={() => setViewing(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+              </div>
+
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_BADGE[viewing.docType]}`}>{TYPE_LABEL[viewing.docType]}</span>
+                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[viewing.status] || 'bg-gray-100 text-gray-600'}`}>{statusLabel(viewing.status)}</span>
+              </div>
+
+              <div className="space-y-2 text-xs mb-4">
+                <div className="flex justify-between"><span className="text-gray-500">Amount</span><span className="font-medium">{format(viewing.amountPhp || 0)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">VATable / VAT</span><span>{format(viewing.vatableAmount || 0)} / {format(viewing.vatAmount || 0)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Document date</span><span>{fmtDate(viewing.docDate)}</span></div>
+                {viewing.dueDate && <div className="flex justify-between"><span className="text-gray-500">Due date</span><span>{fmtDate(viewing.dueDate)}</span></div>}
+                <div className="flex justify-between"><span className="text-gray-500">Category</span><span>{viewing.category || '—'}</span></div>
+                {viewing.vendorTin && <div className="flex justify-between"><span className="text-gray-500">Vendor TIN</span><span>{viewing.vendorTin}</span></div>}
+                {viewing.docNumber && <div className="flex justify-between"><span className="text-gray-500">Doc/Invoice no.</span><span>{viewing.docNumber}</span></div>}
+                {viewing.poNumber && <div className="flex justify-between"><span className="text-gray-500">PO no.</span><span>{viewing.poNumber}</span></div>}
+                <div className="flex justify-between"><span className="text-gray-500">Created by</span><span>{fullName(viewing.createdBy) || '—'}</span></div>
+              </div>
+
+              {viewing.remarks && (<div className="bg-gray-50 rounded-lg p-2 text-xs text-gray-600 mb-3">{viewing.remarks}</div>)}
+
+              {viewing.approvals?.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Approval Trail</p>
+                  <div className="space-y-2">
+                    {[...viewing.approvals].sort((a, b) => (a.stepOrder || a.level || 0) - (b.stepOrder || b.level || 0)).map((a, i) => {
+                      const isApproved = a.status === 'APPROVED';
+                      const isReturned = a.status === 'REJECTED' && (a.notes || '').startsWith('[RETURNED]');
+                      const isRejected = a.status === 'REJECTED' && !isReturned;
+                      const isPending = a.status === 'PENDING';
+                      const accent = isApproved ? '#16a34a' : isReturned ? '#d97706' : isPending ? '#64748b' : '#dc2626';
+                      const cleanNote = (a.notes || '').startsWith('[auto]') ? '' : (a.notes || '').replace(/^\[RETURNED\]\s*/, '');
+                      return (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg border"
+                          style={{
+                            backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : isReturned ? 'rgba(217,119,6,0.12)' : isPending ? 'rgba(148,163,184,0.12)' : 'rgba(220,38,38,0.12)',
+                            borderColor: isApproved ? 'rgba(22,163,74,0.35)' : isReturned ? 'rgba(217,119,6,0.35)' : isPending ? 'rgba(148,163,184,0.35)' : 'rgba(220,38,38,0.35)',
+                          }}>
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold mt-0.5 shrink-0 text-white" style={{ backgroundColor: accent }}>
+                            {isApproved ? '✓' : isReturned ? '↩' : isRejected ? '✗' : '⌛'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold">{fullName(a.approver) || '—'}</p>
+                            <p className="text-xs font-semibold" style={{ color: accent }}>
+                              {isApproved ? 'Approved' : isReturned ? 'Returned' : isRejected ? 'Rejected' : 'Pending approval'}
+                            </p>
+                            {cleanNote && <p className="text-sm mt-1 font-medium" style={{ color: accent }}>"{cleanNote}"</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {viewing.receiptId && (
+                <div className="mb-3">
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">Attached file</p>
+                  <a href={`${API_BASE}/ocr/receipt/${viewing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline inline-block" style={{ color: BRAND }}>📎 View attached file</a>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 border-t border-gray-50 pt-3">
+                {!['PENDING', 'APPROVED', 'PROCESSED', 'PAID'].includes(viewing.status) && (
+                  <button onClick={() => submitDoc(viewing)} className="w-full py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: BRAND }}>📤 Submit for approval</button>
+                )}
+                <button onClick={() => { const d = viewing; setViewing(null); openEdit(d); }} className="w-full py-2 border border-gray-200 text-gray-700 rounded-lg text-xs hover:bg-gray-50">✏️ Edit</button>
+                {['DRAFT', 'RETURNED', 'REJECTED'].includes(viewing.status) && (
+                  <button onClick={() => { removeDoc(viewing); setViewing(null); }} className="w-full py-2 border border-red-100 text-red-600 rounded-lg text-xs hover:bg-red-50">🗑️ Delete permanently</button>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="hidden lg:flex bg-gray-50 rounded-xl border border-gray-100 p-4 items-center justify-center h-32">
+            <p className="text-xs text-gray-400 text-center">Click an invoice to see details and actions</p>
+          </div>
+        )}
+      </div>
+
+      {/* Edit modal */}
+      {editing && (
+        <Modal title={editing.id ? 'Edit invoice' : 'Add invoice'} onClose={() => setEditing(null)}>
           {!editing.id && (
             <label className="block mb-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-center cursor-pointer hover:bg-gray-50 text-gray-600">
               {scanning ? '✨ Reading…' : '📷 Scan a receipt/invoice to auto-fill'}
@@ -527,134 +515,6 @@ export default function LedgerPage({ mode = 'manage' }) {
             <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
             <button onClick={saveDoc} className="px-4 py-2 text-sm rounded-lg font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">Save</button>
             <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Submit for approval</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Bulk review modal */}
-      {bulk && (
-        <Modal title="Bulk upload — review" onClose={() => setBulk(null)} wide>
-          {bulk.uploading ? (
-            <div className="py-6 text-center">
-              <p className="text-sm text-gray-600 mb-2">✨ Reading {bulk.done}/{bulk.total} file(s)…</p>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden max-w-xs mx-auto">
-                <div className="h-full rounded-full transition-all" style={{ width: `${(bulk.done / bulk.total) * 100}%`, backgroundColor: BRAND }} />
-              </div>
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-gray-400 mb-2">Review the extracted data, set type/client, then save. Rows without an amount are skipped.</p>
-              <div className="overflow-x-auto max-h-[55vh]">
-                <table className="w-full text-xs">
-                  <thead><tr className="text-left text-gray-400 border-b">
-                    <th className="p-2">File</th><th className="p-2">Type</th><th className="p-2">Client</th><th className="p-2">Vendor</th><th className="p-2">Doc no.</th><th className="p-2">Date</th><th className="p-2">Amount</th>
-                  </tr></thead>
-                  <tbody>
-                    {bulk.rows.map((r, i) => (
-                      <tr key={i} className={`border-b border-gray-50 ${r.failed ? 'bg-red-50' : ''}`}>
-                        <td className="p-2 text-gray-400 max-w-[120px] truncate" title={r.fileName}>{r.fileName}</td>
-                        <td className="p-2"><select value={r.docType} onChange={(e) => setBulk(b => ({ ...b, rows: b.rows.map((x, j) => j === i ? { ...x, docType: e.target.value } : x) }))} className="border rounded p-1"><option value="AP_INVOICE">AP Inv</option><option value="AP_RECEIPT">AP Rcpt</option><option value="AR_INVOICE">AR Inv</option></select></td>
-                        <td className="p-2"><select value={r.clientId} onChange={(e) => setBulk(b => ({ ...b, rows: b.rows.map((x, j) => j === i ? { ...x, clientId: e.target.value } : x) }))} className="border rounded p-1"><option value="">—</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></td>
-                        <td className="p-2"><input value={r.vendorName} onChange={(e) => setBulk(b => ({ ...b, rows: b.rows.map((x, j) => j === i ? { ...x, vendorName: e.target.value } : x) }))} className="border rounded p-1 w-28" /></td>
-                        <td className="p-2"><input value={r.docNumber} onChange={(e) => setBulk(b => ({ ...b, rows: b.rows.map((x, j) => j === i ? { ...x, docNumber: e.target.value } : x) }))} className="border rounded p-1 w-24" /></td>
-                        <td className="p-2"><input type="date" value={r.docDate} onChange={(e) => setBulk(b => ({ ...b, rows: b.rows.map((x, j) => j === i ? { ...x, docDate: e.target.value } : x) }))} className="border rounded p-1" /></td>
-                        <td className="p-2"><input type="number" step="0.01" value={r.amount} onChange={(e) => setBulk(b => ({ ...b, rows: b.rows.map((x, j) => j === i ? { ...x, amount: e.target.value } : x) }))} className="border rounded p-1 w-24" /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex justify-end gap-2 mt-4">
-                <button onClick={() => setBulk(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                <button onClick={saveBulk} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Save all</button>
-              </div>
-            </>
-          )}
-        </Modal>
-      )}
-
-      {/* View (read-only) modal */}
-      {viewing && (
-        <Modal title="Document details" onClose={() => setViewing(null)} wide>
-          <div className="flex items-center gap-2 mb-3">
-            <span className={`px-2 py-0.5 rounded-full text-xs ${TYPE_BADGE[viewing.docType]}`}>{TYPE_LABEL[viewing.docType]}</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_BADGE[viewing.status] || 'bg-gray-100 text-gray-600'}`}>{statusLabel(viewing.status)}</span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <ViewRow label="Vendor / Payee" value={viewing.vendorName} />
-            <ViewRow label="Client" value={viewing.client?.name} />
-            <ViewRow label="Vendor TIN" value={viewing.vendorTin} />
-            <ViewRow label="Business style" value={viewing.businessStyle} />
-            <ViewRow label="Doc/Invoice number" value={viewing.docNumber} />
-            <ViewRow label="PO number" value={viewing.poNumber} />
-            <ViewRow label="Document date" value={fmtDate(viewing.docDate)} />
-            <ViewRow label="Due date" value={fmtDate(viewing.dueDate)} />
-            <ViewRow label="Amount" value={format(viewing.amountPhp || 0)} />
-            <ViewRow label="VATable / VAT" value={`${format(viewing.vatableAmount || 0)} / ${format(viewing.vatAmount || 0)}`} />
-            <ViewRow label="Category" value={viewing.category} />
-            <ViewRow label="Assigned to" value={fullName(viewing.assignedTo)} />
-            <ViewRow label="Created by" value={fullName(viewing.createdBy)} />
-            <ViewRow label="Last edited by" value={fullName(viewing.lastEditedBy)} />
-            <div className="col-span-2"><ViewRow label="Remarks" value={viewing.remarks} /></div>
-            <div className="col-span-2"><ViewRow label="Notes" value={viewing.notes} /></div>
-          </div>
-          {viewing.receiptId && (
-            <a href={`${API_BASE}/ocr/receipt/${viewing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline mt-3 inline-block" style={{ color: BRAND }}>📎 View attached file</a>
-          )}
-          <div className="flex justify-end gap-2 mt-4">
-            {!['PENDING','APPROVED','PROCESSED','PAID'].includes(viewing.status) && (
-              <button onClick={() => submitDoc(viewing)} className="px-4 py-2 text-sm text-white rounded-lg font-medium bg-brand-400 hover:bg-brand-600">Submit for approval</button>
-            )}
-            <button onClick={() => { const d = viewing; setViewing(null); setEditing({
-              id: d.id, docType: d.docType, clientId: d.clientId || '', vendorName: d.vendorName || '', vendorTin: d.vendorTin || '',
-              businessStyle: d.businessStyle || '', docNumber: d.docNumber || '', poNumber: d.poNumber || '',
-              docDate: d.docDate ? d.docDate.slice(0, 10) : '', dueDate: d.dueDate ? d.dueDate.slice(0, 10) : '', amount: String(d.amount ?? ''),
-              currency: d.currency || 'PHP', category: d.category || '', notes: d.notes || '', remarks: d.remarks || '',
-              assignedToId: d.assignedToId || '', status: d.status, receiptId: d.receiptId || '',
-            }); }} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Edit</button>
-            <button onClick={() => setViewing(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Close</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Bulk change-status modal */}
-      {statusModal && (
-        <Modal title={`Change status · ${statusModal.ids.length} document(s)`} onClose={() => setStatusModal(null)}>
-          <Field label="Set status to">
-            <select id="bulk-status" className="inp" defaultValue="FOR_APPROVAL">
-              {STAGES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-            </select>
-          </Field>
-          <div className="flex justify-end gap-2 mt-4">
-            <button onClick={() => setStatusModal(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-            <button onClick={() => bulkAction('status', null, document.getElementById('bulk-status').value)} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Apply</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Bulk assign modal */}
-      {assignModal && (
-        <Modal title={`Assign ${assignModal.ids.length} document(s)`} onClose={() => setAssignModal(null)}>
-          <Field label="Assign to">
-            <select id="bulk-assign-user" className="inp" defaultValue="">
-              <option value="">— unassigned —</option>{users.map(u => <option key={u.id} value={u.id}>{fullName(u)}</option>)}
-            </select>
-          </Field>
-          <div className="flex justify-end gap-2 mt-4">
-            <button onClick={() => setAssignModal(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-            <button onClick={() => bulkAction('assign', document.getElementById('bulk-assign-user').value || null)} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Assign</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Client modal */}
-      {clientModal && (
-        <Modal title={clientModal.id ? 'Edit client' : 'Add client'} onClose={() => setClientModal(null)}>
-          <Field label="Client name"><input className="inp" value={clientModal.name} onChange={(e) => setClientModal({ ...clientModal, name: e.target.value })} /></Field>
-          <label className="flex items-center gap-2 mt-3 text-sm text-gray-600"><input type="checkbox" checked={!!clientModal.isDefault} onChange={(e) => setClientModal({ ...clientModal, isDefault: e.target.checked })} /> Set as default client</label>
-          <div className="flex justify-end gap-2 mt-4">
-            <button onClick={() => setClientModal(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-            <button onClick={saveClient} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Save</button>
           </div>
         </Modal>
       )}

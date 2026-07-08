@@ -103,6 +103,116 @@ router.get('/summary', authenticate, requirePermission(PERM, FALLBACK), async (r
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.get('/export', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+  try {
+    const { docType, status, from, to, payoutDate, archived } = req.query;
+    const where = { archived: archived === '1' || archived === 'true' };
+    if (docType && docType !== 'ALL') {
+      if (docType === 'AP') where.docType = { in: ['AP_INVOICE', 'AP_RECEIPT'] };
+      else if (docType === 'AR') where.docType = 'AR_INVOICE';
+      else where.docType = String(docType).toUpperCase();
+    }
+    if (status) where.status = String(status).toUpperCase();
+    if (from || to) {
+      where.docDate = {};
+      if (from) where.docDate.gte = new Date(String(from).split('T')[0]);
+      if (to) where.docDate.lte = new Date(String(to).split('T')[0] + 'T23:59:59');
+    }
+    if (payoutDate) {
+      const d0 = new Date(payoutDate + 'T00:00:00.000Z');
+      const d1 = new Date(payoutDate + 'T23:59:59.999Z');
+      where.OR = [
+        { payoutDate: { gte: d0, lte: d1 } },
+        { payoutDate: null, processedAt: { gte: d0, lte: d1 } },
+      ];
+    }
+
+    let glCodes = {};
+    try {
+      const org = await prisma.orgSettings.findFirst();
+      if (org?.categoryGlCodes) {
+        const raw = JSON.parse(org.categoryGlCodes);
+        glCodes = Object.fromEntries(Object.entries(raw).map(([k, v]) => [String(k).trim().toUpperCase(), v]));
+      }
+    } catch (e) { glCodes = {}; }
+
+    const docs = await prisma.ledgerDoc.findMany({
+      where,
+      include: { createdBy: { select: { firstName: true, lastName: true } } },
+      orderBy: { docDate: 'desc' },
+    });
+
+    const fmtDate = (d) => d ? new Date(d).toISOString().split('T')[0] : '';
+    const typeLabel = (t) => t === 'AR_INVOICE' ? 'AR Invoice' : t === 'AP_RECEIPT' ? 'AP Receipt' : 'AP Invoice';
+    const rows = docs.map(d => ({
+      'Date': fmtDate(d.docDate),
+      'Type': typeLabel(d.docType),
+      'Vendor / Payee': d.vendorName || '',
+      'Vendor TIN': d.vendorTin || '',
+      'Doc/Invoice No.': d.docNumber || '',
+      'PO No.': d.poNumber || '',
+      'Category': d.category || '',
+      'GL Code': glCodes[String(d.category || '').trim().toUpperCase()] || '',
+      'Frequency': d.frequency || '',
+      'Amount': d.amount,
+      'Currency': d.currency,
+      'Amount (PHP)': Number((d.amountPhp || 0).toFixed(2)),
+      'VATable (PHP)': Number(((d.amountPhp || 0) / 1.12).toFixed(2)),
+      'VAT (PHP)': Number(((d.amountPhp || 0) - (d.amountPhp || 0) / 1.12).toFixed(2)),
+      'Due Date': fmtDate(d.dueDate),
+      'Status': d.status,
+      'Processed': d.processedAt ? 'Yes' : 'No',
+      'Pay Out Date': fmtDate(d.payoutDate || d.processedAt),
+      'Remarks': d.remarks || '',
+      'Created By': d.createdBy ? `${d.createdBy.lastName || ''}, ${d.createdBy.firstName || ''}`.replace(/^,\s*|,\s*$/g, '').trim() : '',
+      'Document': d.receiptId ? 'View document' : '',
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:12},{wch:12},{wch:26},{wch:14},{wch:16},{wch:12},{wch:18},{wch:12},{wch:12},{wch:12},{wch:8},{wch:14},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10},{wch:14},{wch:24},{wch:22},{wch:16}];
+    const headerRange = XLSX.utils.decode_range(ws['!ref']);
+    const colOf = {};
+    for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c: C });
+      if (!ws[addr]) continue;
+      colOf[ws[addr].v] = C;
+      ws[addr].s = { font: { bold: true }, fill: { fgColor: { rgb: '1D9E75' } } };
+    }
+    const apiBase = (process.env.PUBLIC_API_URL || 'https://xpensetrack-production.up.railway.app/api').replace(/\/$/, '');
+    for (let i = 0; i < docs.length; i++) {
+      const colIdx = colOf['Document'];
+      if (colIdx == null || !docs[i].receiptId) continue;
+      const addr = XLSX.utils.encode_cell({ r: i + 1, c: colIdx });
+      if (!ws[addr]) continue;
+      ws[addr].l = { Target: `${apiBase}/ocr/receipt/${docs[i].receiptId}?token=${signReceiptToken(docs[i].receiptId)}`, Tooltip: 'Open document' };
+      ws[addr].s = { font: { color: { rgb: '1155CC' }, underline: true } };
+    }
+    XLSX.utils.book_append_sheet(wb, ws, 'AP-AR Invoices');
+
+    const approvedPhp = docs.filter(d => ['APPROVED','PROCESSED'].includes(d.status)).reduce((s,d)=>s+(d.amountPhp||0),0);
+    const summaryData = [
+      { 'Metric': 'Total invoices', 'Value': docs.length },
+      { 'Metric': 'Approved/Processed (PHP)', 'Value': Number(approvedPhp.toFixed(2)) },
+      { 'Metric': 'Pending', 'Value': docs.filter(d=>d.status==='PENDING').length },
+      { 'Metric': 'Approved', 'Value': docs.filter(d=>d.status==='APPROVED').length },
+      { 'Metric': 'Processed', 'Value': docs.filter(d=>d.processedAt).length },
+      { 'Metric': 'AP invoices', 'Value': docs.filter(d=>d.docType!=='AR_INVOICE').length },
+      { 'Metric': 'AR invoices', 'Value': docs.filter(d=>d.docType==='AR_INVOICE').length },
+      { 'Metric': 'Report generated', 'Value': new Date().toLocaleString() },
+    ];
+    const ws2 = XLSX.utils.json_to_sheet(summaryData);
+    ws2['!cols'] = [{wch:26},{wch:22}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', `attachment; filename="ap-ar-${from || 'all'}-to-${to || 'all'}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.send(buf);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/:id', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
     const doc = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id }, include });
@@ -351,115 +461,6 @@ router.post('/:id/unmark-processed', authenticate, requirePermission(PERM, FALLB
 });
 
 // GET /ledger/export — Excel download of AP/AR invoices
-router.get('/export', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
-  try {
-    const { docType, status, from, to, payoutDate, archived } = req.query;
-    const where = { archived: archived === '1' || archived === 'true' };
-    if (docType && docType !== 'ALL') {
-      if (docType === 'AP') where.docType = { in: ['AP_INVOICE', 'AP_RECEIPT'] };
-      else if (docType === 'AR') where.docType = 'AR_INVOICE';
-      else where.docType = String(docType).toUpperCase();
-    }
-    if (status) where.status = String(status).toUpperCase();
-    if (from || to) {
-      where.docDate = {};
-      if (from) where.docDate.gte = new Date(String(from).split('T')[0]);
-      if (to) where.docDate.lte = new Date(String(to).split('T')[0] + 'T23:59:59');
-    }
-    if (payoutDate) {
-      const d0 = new Date(payoutDate + 'T00:00:00.000Z');
-      const d1 = new Date(payoutDate + 'T23:59:59.999Z');
-      where.OR = [
-        { payoutDate: { gte: d0, lte: d1 } },
-        { payoutDate: null, processedAt: { gte: d0, lte: d1 } },
-      ];
-    }
-
-    let glCodes = {};
-    try {
-      const org = await prisma.orgSettings.findFirst();
-      if (org?.categoryGlCodes) {
-        const raw = JSON.parse(org.categoryGlCodes);
-        glCodes = Object.fromEntries(Object.entries(raw).map(([k, v]) => [String(k).trim().toUpperCase(), v]));
-      }
-    } catch (e) { glCodes = {}; }
-
-    const docs = await prisma.ledgerDoc.findMany({
-      where,
-      include: { createdBy: { select: { firstName: true, lastName: true } } },
-      orderBy: { docDate: 'desc' },
-    });
-
-    const fmtDate = (d) => d ? new Date(d).toISOString().split('T')[0] : '';
-    const typeLabel = (t) => t === 'AR_INVOICE' ? 'AR Invoice' : t === 'AP_RECEIPT' ? 'AP Receipt' : 'AP Invoice';
-    const rows = docs.map(d => ({
-      'Date': fmtDate(d.docDate),
-      'Type': typeLabel(d.docType),
-      'Vendor / Payee': d.vendorName || '',
-      'Vendor TIN': d.vendorTin || '',
-      'Doc/Invoice No.': d.docNumber || '',
-      'PO No.': d.poNumber || '',
-      'Category': d.category || '',
-      'GL Code': glCodes[String(d.category || '').trim().toUpperCase()] || '',
-      'Frequency': d.frequency || '',
-      'Amount': d.amount,
-      'Currency': d.currency,
-      'Amount (PHP)': Number((d.amountPhp || 0).toFixed(2)),
-      'VATable (PHP)': Number(((d.amountPhp || 0) / 1.12).toFixed(2)),
-      'VAT (PHP)': Number(((d.amountPhp || 0) - (d.amountPhp || 0) / 1.12).toFixed(2)),
-      'Due Date': fmtDate(d.dueDate),
-      'Status': d.status,
-      'Processed': d.processedAt ? 'Yes' : 'No',
-      'Pay Out Date': fmtDate(d.payoutDate || d.processedAt),
-      'Remarks': d.remarks || '',
-      'Created By': d.createdBy ? `${d.createdBy.lastName || ''}, ${d.createdBy.firstName || ''}`.replace(/^,\s*|,\s*$/g, '').trim() : '',
-      'Document': d.receiptId ? 'View document' : '',
-    }));
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{wch:12},{wch:12},{wch:26},{wch:14},{wch:16},{wch:12},{wch:18},{wch:12},{wch:12},{wch:12},{wch:8},{wch:14},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10},{wch:14},{wch:24},{wch:22},{wch:16}];
-    const headerRange = XLSX.utils.decode_range(ws['!ref']);
-    const colOf = {};
-    for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
-      const addr = XLSX.utils.encode_cell({ r: 0, c: C });
-      if (!ws[addr]) continue;
-      colOf[ws[addr].v] = C;
-      ws[addr].s = { font: { bold: true }, fill: { fgColor: { rgb: '1D9E75' } } };
-    }
-    const apiBase = (process.env.PUBLIC_API_URL || 'https://xpensetrack-production.up.railway.app/api').replace(/\/$/, '');
-    for (let i = 0; i < docs.length; i++) {
-      const colIdx = colOf['Document'];
-      if (colIdx == null || !docs[i].receiptId) continue;
-      const addr = XLSX.utils.encode_cell({ r: i + 1, c: colIdx });
-      if (!ws[addr]) continue;
-      ws[addr].l = { Target: `${apiBase}/ocr/receipt/${docs[i].receiptId}?token=${signReceiptToken(docs[i].receiptId)}`, Tooltip: 'Open document' };
-      ws[addr].s = { font: { color: { rgb: '1155CC' }, underline: true } };
-    }
-    XLSX.utils.book_append_sheet(wb, ws, 'AP-AR Invoices');
-
-    const approvedPhp = docs.filter(d => ['APPROVED','PROCESSED'].includes(d.status)).reduce((s,d)=>s+(d.amountPhp||0),0);
-    const summaryData = [
-      { 'Metric': 'Total invoices', 'Value': docs.length },
-      { 'Metric': 'Approved/Processed (PHP)', 'Value': Number(approvedPhp.toFixed(2)) },
-      { 'Metric': 'Pending', 'Value': docs.filter(d=>d.status==='PENDING').length },
-      { 'Metric': 'Approved', 'Value': docs.filter(d=>d.status==='APPROVED').length },
-      { 'Metric': 'Processed', 'Value': docs.filter(d=>d.processedAt).length },
-      { 'Metric': 'AP invoices', 'Value': docs.filter(d=>d.docType!=='AR_INVOICE').length },
-      { 'Metric': 'AR invoices', 'Value': docs.filter(d=>d.docType==='AR_INVOICE').length },
-      { 'Metric': 'Report generated', 'Value': new Date().toLocaleString() },
-    ];
-    const ws2 = XLSX.utils.json_to_sheet(summaryData);
-    ws2['!cols'] = [{wch:26},{wch:22}];
-    XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
-
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    res.setHeader('Content-Disposition', `attachment; filename="ap-ar-${from || 'all'}-to-${to || 'all'}.xlsx"`);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-    res.send(buf);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
 // Bulk delete AP/AR invoices (Admin only) — clears approvals first to satisfy FKs.
 router.post('/delete-selected', authenticate, requireRole('ADMIN'), async (req, res) => {
