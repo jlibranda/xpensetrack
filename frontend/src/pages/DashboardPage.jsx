@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState(null);
   const [ledger, setLedger] = useState(null); // null = not permitted / not loaded; array = AP/AR rows
   const [loading, setLoading] = useState(true);
+  const [source, setSource] = useState('expense'); // 'expense' | 'ledger'
   const { format } = useCurrency();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -114,6 +115,20 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {/* Source toggle — keeps the dashboard clean by showing one view at a time.
+          The AP & AR option only appears for users who can view the ledger. */}
+      {apArAllowed && (
+        <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1 w-fit">
+          {[['expense', 'Expenses'], ['ledger', 'AP & AR']].map(([val, label]) => (
+            <button key={val} onClick={() => setSource(val)}
+              className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === val ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {source === 'expense' ? (<>
       {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {[
@@ -130,30 +145,6 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
-
-      {/* AP & AR — this month (only shown to users who can view the ledger) */}
-      {apArAllowed && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700">AP &amp; AR — this month</p>
-            <button onClick={() => navigate('/ap-ar')} className="text-xs text-brand-400 hover:text-brand-600">View all →</button>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { label: 'Payables (AP)', value: format(apActive), sub: `${apRows.length} invoice(s)`, accent: 'text-red-500' },
-              { label: 'Receivables (AR)', value: format(arActive), sub: `${arRows.length} invoice(s)`, accent: 'text-green-600' },
-              { label: 'Approved / processed', value: format(apArApproved), sub: `${(ledger || []).length} total`, accent: 'text-blue-600' },
-              { label: 'Pending', value: `${apArPending}`, sub: 'awaiting approval', accent: 'text-amber-600' },
-            ].map((m, i) => (
-              <div key={i} className="bg-gray-50 rounded-xl p-4">
-                <p className="text-xs text-gray-600 font-medium uppercase tracking-wide mb-1">{m.label}</p>
-                <p className={`text-xl font-medium ${m.accent || 'text-gray-900'}`}>{loading ? '—' : m.value}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{m.sub}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {/* Chart — spending summary is for Finance/Admin only */}
@@ -249,6 +240,68 @@ export default function DashboardPage() {
           </table>
         )}
       </div>
+      </>) : (<>
+        {/* ===== AP & AR view ===== */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          {[
+            { label: 'Payables (AP)', value: format(apActive), sub: `${apRows.length} invoice(s)`, accent: 'text-red-500' },
+            { label: 'Receivables (AR)', value: format(arActive), sub: `${arRows.length} invoice(s)`, accent: 'text-green-600' },
+            { label: 'Approved / processed', value: format(apArApproved), sub: `${(ledger || []).length} total`, accent: 'text-blue-600' },
+            { label: 'Pending', value: `${apArPending}`, sub: 'awaiting approval', accent: 'text-amber-600' },
+          ].map((m, i) => (
+            <div key={i} className="bg-gray-50 rounded-xl p-4">
+              <p className="text-xs text-gray-600 font-medium uppercase tracking-wide mb-1">{m.label}</p>
+              <p className={`text-xl font-medium ${m.accent || 'text-gray-900'}`}>{loading ? '—' : m.value}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{m.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-gray-700">Recent AP &amp; AR invoices</h2>
+            <button onClick={() => navigate('/ap-ar')} className="text-xs text-brand-400 hover:text-brand-600">View all →</button>
+          </div>
+          {loading ? (
+            <div className="py-12 text-center text-sm text-gray-400">Loading...</div>
+          ) : (ledger || []).length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-sm text-gray-400">No AP/AR invoices this month.</p>
+              <button onClick={() => navigate('/ap-ar')} className="mt-2 text-sm text-brand-400 hover:text-brand-600">Go to AP &amp; AR →</button>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead><tr className="bg-gray-50">
+                <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium">Vendor / Client</th>
+                <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium hidden md:table-cell">Doc #</th>
+                <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium hidden md:table-cell">Date</th>
+                <th className="px-4 py-2.5 text-left text-xs text-gray-600 font-medium">Type</th>
+                <th className="px-4 py-2.5 text-right text-xs text-gray-600 font-medium">Amount</th>
+                <th className="px-4 py-2.5 text-right text-xs text-gray-600 font-medium">Status</th>
+              </tr></thead>
+              <tbody>
+                {(ledger || []).slice(0, 8).map(d => (
+                  <tr key={d.id} onClick={() => navigate('/ap-ar')}
+                    className="border-t border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors">
+                    <td className="px-4 py-3 text-gray-900">{d.vendorName || '—'}</td>
+                    <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{d.docNumber || '—'}</td>
+                    <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{d.docDate ? new Date(d.docDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${d.docType === 'AR_INVOICE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {d.docType === 'AR_INVOICE' ? 'AR' : 'AP'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-gray-900">{format(d.amountPhp || 0)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[d.status] || 'bg-gray-400 text-white'}`}>{d.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </>)}
     </div>
   );
 }
