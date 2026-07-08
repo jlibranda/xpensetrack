@@ -51,6 +51,7 @@ export default function TransactionsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [payoutFilter, setPayoutFilter] = useState('');
+  const [search, setSearch] = useState(''); // live payee/merchant/keyword filter (client-side)
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger' (AP/AR)
   const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default = all dates)
 
@@ -153,6 +154,7 @@ export default function TransactionsPage() {
     setFrom(ymd(start)); setTo(ymd(end));
   };
 
+  const kw = search.trim().toLowerCase();
   const visibleRows = rows.filter(e => {
     if (from && new Date(e.expenseDate) < new Date(from + 'T00:00:00')) return false;
     if (to && new Date(e.expenseDate) > new Date(to + 'T23:59:59')) return false;
@@ -160,8 +162,13 @@ export default function TransactionsPage() {
       const pd = e.payoutDate || e.processedAt;
       if (!pd || new Date(pd).toISOString().slice(0, 10) !== payoutFilter) return false;
     }
-    if (status === 'PROCESSED') return !!e.processedAt;
-    if (status === 'FOR_PROCESS') return ['APPROVED', 'PROCESSED'].includes(e.status) && !e.processedAt;
+    if (status === 'PROCESSED' && !e.processedAt) return false;
+    if (status === 'FOR_PROCESS' && !(['APPROVED', 'PROCESSED'].includes(e.status) && !e.processedAt)) return false;
+    if (kw) {
+      const hay = [e.merchant, e.vendorName, e.title, e.description, e.category, e.vendorTin, e.orNumber, e.atcCode, personName(e.submittedBy)]
+        .map(v => String(v || '').toLowerCase());
+      if (!hay.some(h => h.includes(kw))) return false;
+    }
     return true;
   });
 
@@ -405,8 +412,14 @@ export default function TransactionsPage() {
             {payoutDateOptions.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
           </select>
         </div>
-        {(status || from || to || payoutFilter) && (
-          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setPayoutFilter(''); setActiveRange('all'); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-xs text-gray-500 mb-1">{source === 'ledger' ? 'Search payee / vendor / keyword' : 'Search merchant / employee / keyword'}</label>
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder={source === 'ledger' ? 'vendor, doc #, TIN, ATC, notes…' : 'merchant, employee, category, notes…'}
+            className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+        </div>
+        {(status || from || to || payoutFilter || search) && (
+          <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setPayoutFilter(''); setSearch(''); setActiveRange('all'); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Clear</button>
         )}
       </div>
 

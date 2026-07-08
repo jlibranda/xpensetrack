@@ -14,7 +14,6 @@ export default function AnalyticsPage() {
   const [to, setTo] = useState('');
   const [activeRange, setActiveRange] = useState('month'); // default: this month
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger'
-  const [keyword, setKeyword] = useState(''); // payee / merchant / free-text filter
   const { format } = useCurrency();
   const { settings } = useOrg();
   const brandColor = settings?.primaryColor || '#1D9E75';
@@ -31,7 +30,6 @@ export default function AnalyticsPage() {
       if (f) params.append('from', f);
       if (t) params.append('to', t);
       if (source === 'ledger') {
-        if (keyword.trim()) params.append('q', keyword.trim());
         const rows = await api.get(`/ledger?${params}`);
         setData({ ledger: Array.isArray(rows) ? rows : [] });
       } else {
@@ -72,42 +70,30 @@ export default function AnalyticsPage() {
   // Proper-case multi-word labels (e.g. "OFFICE SUPPLIES" -> "Office Supplies").
   const titleCase = (s) => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
-  // ----- Keyword (payee / merchant / free-text) filter for the EXPENSE view -----
-  // AP/AR handles its keyword server-side via the `q` param; expenses are filtered
-  // client-side here so charts/KPIs react to the search term too.
-  const kw = keyword.trim().toLowerCase();
-  const empName = (e) => (`${e.submittedBy?.firstName || ''} ${e.submittedBy?.lastName || ''}`.trim() || e.submittedBy?.name || e.submittedBy?.email || '');
-  const inRange = (e) => {
-    if (!from && !to) return true;
-    const d = new Date(e.expenseDate);
-    if (from && d < new Date(from)) return false;
-    if (to && d > new Date(to + 'T23:59:59')) return false;
-    return true;
-  };
-  const kwMatch = (e) => !kw || [e.merchant, e.title, e.category, e.description, empName(e)].some(v => String(v || '').toLowerCase().includes(kw));
-  // Rows used when a keyword is active (date + keyword filtered).
-  const fExp = expenses.filter(e => kwMatch(e) && inRange(e));
-
-  // Category breakdown — from the keyword-filtered rows when searching, else the server summary.
-  const categoryData = kw
-    ? Object.entries(fExp.filter(e => ['APPROVED', 'PROCESSED'].includes(e.status)).reduce((m, e) => { const c = titleCase(e.category || 'Uncategorized'); m[c] = (m[c] || 0) + (e.amountPhp || 0); return m; }, {})).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a, b) => b.value - a.value)
-    : (summary?.byCategory ? Object.entries(summary.byCategory).map(([name, value]) => ({ name: titleCase(name), value: Math.round(value) })).sort((a, b) => b.value - a.value) : []);
+  // Category breakdown
+  const categoryData = summary?.byCategory
+    ? Object.entries(summary.byCategory).map(([name, value]) => ({ name: titleCase(name), value: Math.round(value) })).sort((a,b)=>b.value-a.value)
+    : [];
 
   // Employee spending
-  const employeeData = kw
-    ? Object.entries(fExp.filter(e => ['APPROVED', 'PROCESSED'].includes(e.status)).reduce((m, e) => { const n = empName(e) || '—'; m[n] = (m[n] || 0) + (e.amountPhp || 0); return m; }, {})).map(([name, value]) => ({ name: name?.split(' ')?.[0] || name, value: Math.round(value) })).sort((a, b) => b.value - a.value).slice(0, 8)
-    : (summary?.byEmployee ? Object.entries(summary.byEmployee).map(([name, value]) => ({ name: name?.split(' ')?.[0] || name, value: Math.round(value || 0) })).sort((a, b) => b.value - a.value).slice(0, 8) : []);
+  const employeeData = summary?.byEmployee
+    ? Object.entries(summary?.byEmployee || {}).map(([name, value]) => ({ name: name?.split(' ')?.[0] || name, value: Math.round(value || 0) })).sort((a,b)=>b.value-a.value).slice(0,8)
+    : [];
 
-  // Monthly trend — last 6 calendar months, keyword-filtered, zero-filled. APPROVED/PROCESSED only.
-  const trendSrc = kw ? expenses.filter(kwMatch) : expenses;
+  // Monthly trend — last 6 calendar months ending this month, in chronological
+  // order, zero-filled. Counts only APPROVED/PROCESSED (actual spend).
   const trendNow = new Date();
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(trendNow.getFullYear(), trendNow.getMonth() - i, 1);
-    months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('en-PH', { month: 'short', year: '2-digit' }), value: 0 });
+    months.push({
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      label: d.toLocaleDateString('en-PH', { month: 'short', year: '2-digit' }),
+      value: 0,
+    });
   }
   const monthIndex = Object.fromEntries(months.map((m, idx) => [m.key, idx]));
-  trendSrc.forEach(e => {
+  expenses.forEach(e => {
     if (!['APPROVED', 'PROCESSED'].includes(e.status)) return;
     const d = new Date(e.expenseDate);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -116,25 +102,22 @@ export default function AnalyticsPage() {
   const monthlyData = months.map(m => ({ month: m.label, value: Math.round(m.value) }));
   const hasMonthly = monthlyData.some(m => m.value > 0);
 
-  // Status + department breakdowns — keyword-filtered when searching, else full recent set.
-  const statusSrc = kw ? fExp : expenses;
+  // Status breakdown
   const statusMap = {};
-  statusSrc.forEach(e => { statusMap[e.status] = (statusMap[e.status] || 0) + 1; });
+  expenses.forEach(e => { statusMap[e.status] = (statusMap[e.status]||0) + 1; });
   const statusData = Object.entries(statusMap).map(([name, value]) => ({ name, value }));
 
+  // Department breakdown
   const deptMap = {};
-  statusSrc.filter(e => ['APPROVED', 'PROCESSED'].includes(e.status)).forEach(e => {
+  expenses.filter(e => ['APPROVED','PROCESSED'].includes(e.status)).forEach(e => {
     const d = e.submittedBy?.department || 'Unknown';
-    deptMap[d] = (deptMap[d] || 0) + e.amountPhp;
+    deptMap[d] = (deptMap[d]||0) + e.amountPhp;
   });
-  const deptData = Object.entries(deptMap).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a, b) => b.value - a.value);
-  const deptTotal = deptData.reduce((s, d) => s + d.value, 0) || 1;
+  const deptData = Object.entries(deptMap).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a,b)=>b.value-a.value);
+  const deptTotal = deptData.reduce((s,d)=>s+d.value, 0) || 1;
 
-  const totalApproved = kw ? fExp.filter(e => ['APPROVED', 'PROCESSED'].includes(e.status)).reduce((s, e) => s + (e.amountPhp || 0), 0) : (summary?.totalPhp || 0);
-  const kwCount = kw ? fExp.filter(e => ['APPROVED', 'PROCESSED'].includes(e.status)).length : (summary?.count || 0);
-  const avgExpense = kwCount > 0 ? totalApproved / kwCount : 0;
-  const kwPending = kw ? fExp.filter(e => e.status === 'PENDING').length : (summary?.pendingCount || 0);
-  const kwRejected = kw ? fExp.filter(e => e.status === 'REJECTED').length : (summary?.rejectedCount || 0);
+  const totalApproved = summary?.totalPhp || 0;
+  const avgExpense = summary?.count > 0 ? totalApproved / summary.count : 0;
 
   // ---------- AP/AR analytics (computed from the ledger rows) ----------
   const ledgerRows = data?.ledger || [];
@@ -286,20 +269,9 @@ export default function AnalyticsPage() {
             <input type="date" value={to} onChange={e => { setTo(e.target.value); setActiveRange(null); }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
           </div>
-          <div className="flex-1 min-w-[180px]">
-            <label className="block text-xs text-gray-500 mb-1">{source === 'ledger' ? 'Payee / vendor / keyword' : 'Merchant / employee / keyword'}</label>
-            <input type="text" value={keyword} placeholder={source === 'ledger' ? 'e.g. vendor name or doc #' : 'e.g. merchant, employee, category'}
-              onChange={e => setKeyword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') load(); }}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
-          </div>
           <button onClick={() => load()} className="px-4 py-2 bg-brand-400 text-white rounded-lg text-sm font-medium hover:bg-brand-600">
             Apply
           </button>
-          {keyword && (
-            <button onClick={() => { setKeyword(''); setTimeout(() => load(), 0); }} className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">
-              Clear
-            </button>
-          )}
         </div>
       </div>
 
@@ -308,9 +280,9 @@ export default function AnalyticsPage() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
-          { label: 'Total approved', value: format(totalApproved), sub: `${kwCount} expenses` },
-          { label: 'Pending', value: kwPending, sub: 'awaiting approval', isCount: true },
-          { label: 'Rejected', value: kwRejected, sub: 'this period', isCount: true },
+          { label: 'Total approved', value: format(totalApproved), sub: `${summary?.count||0} expenses` },
+          { label: 'Pending', value: summary?.pendingCount||0, sub: 'awaiting approval', isCount: true },
+          { label: 'Rejected', value: summary?.rejectedCount||0, sub: 'this period', isCount: true },
           { label: 'Avg per expense', value: format(avgExpense), sub: 'approved expenses' },
         ].map((k,i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-100 p-4">
