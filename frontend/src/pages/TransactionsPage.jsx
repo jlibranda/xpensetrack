@@ -192,7 +192,7 @@ export default function TransactionsPage() {
     if (!window.confirm(`PERMANENTLY delete ${selected.length} selected transaction(s)? This cannot be undone.`)) return;
     setDeleting(true); setMsg({ text: '', ok: true });
     try {
-      const r = await api.post('/expenses/delete-selected', { ids: selected });
+      const r = await api.post(source === 'ledger' ? '/ledger/delete-selected' : '/expenses/delete-selected', { ids: selected });
       setMsg({ text: `Deleted ${r.deleted} transaction(s)`, ok: true }); toast.success(`Deleted ${r.deleted} transaction(s)`);
       setSelected([]); await load();
     } catch (e) { setMsg({ text: e.error || 'Delete failed', ok: false }); }
@@ -215,6 +215,12 @@ export default function TransactionsPage() {
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     if (payoutFilter) params.set('payoutDate', payoutFilter);
+    if (source === 'ledger') {
+      if (status === 'FOR_PROCESS') params.set('status', 'APPROVED');
+      else if (status) params.set('status', status);
+      window.open(`${base}/ledger/export?${params.toString()}`, '_blank');
+      return;
+    }
     if (status === 'PROCESSED') params.set('processed', 'yes');
     else if (status === 'FOR_PROCESS') { params.set('status', 'APPROVED'); params.set('processed', 'no'); }
     else if (status) params.set('status', status);
@@ -231,18 +237,16 @@ export default function TransactionsPage() {
           <p className="text-sm text-gray-500">{visibleRows.length} shown</p>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && source === 'expense' && (
+          {isAdmin && (
             <button onClick={deleteSelected} disabled={deleting || selected.length === 0}
               className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: '#dc2626' }}>
               {deleting ? 'Deleting…' : `🗑 Delete selected${selected.length ? ` (${selected.length})` : ''}`}
             </button>
           )}
-          {source === 'expense' && (
-            <button onClick={exportExcel} className="px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: '#16a34a' }}>
-              ⬇ Export Excel
-            </button>
-          )}
+          <button onClick={exportExcel} className="px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: '#16a34a' }}>
+            ⬇ Export Excel
+          </button>
         </div>
       </div>
 

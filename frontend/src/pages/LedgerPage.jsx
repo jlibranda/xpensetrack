@@ -103,6 +103,14 @@ export default function LedgerPage({ mode = 'manage' }) {
 
   const defaultClientId = () => (clients.find(c => c.isDefault) || {}).id || '';
   const initAddForm = () => setEditing(emptyDoc({ docType: 'AP_INVOICE', clientId: defaultClientId() }));
+  // Excel export of the current AP/AR list (respects tab + status filter).
+  const exportExcel = () => {
+    const params = new URLSearchParams({ token: localStorage.getItem('token') || '' });
+    if (['AP_INVOICE', 'AR_INVOICE', 'AP_RECEIPT'].includes(tab)) params.set('docType', tab);
+    if (tab === 'ARCHIVED') params.set('archived', '1');
+    if (statusFilter) params.set('status', statusFilter);
+    window.open(`${API_BASE}/ledger/export?${params.toString()}`, '_blank');
+  };
   // After save/submit: in add mode reset to a fresh form; in manage mode close + reload.
   const afterSave = () => { if (isAddMode) initAddForm(); else { setEditing(null); load(); } };
   const cancelForm = () => { if (isAddMode) initAddForm(); else setEditing(null); };
@@ -342,11 +350,19 @@ export default function LedgerPage({ mode = 'manage' }) {
           <h1 className="text-2xl font-semibold text-gray-900">My AP &amp; AR Invoices</h1>
           <p className="text-sm text-gray-500 mt-0.5">Track vendor invoices &amp; receivables, submit for approval, and see what's paid.</p>
         </div>
-        {isDocTab && !isArchived && (
-          <button onClick={() => setEditing(emptyDoc({ clientId: clientFilter || defaultClientId(), docType: ['AP_INVOICE','AP_RECEIPT','AR_INVOICE'].includes(tab) ? tab : 'AP_INVOICE' }))}
-            className="px-4 py-2.5 text-white rounded-xl text-sm font-medium shadow-sm hover:opacity-90 transition" style={{ backgroundColor: BRAND }}>
-            + Add document
-          </button>
+        {isDocTab && (
+          <div className="flex items-center gap-2">
+            <button onClick={exportExcel}
+              className="px-3 py-2.5 rounded-xl text-sm font-medium text-white shadow-sm hover:opacity-90" style={{ backgroundColor: '#16a34a' }}>
+              ⬇ Export Excel
+            </button>
+            {!isArchived && (
+              <button onClick={() => setEditing(emptyDoc({ clientId: clientFilter || defaultClientId(), docType: ['AP_INVOICE','AP_RECEIPT','AR_INVOICE'].includes(tab) ? tab : 'AP_INVOICE' }))}
+                className="px-4 py-2.5 text-white rounded-xl text-sm font-medium shadow-sm hover:opacity-90 transition" style={{ backgroundColor: BRAND }}>
+                + Add document
+              </button>
+            )}
+          </div>
         )}
       </div>
 

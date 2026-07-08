@@ -18,6 +18,8 @@ export default function ReportsPage() {
   const now = new Date();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [source, setSource] = useState('expense'); // 'expense' | 'ledger'
+  const [ledgerRows, setLedgerRows] = useState([]);
   const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default)
   const [userId, setUserId] = useState('');
   const { format } = useCurrency();
@@ -31,8 +33,8 @@ export default function ReportsPage() {
 
   useEffect(() => {
     api.get('/users').then(d => setUsers(Array.isArray(d) ? d : [])).catch(() => {});
-    load();
   }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [source]);
 
   const load = async (f = from, t = to) => {
     setLoading(true);
@@ -40,6 +42,12 @@ export default function ReportsPage() {
       const params = new URLSearchParams();
       if (f) params.append('from', f);
       if (t) params.append('to', t);
+      if (source === 'ledger') {
+        const d = await api.get(`/ledger?${params}`);
+        setLedgerRows(Array.isArray(d) ? d : []);
+        setLoading(false);
+        return;
+      }
       if (userId) params.append('userId', userId);
       const data = await api.get(`/reports/summary?${params}`);
       setSummary(data);
@@ -90,15 +98,49 @@ export default function ReportsPage() {
     const params = new URLSearchParams({ token });
     if (from) params.append('from', from);
     if (to) params.append('to', to);
+    if (source === 'ledger') { window.open(`${base}/ledger/export?${params}`, '_blank'); return; }
     if (userId) params.append('userId', userId);
     window.open(`${base}/reports/export?${params}`, '_blank');
+  };
+
+  // Compact AP/AR report panel (computed from the fetched ledger rows).
+  const renderLedgerReport = () => {
+    const rows = ledgerRows;
+    const approvedPhp = rows.filter(d => ['APPROVED','PROCESSED'].includes(d.status)).reduce((s,d)=>s+(d.amountPhp||0),0);
+    const ap = rows.filter(d => d.docType !== 'AR_INVOICE');
+    const ar = rows.filter(d => d.docType === 'AR_INVOICE');
+    const card = (label, value, sub) => (
+      <div className="bg-gray-50 rounded-xl p-4">
+        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+        <p className="text-2xl font-medium text-gray-900">{value}</p>
+        {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+      </div>
+    );
+    return (
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        {card('Approved / processed', format(approvedPhp), `${rows.length} invoice(s)`)}
+        {card('Pending', rows.filter(d=>d.status==='PENDING').length, 'awaiting approval')}
+        {card('AP (payables)', ap.length, format(ap.reduce((s,d)=>s+(d.amountPhp||0),0)))}
+        {card('AR (receivables)', ar.length, format(ar.reduce((s,d)=>s+(d.amountPhp||0),0)))}
+      </div>
+    );
   };
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-medium text-gray-900">Reports</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Expense summaries and exports</p>
+        <p className="text-sm text-gray-500 mt-0.5">Summaries and exports</p>
+        <div className="flex gap-1 mt-3 bg-gray-100 rounded-lg p-1 w-fit">
+          <button onClick={() => setSource('expense')}
+            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'expense' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            Expenses
+          </button>
+          <button onClick={() => setSource('ledger')}
+            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'ledger' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            AP &amp; AR
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -148,7 +190,9 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {loading ? (
+      {source === 'ledger' ? (
+        loading ? <div className="py-12 text-center text-sm text-gray-400">Generating report...</div> : renderLedgerReport()
+      ) : loading ? (
         <div className="py-12 text-center text-sm text-gray-400">Generating report...</div>
       ) : summary ? (
         <>
