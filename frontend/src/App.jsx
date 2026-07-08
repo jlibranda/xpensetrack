@@ -98,8 +98,8 @@ function AppRoutes() {
         <Route path="expenses/:id/edit" element={<AddExpensePage />} />
         <Route path="approvals" element={<PrivateRoute permission="view_approvals" roles={['MANAGER','FINANCE','ADMIN']}><ApprovalsPage /></PrivateRoute>} />
         <Route path="reports" element={<PrivateRoute permission="view_reports" roles={['MANAGER','FINANCE','ADMIN']}><ReportsPage /></PrivateRoute>} />
-        <Route path="payables" element={<PrivateRoute permission="manage_ap_ar" feature="apAr" roles={['FINANCE','ADMIN']}><LedgerPage mode="add" /></PrivateRoute>} />
-        <Route path="ap-ar" element={<PrivateRoute permission="manage_ap_ar" feature="apAr" roles={['FINANCE','ADMIN']}><LedgerPage mode="manage" /></PrivateRoute>} />
+        <Route path="payables" element={<PrivateRoute permission="manage_ap_ar" feature="apAr" roles={['FINANCE','ADMIN']}><LedgerPage key="ledger-add" mode="add" /></PrivateRoute>} />
+        <Route path="ap-ar" element={<PrivateRoute permission="manage_ap_ar" feature="apAr" roles={['FINANCE','ADMIN']}><LedgerPage key="ledger-manage" mode="manage" /></PrivateRoute>} />
         <Route path="transactions" element={<PrivateRoute roles={['FINANCE','ADMIN']}><TransactionsPage /></PrivateRoute>} />
         <Route path="analytics" element={<PrivateRoute permission="view_analytics" roles={['FINANCE','ADMIN']}><AnalyticsPage /></PrivateRoute>} />
         <Route path="users" element={<PrivateRoute permission="manage_users"><UsersPage /></PrivateRoute>} />

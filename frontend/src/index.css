@@ -50,6 +50,10 @@ input:focus, select:focus, textarea:focus {
 }
 input::placeholder, textarea::placeholder { color: #94a3b8 !important; }
 
+/* Shared compact form-input class used by the AP/AR forms */
+.inp { width: 100%; padding: 0.5rem 0.625rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; font-size: 0.875rem; }
+
+
 /* Table */
 table thead tr { background-color: #e2e8f0 !important; }
 table th { color: #334155 !important; font-weight: 700 !important; border-color: #cbd5e1 !important; }
