@@ -479,7 +479,7 @@ router.post('/:id/submit', authenticate, requirePermission(PERM, FALLBACK), asyn
       await createNotification(approverId, 'APPROVAL_REQUEST', 'New AP/AR invoice to approve',
         `An AP/AR invoice "${label}" needs your approval`, '/approvals').catch(() => {});
       const apu = await prisma.user.findUnique({ where: { id: approverId } }).catch(() => null);
-      if (apu?.email) await sendApprovalRequestEmail(apu.email, nm(apu), pseudo, creator).catch(() => {});
+      if (apu?.email) await sendApprovalRequestEmail(apu.email, nm(apu), pseudo, creator, 'apar').catch(() => {});
     }
     res.json({ message: 'Submitted', doc: await prisma.ledgerDoc.findUnique({ where: { id: doc.id }, include }) });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -501,7 +501,7 @@ router.post('/bulk-mark-processed', authenticate, requirePermission(PERM, FALLBA
       const creator = d.createdById ? await prisma.user.findUnique({ where: { id: d.createdById } }).catch(() => null) : null;
       if (creator?.email) {
         const pseudo = ledgerAsExpense({ ...d, status: 'PROCESSED', processedAt: when, payoutDate: when }, creator);
-        await sendStatusUpdateEmail(creator.email, nm(creator), pseudo, 'PROCESSED', creator).catch(() => {});
+        await sendStatusUpdateEmail(creator.email, nm(creator), pseudo, 'PROCESSED', creator, 'apar').catch(() => {});
       }
     }
     await logAudit(req.user, 'LEDGER_BULK_PROCESSED', { targetType: 'LEDGER_DOC', details: `Marked ${count} AP/AR invoice(s) processed` });
@@ -518,7 +518,7 @@ router.post('/:id/unmark-processed', authenticate, requirePermission(PERM, FALLB
     await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'APPROVED', processedAt: null, payoutDate: null, paidAt: null } });
     // Notify creator the payout was reverted (mirrors expense reprocessing email).
     const creator = d.createdById ? await prisma.user.findUnique({ where: { id: d.createdById } }).catch(() => null) : null;
-    if (creator?.email) await sendStatusUpdateEmail(creator.email, nm(creator), ledgerAsExpense(d, creator), 'REPROCESSING', creator).catch(() => {});
+    if (creator?.email) await sendStatusUpdateEmail(creator.email, nm(creator), ledgerAsExpense(d, creator), 'REPROCESSING', creator, 'apar').catch(() => {});
     await logAudit(req.user, 'LEDGER_PAYOUT_REVERSED', { targetType: 'LEDGER_DOC', targetId: req.params.id, details: `Reversed payout for "${d.vendorName || 'AP/AR document'}${d.docNumber ? ` (${d.docNumber})` : ''}"` });
     res.json({ message: 'Unmarked' });
   } catch (err) { res.status(500).json({ error: err.message }); }

@@ -1023,22 +1023,47 @@ const EMAIL_TEMPLATE_DEFS = [
     vars: ['{name}','{appName}', ...EMP_VARS] },
 ];
 
+// AP/AR (payables & receivables) workflow templates — edited via the toggle.
+const AP_AR_TEMPLATE_DEFS = [
+  { key: 'apar_approval_request', label: 'Approval request', desc: 'Sent to an approver when an AP/AR invoice needs their approval. Employee tags refer to the invoice creator.',
+    subject: 'Action required: Approve "{title}"', message: 'An AP/AR invoice from {employeeName} has been submitted and is waiting for your approval:',
+    vars: ['{name}','{title}','{amount}','{category}','{date}', ...EMP_VARS] },
+  { key: 'apar_status_APPROVED', label: 'Status: Approved', desc: 'Sent to the creator when their AP/AR invoice is fully approved.',
+    subject: '✅ AP/AR invoice approved — {title}', message: 'The AP/AR invoice has been fully approved and will be processed for payment.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'apar_status_REJECTED', label: 'Status: Rejected', desc: 'Sent when an AP/AR invoice is rejected.',
+    subject: '❌ AP/AR invoice rejected — {title}', message: 'The AP/AR invoice was not approved. Please check the notes and resubmit if needed.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'apar_status_RETURNED', label: 'Status: Returned', desc: 'Sent when an AP/AR invoice is returned for revision.',
+    subject: '↩ AP/AR invoice returned — {title}', message: 'The approver returned this AP/AR invoice. Please review the comments and resubmit.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'apar_status_PROCESSED', label: 'Status: Processed', desc: 'Sent to the creator when an AP/AR invoice is processed for payout.',
+    subject: '💰 AP/AR invoice processed — {title}', message: 'The AP/AR invoice has been processed for payout.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'apar_status_REPROCESSING', label: 'Status: Reprocessing', desc: 'Sent when a processed AP/AR invoice is undone and goes back for reprocessing.',
+    subject: '↻ AP/AR invoice back for reprocessing — {title}', message: 'A previously processed AP/AR invoice has been reverted and is now back for reprocessing.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+];
+
 function EmailTemplatesTab({ settings, refresh, brand }) {
+  const ALL_DEFS = [...EMAIL_TEMPLATE_DEFS, ...AP_AR_TEMPLATE_DEFS];
   // Pre-fill each field with the current custom value, or the default draft if none.
   // This gives the admin an editable starting draft rather than a blank box.
   const saved = settings?.emailTemplates || {};
   const initial = {};
-  for (const d of EMAIL_TEMPLATE_DEFS) {
+  for (const d of ALL_DEFS) {
     initial[d.key] = {
       subject: (saved[d.key]?.subject != null && saved[d.key].subject !== '') ? saved[d.key].subject : d.subject,
       message: (saved[d.key]?.message != null && saved[d.key].message !== '') ? saved[d.key].message : d.message,
     };
   }
   const [tpls, setTpls] = useState(initial);
+  const [mode, setMode] = useState('expense'); // 'expense' | 'apar'
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const defFor = (key) => EMAIL_TEMPLATE_DEFS.find(d => d.key === key) || {};
+  const defList = mode === 'apar' ? AP_AR_TEMPLATE_DEFS : EMAIL_TEMPLATE_DEFS;
+  const defFor = (key) => ALL_DEFS.find(d => d.key === key) || {};
   const get = (key, field) => tpls[key]?.[field] ?? '';
   const set = (key, field, val) => setTpls(t => ({ ...t, [key]: { ...(t[key] || {}), [field]: val } }));
   const isCustom = (key) => { const d = defFor(key); return (tpls[key]?.subject ?? '') !== d.subject || (tpls[key]?.message ?? '') !== d.message; };
@@ -1050,7 +1075,7 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
       // Only persist entries that differ from the default draft, so unchanged
       // templates keep following the defaults.
       const clean = {};
-      for (const d of EMAIL_TEMPLATE_DEFS) {
+      for (const d of ALL_DEFS) {
         const subj = (tpls[d.key]?.subject ?? '').trim();
         const message = (tpls[d.key]?.message ?? '').trim();
         const entry = {};
@@ -1076,8 +1101,18 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
         The branded header, details, and buttons stay consistent.
       </p>
 
+      {/* Expense / AP & AR toggle */}
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+        {[['expense', 'Expense emails'], ['apar', 'AP & AR emails']].map(([val, label]) => (
+          <button key={val} onClick={() => setMode(val)}
+            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${mode === val ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-4">
-        {EMAIL_TEMPLATE_DEFS.map(def => (
+        {defList.map(def => (
           <div key={def.key} className="rounded-xl border border-gray-100 p-4">
             <div className="flex items-center justify-between mb-1">
               <p className="text-sm font-medium text-gray-800">{def.label} {isCustom(def.key) && <span className="text-[10px] text-emerald-600 ml-1">customized</span>}</p>

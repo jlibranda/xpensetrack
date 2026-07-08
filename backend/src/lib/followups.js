@@ -132,7 +132,7 @@ async function runFollowups() {
         if (r.lastFollowUpAt && (now - new Date(r.lastFollowUpAt).getTime()) < thresholdMs) continue;
         const ap = r.approver;
         if (!ap?.email) continue;
-        await sendApprovalReminderEmail(ap.email, `${ap.firstName || ''} ${ap.lastName || ''}`.trim(), emailExpense, doc.createdBy, daysWaiting).catch(() => {});
+        await sendApprovalReminderEmail(ap.email, `${ap.firstName || ''} ${ap.lastName || ''}`.trim(), emailExpense, doc.createdBy, daysWaiting, 'apar').catch(() => {});
         await prisma.approval.update({ where: { id: r.id }, data: { lastFollowUpAt: new Date() } }).catch(() => {});
       }
     } catch (e) { console.error('Follow-ups: ledger', doc.id, 'failed:', e.message); }

@@ -57,6 +57,13 @@ const DEFAULT_TEMPLATES = {
   status_MANAGER_APPROVED: { subject: '✓ Manager approved — {title}',        message: 'Your expense was approved by your manager and is now pending finance review.' },
   status_PROCESSED:        { subject: '💰 Expense processed — {title}',      message: 'Your expense has been processed for payout.' },
   status_REPROCESSING:     { subject: '↻ Expense back for reprocessing — {title}', message: 'A previously processed expense has been reverted and is now back for reprocessing. You will receive an updated notification once it has been processed again.' },
+  // AP/AR (payables & receivables) variants — used when kind='apar'.
+  apar_approval_request:   { subject: 'Action required: Approve "{title}"', message: 'An AP/AR invoice from {employeeName} has been submitted and is waiting for your approval:' },
+  apar_status_APPROVED:    { subject: '✅ AP/AR invoice approved — {title}',  message: 'The AP/AR invoice has been fully approved and will be processed for payment.' },
+  apar_status_REJECTED:    { subject: '❌ AP/AR invoice rejected — {title}',  message: 'The AP/AR invoice was not approved. Please check the notes and resubmit if needed.' },
+  apar_status_RETURNED:    { subject: '↩ AP/AR invoice returned — {title}',   message: 'The approver returned this AP/AR invoice. Please review the comments and resubmit.' },
+  apar_status_PROCESSED:   { subject: '💰 AP/AR invoice processed — {title}', message: 'The AP/AR invoice has been processed for payout.' },
+  apar_status_REPROCESSING:{ subject: '↻ AP/AR invoice back for reprocessing — {title}', message: 'A previously processed AP/AR invoice has been reverted and is now back for reprocessing.' },
   welcome:                 { subject: 'Welcome to {appName}!',               message: 'Your {appName} account has been created. Here are your login details:' },
   password_reset:          { subject: 'Reset your {appName} password',       message: 'Click below to reset your password. This link expires in 1 hour.' },
 };
@@ -187,8 +194,9 @@ async function sendMail(to, subject, htmlBody, fromName) {
   return false;
 }
 
-async function sendApprovalRequestEmail(toEmail, toName, expense, employee) {
+async function sendApprovalRequestEmail(toEmail, toName, expense, employee, kind = 'expense') {
   if (!(await notificationsEnabled())) return { skipped: true, reason: 'notifications_disabled' };
+  const isApar = kind === 'apar';
   const sym = expense.currency === 'PHP' ? '₱' : '$';
   const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
   const date = new Date(expense.expenseDate).toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
@@ -199,10 +207,12 @@ async function sendApprovalRequestEmail(toEmail, toName, expense, employee) {
   const custom = await getTemplates();
   const emp = await employeeVars(employee || expense.submittedBy || expense.submittedById);
   const vars = { name: toName, title: expense.title, amount: amt, category: cat, date, appName, ...emp };
-  const subject = tpl(custom, 'approval_request', 'subject', vars);
-  const message = tpl(custom, 'approval_request', 'message', vars);
+  const key = isApar ? 'apar_approval_request' : 'approval_request';
+  const subject = tpl(custom, key, 'subject', vars);
+  const message = tpl(custom, key, 'message', vars);
+  const heading = isApar ? 'New AP/AR invoice needs your approval' : 'New expense needs your approval';
   return sendMail(toEmail, subject, html(
-    'New expense needs your approval',
+    heading,
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
      <p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
      <table style="width:100%;border-collapse:collapse;margin:0 0 20px">
@@ -216,15 +226,18 @@ async function sendApprovalRequestEmail(toEmail, toName, expense, employee) {
   , brand), appName);
 }
 
-async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee) {
+async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee, kind = 'expense') {
   if (!(await notificationsEnabled())) return { skipped: true, reason: 'notifications_disabled' };
+  const isApar = kind === 'apar';
   const sym = expense.currency === 'PHP' ? '₱' : '$';
   const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
-  const titles = {
+  const titles = isApar ? {
+    APPROVED: 'AP/AR invoice approved', REJECTED: 'AP/AR invoice rejected', RETURNED: 'AP/AR invoice returned for revision',
+    MANAGER_APPROVED: 'Approved by manager', PROCESSED: 'AP/AR invoice processed', REPROCESSING: 'AP/AR invoice back for reprocessing',
+  } : {
     APPROVED: 'Expense approved', REJECTED: 'Expense rejected', RETURNED: 'Expense returned for revision',
-    MANAGER_APPROVED: 'Approved by manager', PROCESSED: 'Expense processed',
-    REPROCESSING: 'Expense back for reprocessing',
+    MANAGER_APPROVED: 'Approved by manager', PROCESSED: 'Expense processed', REPROCESSING: 'Expense back for reprocessing',
   };
   const brand = await getBranding();
   const appName = brand.appName;
@@ -232,13 +245,14 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee)
   const custom = await getTemplates();
   const emp = await employeeVars(employee || expense.submittedBy || expense.submittedById);
   const vars = { name: toName, title: expense.title, amount: amt, appName, ...emp };
-  const key = `status_${status}`;
+  const key = `${isApar ? 'apar_status_' : 'status_'}${status}`;
+  const noun = isApar ? 'AP/AR invoice' : 'Expense';
   const fallbackMsgs = {
-    REPROCESSING: 'A previously processed expense has been reverted and is now back for reprocessing. You will receive an updated notification once it has been processed again.',
+    REPROCESSING: `A previously processed ${noun.toLowerCase()} has been reverted and is now back for reprocessing. You will receive an updated notification once it has been processed again.`,
   };
-  const subject = DEFAULT_TEMPLATES[key] ? tpl(custom, key, 'subject', vars) : subst(`Expense update — {title}`, vars);
+  const subject = DEFAULT_TEMPLATES[key] ? tpl(custom, key, 'subject', vars) : subst(`${noun} update — {title}`, vars);
   const message = DEFAULT_TEMPLATES[key] ? tpl(custom, key, 'message', vars) : (fallbackMsgs[status] || '');
-  const title = titles[status] || 'Expense update';
+  const title = titles[status] || `${noun} update`;
   const color = colors[status] || '#374151';
   // For processed payouts, show pay out date + remarks (and pay period if set).
   const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', timeZone: brand.timezone || 'Asia/Manila' }) : '';
@@ -251,6 +265,8 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee)
     if (expense.remarks) lines.push(`Remarks: ${esc(expense.remarks)}`);
     extra = lines.map(l => `<p style="margin:8px 0 0;font-size:13px;color:#6b7280">${l}</p>`).join('');
   }
+  const btnLink = isApar ? `${frontendUrl}/ap-ar` : `${frontendUrl}/expenses`;
+  const btnLabel = isApar ? 'View AP &amp; AR invoices →' : 'View my expenses →';
   return sendMail(toEmail, subject, html(
     title,
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
@@ -260,7 +276,7 @@ async function sendStatusUpdateEmail(toEmail, toName, expense, status, employee)
        <p style="margin:0;font-size:14px;color:#6b7280">${amt}</p>
        ${extra}
      </div>
-     ${btn(`${frontendUrl}/expenses`, 'View my expenses →', brand)}`
+     ${btn(btnLink, btnLabel, brand)}`
   , brand), appName);
 }
 
@@ -377,8 +393,9 @@ async function sendPasswordChangedEmail(toEmail, toName) {
 }
 
 // Automatic reminder to a pending approver when an expense has been waiting too long.
-async function sendApprovalReminderEmail(toEmail, toName, expense, employee, days) {
+async function sendApprovalReminderEmail(toEmail, toName, expense, employee, days, kind = 'expense') {
   if (!(await notificationsEnabled())) return { skipped: true, reason: 'notifications_disabled' };
+  const noun = kind === 'apar' ? 'AP/AR invoice' : 'expense';
   const sym = expense.currency === 'PHP' ? '₱' : '$';
   const amt = `${sym}${Number(expense.amount).toLocaleString()}`;
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
@@ -390,7 +407,7 @@ async function sendApprovalReminderEmail(toEmail, toName, expense, employee, day
   return sendMail(toEmail, `Reminder: "${expense.title}" is awaiting your approval`, html(
     'Approval reminder',
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName || 'there'},</p>
-     <p style="color:#374151;font-size:14px;margin:0 0 20px">This is a friendly reminder that an expense from ${who} has been waiting for your approval for <b>${dayTxt}</b>. Please review it when you can.</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">This is a friendly reminder that an ${noun} from ${who} has been waiting for your approval for <b>${dayTxt}</b>. Please review it when you can.</p>
      <div style="background:#f9fafb;border-left:4px solid ${brand.brandColor};border-radius:4px;padding:16px;margin:0 0 20px">
        <p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#111">${expense.title}</p>
        <p style="margin:0;font-size:14px;color:#6b7280">${amt}</p>
