@@ -1,4 +1,5 @@
 // src/App.jsx
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
@@ -24,19 +25,25 @@ import EmployeePage from './pages/EmployeePage';
 import ProfilePage from './pages/ProfilePage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 
-// Branded loading screen — shows the org logo + primary color from cached branding
-// (saved by the login/settings pages) instead of a hardcoded placeholder.
+// Branded loading screen — shows the org logo + primary color. It prefers the
+// cached branding (saved by the login/settings pages), but if the cache was
+// cleared (e.g. after a "clear site data"), it falls back to the PUBLIC logo
+// endpoint so the real logo still appears instead of a bare letter.
+const LOADER_API = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
 function BrandedLoader() {
   let b = { companyName: 'Cashalo', primaryColor: '#1D9E75', logoUrl: null };
   try { const v = localStorage.getItem('cached_branding'); if (v) b = { ...b, ...JSON.parse(v) }; } catch {}
+  const [imgOk, setImgOk] = useState(true);
+  const logoSrc = b.logoUrl || `${LOADER_API}/settings/logo`;
   return (
     <div className="flex items-center justify-center h-screen">
       <div className="text-center">
         <div className="relative w-16 h-16 mx-auto mb-3 flex items-center justify-center">
           <div className="absolute inset-0 rounded-full animate-spin"
             style={{ border: '3px solid rgba(0,0,0,0.08)', borderTopColor: b.primaryColor || '#1D9E75' }} />
-          {b.logoUrl ? (
-            <img src={b.logoUrl} alt={b.companyName} className="w-11 h-11 rounded-xl object-cover" />
+          {imgOk ? (
+            <img src={logoSrc} alt={b.companyName} onError={() => setImgOk(false)}
+              className="w-11 h-11 rounded-xl object-cover" />
           ) : (
             <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg font-bold"
               style={{ backgroundColor: b.primaryColor || '#1D9E75' }}>{(b.companyName || 'C')[0]}</div>
