@@ -74,6 +74,7 @@ export function applyThemeToDOM(s) {
 
 export function OrgProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULT);
+  const [loaded, setLoaded] = useState(false);
   const { user } = useAuth();
 
   const load = () => {
@@ -93,7 +94,7 @@ export function OrgProvider({ children }) {
         setSettings(parsed);
         applyThemeToDOM(parsed);
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setLoaded(true));
   };
 
   // Reload settings whenever the authenticated user changes (covers login),
@@ -106,6 +107,7 @@ export function OrgProvider({ children }) {
       // Logged out (or on the login screen): clear any applied theme/wallpaper
       applyThemeToDOM({ darkMode: false, primaryColor: '#1D9E75', wallpaperUrl: null });
       setSettings(DEFAULT);
+      setLoaded(false);
     }
     window.addEventListener('storage', load);
     return () => window.removeEventListener('storage', load);
@@ -117,7 +119,7 @@ export function OrgProvider({ children }) {
   };
 
   return (
-    <OrgContext.Provider value={{ settings, refresh: load, applyTheme }}>
+    <OrgContext.Provider value={{ settings, loaded, refresh: load, applyTheme }}>
       {children}
     </OrgContext.Provider>
   );

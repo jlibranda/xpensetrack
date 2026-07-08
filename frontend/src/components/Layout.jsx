@@ -26,7 +26,7 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const { currency, toggle } = useCurrency();
   const { notifications, unreadCount, pendingCounts, markAllRead } = useNotifications();
-  const { settings } = useOrg();
+  const { settings, loaded } = useOrg();
   const navigate = useNavigate();
   const [showNotif, setShowNotif] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -284,24 +284,11 @@ export default function Layout() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="relative h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 gap-3 shrink-0 z-10"
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 md:px-6 gap-3 shrink-0 z-10"
           style={darkMode ? { backgroundColor: '#1e293b', borderColor: '#334155' } : {}}>
 
-          {/* Mobile: company name, centered (desktop shows branding in the sidebar) */}
-          {settings?.companyName && (() => {
-            const coName = settings.companyName;
-            const sizeClass = coName.length > 26 ? 'text-sm' : coName.length > 18 ? 'text-base' : 'text-lg';
-            return (
-              <span onClick={() => navigate('/')}
-                className={`md:hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold truncate max-w-[56vw] text-center cursor-pointer ${sizeClass}`}
-                style={{ color: darkMode ? '#f1f5f9' : '#111827' }}>
-                {coName}
-              </span>
-            );
-          })()}
-
           {/* Left: hamburger (mobile) + employer TIN */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 shrink-0">
             <button onClick={() => setMobileNavOpen(true)}
               className="p-2 rounded-lg text-xl md:hidden"
               style={darkMode ? { backgroundColor:'#334155', color:'#e2e8f0' } : { backgroundColor:'#f1f5f9', color:'#475569' }}
@@ -314,6 +301,21 @@ export default function Layout() {
                 <span style={{ color: darkMode ? '#64748b' : '#94a3b8' }}>TIN: </span>{settings.tin}
               </span>
             )}
+          </div>
+
+          {/* Center (mobile): company name in the vacant middle space only */}
+          <div className="flex-1 min-w-0 flex justify-center md:justify-start">
+            {loaded && settings?.companyName && (() => {
+              const coName = settings.companyName;
+              const sizeClass = coName.length > 26 ? 'text-sm' : coName.length > 18 ? 'text-base' : 'text-lg';
+              return (
+                <span onClick={() => navigate('/')}
+                  className={`md:hidden font-bold truncate text-center cursor-pointer ${sizeClass}`}
+                  style={{ color: darkMode ? '#f1f5f9' : '#111827' }}>
+                  {coName}
+                </span>
+              );
+            })()}
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
