@@ -32,7 +32,7 @@ const statusLabel = (s) => STATUS_LABEL[s] || s || '—';
 const FREQ = [['ONE_TIME','One-time'],['WEEKLY','Weekly'],['MONTHLY','Monthly'],['QUARTERLY','Quarterly'],['ANNUALLY','Annually']];
 
 const emptyDoc = (defaults = {}) => ({
-  docType: 'AP_INVOICE', clientId: '', vendorName: '', vendorTin: '', businessStyle: '',
+  docType: 'AP_INVOICE', clientId: '', vendorName: '', vendorTin: '', vendorAccount: '', businessStyle: '',
   docNumber: '', poNumber: '', docDate: '', dueDate: '', amount: '', currency: 'PHP',
   category: '', notes: '', remarks: '', assignedToId: '', status: 'DRAFT', frequency: 'ONE_TIME', receiptId: '',
   atcCode: '', ewtRate: '', ewtBase: '', ewtAmount: '', ...defaults,
@@ -284,6 +284,7 @@ export default function LedgerPage({ mode = 'manage' }) {
             )}
           </Field></div>
           {!isGovt && <Field label="Vendor TIN"><input className="inp" value={editing.vendorTin} onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value })} /></Field>}
+          <Field label="Account number"><input className="inp" value={editing.vendorAccount || ''} onChange={(e) => setEditing({ ...editing, vendorAccount: e.target.value })} placeholder="Bank / payee account no." /></Field>
           {!isGovt && <Field label="Doc/Invoice number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>}
           {!isGovt && <Field label="PO number"><input className="inp" value={editing.poNumber} onChange={(e) => setEditing({ ...editing, poNumber: e.target.value })} /></Field>}
           <Field label="Category"><select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} className="inp">
@@ -323,9 +324,19 @@ export default function LedgerPage({ mode = 'manage' }) {
             <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: BRAND, color: 'var(--brand-contrast,#fff)' }}>✨ AI auto-fill</span>
           </div>
           {hasFile ? (
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-green-700">{scanning ? '✨ Reading…' : '✓ File attached'}</p>
-              <a href={`${API_BASE}/ocr/receipt/${editing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline" style={{ color: BRAND }}>View</a>
+            <div className="space-y-2">
+              <ReceiptImage receiptId={editing.receiptId} className="w-full max-h-56 object-contain rounded-lg border border-gray-100" />
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-green-700">{scanning ? '✨ Reading…' : '✓ File attached'}</p>
+                <div className="flex items-center gap-3">
+                  <a href={`${API_BASE}/ocr/receipt/${editing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline" style={{ color: BRAND }}>Open</a>
+                  <label className="text-xs hover:underline cursor-pointer" style={{ color: BRAND }}>
+                    Replace
+                    <input type="file" accept="image/*,application/pdf" className="hidden" disabled={scanning}
+                      onChange={(e) => { scanInto(e.target.files?.[0]); e.target.value = ''; }} />
+                  </label>
+                </div>
+              </div>
             </div>
           ) : (
             <label className="block w-full border-2 border-dashed border-gray-200 rounded-xl py-5 text-center hover:bg-gray-50 transition-colors cursor-pointer">
@@ -360,7 +371,7 @@ export default function LedgerPage({ mode = 'manage' }) {
   const typeTabs = [['ALL', 'All'], ['AP_INVOICE', 'AP (payables)'], ['AR_INVOICE', 'AR (receivables)']];
   const statusTabs = [['', 'All'], ['DRAFT', 'Drafts'], ['PENDING', 'Pending'], ['APPROVED', 'Approved'], ['RETURNED', 'Returned'], ['REJECTED', 'Rejected'], ['PROCESSED', 'Processed']];
   const openEdit = (d) => setEditing({
-    id: d.id, docType: d.docType, clientId: d.clientId || '', vendorName: d.vendorName || '', vendorTin: d.vendorTin || '',
+    id: d.id, docType: d.docType, clientId: d.clientId || '', vendorName: d.vendorName || '', vendorTin: d.vendorTin || '', vendorAccount: d.vendorAccount || '',
     businessStyle: d.businessStyle || '', docNumber: d.docNumber || '', poNumber: d.poNumber || '',
     docDate: d.docDate ? d.docDate.slice(0, 10) : '', dueDate: d.dueDate ? d.dueDate.slice(0, 10) : '', amount: String(d.amount ?? ''),
     currency: d.currency || 'PHP', category: d.category || '', notes: d.notes || '', remarks: d.remarks || '',

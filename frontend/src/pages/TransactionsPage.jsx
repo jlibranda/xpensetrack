@@ -125,6 +125,8 @@ export default function TransactionsPage() {
           submittedBy: doc.createdBy || null,
           approvals: doc.approvals || [],
           receipt: doc.receipt || null,
+          proofOfPayment: doc.proofOfPayment || null,
+          paymentNotifiedAt: doc.paymentNotifiedAt || null,
           orNumber: doc.docNumber || '',
         })));
       } else {
@@ -472,6 +474,7 @@ export default function TransactionsPage() {
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Pending With</th>
                 <th className="px-4 py-3">Pay out date</th>
+                <th className="px-4 py-3">Proof</th>
                 <th className="px-4 py-3">Remarks</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
@@ -502,6 +505,11 @@ export default function TransactionsPage() {
                     {(e.payoutDate || e.processedAt)
                       ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">✓ {fmtDate(e.payoutDate || e.processedAt)}</span>
                       : <span className="text-xs text-gray-400">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {e.proofOfPayment?.id
+                      ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: '#dcfce7', color: '#15803d' }}>✓ Proof</span>
+                      : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#fef3c7', color: '#b45309' }}>None</span>}
                   </td>
                   <td className="px-4 py-3">
                     {canProcess ? (

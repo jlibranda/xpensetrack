@@ -254,7 +254,7 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
     const expenses = await prisma.expense.findMany({
       where,
       include: {
-        submittedBy: { select: { firstName: true, lastName: true, email: true, department: true, employeeNumber: true, costCenter: true } },
+        submittedBy: { select: { firstName: true, lastName: true, email: true, department: true, employeeNumber: true, costCenter: true, payrollAccount: true } },
         approvals: { include: { approver: { select: { firstName: true, lastName: true } } }, orderBy: { stepOrder: 'asc' } },
       },
       orderBy: { expenseDate: 'desc' },
@@ -264,6 +264,7 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
     const rows = expenses.map(e => ({
       'Date': fmtDate(e.expenseDate),
       'Employee Number': e.submittedBy.employeeNumber || '',
+      'Account Number': e.submittedBy.payrollAccount || '',
       'Employee Full Name': `${e.submittedBy.lastName||''}, ${e.submittedBy.firstName||''}`.replace(/^,\s*|,\s*$/g, '').trim(),
       'Department': e.submittedBy.department || '',
       'Cost Center': e.costCenter || e.submittedBy.costCenter || '',

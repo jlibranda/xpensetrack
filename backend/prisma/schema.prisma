@@ -127,6 +127,7 @@ model LedgerDoc {
   client        Client?   @relation(fields: [clientId], references: [id])
   vendorName    String?
   vendorTin     String?
+  vendorAccount String?
   businessStyle String?
   docNumber     String?
   poNumber      String?
