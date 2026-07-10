@@ -1,18 +1,23 @@
 // src/lib/storage.js
-// Optional S3-compatible object storage for receipt images.
-// Works with any S3-compatible provider (Cloudflare R2, AWS S3, Railway bucket,
-// MinIO) configured purely through environment variables. If not configured,
-// callers fall back to storing the (compressed) image bytes in the database.
+// Durable object storage for receipt / proof-of-payment files.
 //
-// Env vars:
-//   S3_ENDPOINT          e.g. https://<accountid>.r2.cloudflarestorage.com
-//   S3_REGION            e.g. auto (R2) or us-east-1 (S3)
-//   S3_BUCKET            bucket name
-//   S3_ACCESS_KEY_ID
-//   S3_SECRET_ACCESS_KEY
-//   S3_FORCE_PATH_STYLE  "true" for MinIO / Railway bucket (default true)
+// Backend priority:
+//   1) Vercel Blob   — if BLOB_READ_WRITE_TOKEN is set (uses a PRIVATE blob store)
+//   2) S3-compatible — if S3_* env vars are set (Cloudflare R2, AWS S3, MinIO)
+//   3) neither       — callers fall back to storing the (compressed) bytes in the DB
+//
+// The stored `storageKey` is the object key (S3) or the blob pathname (Vercel Blob).
+// Files live outside the app container and the database, so they survive every
+// deploy / schema sync.
+//
+// Vercel Blob env (works from Railway too — token auth):
+//   BLOB_READ_WRITE_TOKEN   read-write token from a PRIVATE Vercel Blob store
+//
+// S3 env:
+//   S3_ENDPOINT  S3_REGION  S3_BUCKET  S3_ACCESS_KEY_ID  S3_SECRET_ACCESS_KEY  S3_FORCE_PATH_STYLE
 
-function storageConfigured() {
+function blobConfigured() { return !!process.env.BLOB_READ_WRITE_TOKEN; }
+function s3Configured() {
   return !!(
     process.env.S3_ENDPOINT &&
     process.env.S3_BUCKET &&
@@ -20,11 +25,41 @@ function storageConfigured() {
     process.env.S3_SECRET_ACCESS_KEY
   );
 }
+function storageConfigured() { return blobConfigured() || s3Configured(); }
 
+/* ----------------------------- Vercel Blob ------------------------------ */
+const BLOB_TOKEN = () => process.env.BLOB_READ_WRITE_TOKEN;
+
+async function blobPut(key, buffer, contentType) {
+  const { put } = require('@vercel/blob');
+  const res = await put(key, buffer, {
+    access: 'private',
+    addRandomSuffix: false,       // keep our exact key so getObject(key) works
+    contentType: contentType || 'application/octet-stream',
+    token: BLOB_TOKEN(),
+  });
+  return res.pathname || key;
+}
+
+async function blobGet(key) {
+  const { get } = require('@vercel/blob');
+  const result = await get(key, { access: 'private', token: BLOB_TOKEN() });
+  if (!result || result.statusCode !== 200 || !result.stream) throw new Error('Blob not found');
+  const { Readable } = require('stream');
+  const chunks = [];
+  for await (const chunk of Readable.fromWeb(result.stream)) chunks.push(Buffer.from(chunk));
+  return { buffer: Buffer.concat(chunks), contentType: result.blob?.contentType };
+}
+
+async function blobDel(key) {
+  const { del } = require('@vercel/blob');
+  await del(key, { token: BLOB_TOKEN() });
+}
+
+/* ------------------------------- S3 / R2 -------------------------------- */
 let _client = null;
 function getClient() {
   if (_client) return _client;
-  // Lazy-require so the app still boots if the SDK isn't installed / not used.
   const { S3Client } = require('@aws-sdk/client-s3');
   _client = new S3Client({
     endpoint: process.env.S3_ENDPOINT,
@@ -38,7 +73,7 @@ function getClient() {
   return _client;
 }
 
-async function putObject(key, buffer, contentType) {
+async function s3Put(key, buffer, contentType) {
   const { PutObjectCommand } = require('@aws-sdk/client-s3');
   await getClient().send(new PutObjectCommand({
     Bucket: process.env.S3_BUCKET,
@@ -49,23 +84,38 @@ async function putObject(key, buffer, contentType) {
   return key;
 }
 
-async function getObject(key) {
+async function s3Get(key) {
   const { GetObjectCommand } = require('@aws-sdk/client-s3');
   const out = await getClient().send(new GetObjectCommand({
     Bucket: process.env.S3_BUCKET,
     Key: key,
   }));
-  // Collect the readable stream into a Buffer.
   const chunks = [];
   for await (const chunk of out.Body) chunks.push(chunk);
   return { buffer: Buffer.concat(chunks), contentType: out.ContentType };
 }
 
-async function deleteObject(key) {
-  try {
-    const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
-    await getClient().send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
-  } catch (e) { /* best-effort */ }
+async function s3Del(key) {
+  const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+  await getClient().send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
 }
 
-module.exports = { storageConfigured, putObject, getObject, deleteObject };
+/* --------------------- Unified API (stable signatures) ------------------ */
+async function putObject(key, buffer, contentType) {
+  if (blobConfigured()) return blobPut(key, buffer, contentType);
+  return s3Put(key, buffer, contentType);
+}
+
+async function getObject(key) {
+  if (blobConfigured()) return blobGet(key);
+  return s3Get(key);
+}
+
+async function deleteObject(key) {
+  try {
+    if (blobConfigured()) return await blobDel(key);
+    return await s3Del(key);
+  } catch (e) { /* best-effort: an orphaned object is harmless */ }
+}
+
+module.exports = { storageConfigured, blobConfigured, s3Configured, putObject, getObject, deleteObject };
