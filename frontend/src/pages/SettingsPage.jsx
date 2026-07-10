@@ -926,14 +926,13 @@ export default function SettingsPage() {
 function EmailNotificationsCard({ settings }) {
   const [on, setOn] = useState(settings?.emailNotificationsEnabled !== false);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
 
   const apply = async (next) => {
-    setOn(next); setSaving(true); setMsg(null);
+    setOn(next); setSaving(true);
     try {
       await api.patch('/settings', { emailNotificationsEnabled: next });
-      setMsg({ ok: true, text: next ? 'Notifications ON' : 'Notifications OFF' });
-    } catch (e) { setOn(!next); setMsg({ ok: false, text: e.error || 'Failed' }); }
+      toast.success(next ? 'Email notifications ON' : 'Email notifications OFF');
+    } catch (e) { setOn(!next); toast.error(e.error || 'Failed to update'); }
     finally { setSaving(false); }
   };
 
@@ -942,7 +941,7 @@ function EmailNotificationsCard({ settings }) {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-sm font-medium text-gray-700 mb-1">Email notifications</h2>
-          <p className="text-xs text-gray-500">Master switch for automated emails (approval requests + status updates like approved/returned/processed/reprocessing). Turn OFF during testing so staff don't get real emails. Password resets and credential emails are not affected.</p>
+          <p className="text-xs text-gray-500">Master switch for all automated emails (approval requests, status updates, welcome, password resets, and credentials). Turn OFF during testing so no emails go out. This toggle saves automatically — no need to press “Save settings.”</p>
         </div>
         <button onClick={() => apply(!on)} disabled={saving} role="switch" aria-checked={on}
           className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors ${on ? '' : 'bg-gray-300'}`}
@@ -950,7 +949,6 @@ function EmailNotificationsCard({ settings }) {
           <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform mt-0.5 ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
         </button>
       </div>
-      {msg && <p className={`text-xs mt-2 ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.ok ? '✓ ' : '✕ '}{msg.text}{msg.ok ? ' — saved.' : ''}</p>}
     </div>
   );
 }

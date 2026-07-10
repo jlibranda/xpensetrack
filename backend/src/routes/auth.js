@@ -42,13 +42,15 @@ router.post('/register', authenticate, requirePermission('manage_users'), async 
         managerId: managerId || null,
         role: wantedRole },
     });
-    // Welcome email (transactional — sent even if notifications are off). Fire-and-forget
-    // so a mail hiccup never blocks account creation.
+    // Welcome email (respects the master toggle). Fire-and-forget so a mail hiccup
+    // never blocks account creation; report back whether it actually went out.
+    let welcomeSent = false;
     try {
       const { sendWelcomeEmail } = require('../lib/email');
-      await sendWelcomeEmail(user.email, `${user.firstName} ${user.lastName}`.trim(), password, user);
+      const r = await sendWelcomeEmail(user.email, `${user.firstName} ${user.lastName}`.trim(), password, user);
+      welcomeSent = !(r && r.skipped);
     } catch (e) { console.error('welcome email (register) failed:', e.message); }
-    res.status(201).json({ user: safeUser(user) });
+    res.status(201).json({ user: safeUser(user), welcomeSent });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 

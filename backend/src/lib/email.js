@@ -317,6 +317,7 @@ async function sendPasswordResetEmail(toEmail, toName, resetUrl, employee) {
 }
 
 async function sendWelcomeEmail(toEmail, toName, tempPassword, employee) {
+  if (!(await notificationsEnabled())) return { skipped: true, reason: 'notifications_disabled' };
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
   const brand = await getBranding();
   const appName = brand.appName;

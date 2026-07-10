@@ -125,7 +125,7 @@ export default function UsersPage() {
         await api.patch(`/users/${editUser.id}`, { ...form, approvalFlow: cleanFlow, managerId: form.managerId||null, hireDate: form.hireDate||null });
         setMsg({text:'Updated!',ok:true});
       } else {
-        // Create the account (saves core fields + sends the welcome email)...
+        // Create the account (saves core fields + sends the welcome email if email is ON)...
         const res = await api.post('/auth/register', { ...form });
         const newId = res?.user?.id;
         // ...then persist the rest (cost center, position, payroll account, manager,
@@ -133,7 +133,7 @@ export default function UsersPage() {
         if (newId) {
           await api.patch(`/users/${newId}`, { ...form, approvalFlow: cleanFlow, managerId: form.managerId||null, hireDate: form.hireDate||null });
         }
-        setMsg({text:'User created — welcome email sent.',ok:true});
+        setMsg({ text: res?.welcomeSent ? 'User created — welcome email sent.' : 'User created. (Email notifications are OFF, so no welcome email was sent.)', ok:true });
       }
       await load();
       setTimeout(() => { setTab('list'); setMsg({text:'',ok:true}); }, 1500);

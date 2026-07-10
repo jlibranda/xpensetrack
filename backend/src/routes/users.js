@@ -201,6 +201,10 @@ router.post('/:id/reset-password', authenticate, requirePermission('reset_passwo
     if (target.role === 'ADMIN' && req.user.role !== 'ADMIN') {
       return res.status(403).json({ error: 'Only an admin can reset an admin password' });
     }
+    const org0 = await prisma.orgSettings.findFirst();
+    if (org0?.emailNotificationsEnabled === false) {
+      return res.status(400).json({ error: 'Email notifications are OFF in Settings, so no email can be sent — this action is paused. Turn email notifications ON first, then try again.' });
+    }
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null } });
     await logAudit(req.user, 'USER_PASSWORD_RESET', { targetType: 'USER', targetId: req.params.id, details: `Reset password for ${target.firstName||''} ${target.lastName||''}`.trim() });
@@ -229,6 +233,10 @@ router.post('/:id/send-credentials', authenticate, requirePermission('send_crede
     }
     if (target.isActive === false) {
       return res.status(400).json({ error: 'This account is deactivated. Reactivate it before sending credentials.' });
+    }
+    const org1 = await prisma.orgSettings.findFirst();
+    if (org1?.emailNotificationsEnabled === false) {
+      return res.status(400).json({ error: 'Email notifications are OFF in Settings, so no email can be sent — this action is paused. Turn email notifications ON first, then try again.' });
     }
     const tempPassword = genTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
