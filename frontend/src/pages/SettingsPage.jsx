@@ -853,7 +853,7 @@ function EmailNotificationsCard({ settings }) {
         </div>
         <button onClick={() => apply(!on)} disabled={saving} role="switch" aria-checked={on}
           className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors ${on ? '' : 'bg-gray-300'}`}
-          style={on ? { backgroundColor: 'var(--brand-color,#1D9E75)' } : {}}>
+          style={on ? { backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' } : {}}>
           <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform mt-0.5 ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
         </button>
       </div>
@@ -905,7 +905,7 @@ function ReminderSettingsCard({ settings }) {
         </div>
         <button onClick={save} disabled={saving}
           className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+          style={{ backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' }}>
           {saving ? 'Saving…' : 'Save'}
         </button>
         {msg && <span className={`text-xs ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.ok ? '✓ ' : '✕ '}{msg.text}</span>}
@@ -958,7 +958,7 @@ function PayoutReversalCard({ settings }) {
       <div className="flex items-center gap-3 mt-3">
         <button onClick={save} disabled={saving}
           className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+          style={{ backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' }}>
           {saving ? 'Saving…' : 'Save reversal access'}
         </button>
         <span className="text-xs text-gray-500">{ids.length} selected</span>
@@ -1039,7 +1039,7 @@ function ReceiptStorageCard() {
       <div className="flex gap-2 flex-wrap items-center">
         <button onClick={download} disabled={downloading}
           className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+          style={{ backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' }}>
           {downloading ? 'Preparing…' : '⬇ Download all receipts (ZIP)'}
         </button>
         <button onClick={purgeOrphans} disabled={cleaningOrphans || (stats && stats.orphans === 0)}

@@ -426,7 +426,7 @@ export default function TransactionsPage() {
           </div>
           <button onClick={bulkMarkProcessed} disabled={processing || selectedEligible.length === 0}
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+            style={{ backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' }}>
             {processing ? 'Processing…' : `Mark processed${selectedEligible.length ? ` (${selectedEligible.length})` : ''}`}
           </button>
           <p className="text-xs text-gray-500 self-center">Tick approved expenses, choose the pay out date, then mark processed.</p>

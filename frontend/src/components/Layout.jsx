@@ -200,7 +200,7 @@ export default function Layout() {
             {settings?.logoUrl
               ? <img src={settings.logoUrl} alt="Logo" className="w-7 h-7 rounded-lg object-cover" />
               : <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                  style={{ backgroundColor: brandColor }}>
+                  style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
                   {settings?.companyName?.[0] || 'X'}
                 </div>
             }
@@ -319,7 +319,7 @@ export default function Layout() {
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/profile')}
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-              style={{ backgroundColor: brandColor }}>
+              style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
               {initials}
             </button>
             <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate('/profile')}>
@@ -393,7 +393,7 @@ export default function Layout() {
               <span className="text-lg">🔔</span>
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-white flex items-center justify-center font-bold"
-                  style={{ backgroundColor: brandColor, fontSize: '9px' }}>
+                  style={{ backgroundColor: brandColor, fontSize: '9px', color: 'var(--brand-contrast,#fff)' }}>
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}

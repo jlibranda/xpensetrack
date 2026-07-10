@@ -31,11 +31,15 @@
 }
 .seg-btn:hover { color: #334155; }
 .seg-btn.active {
-  background-color: #ffffff;
-  color: #0f172a !important;
+  background-color: var(--brand-color);
+  color: var(--brand-contrast, #fff) !important;
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(0,0,0,0.12);
 }
+/* Any element filled with the raw brand color keeps readable text (black on a
+   light brand like yellow, white on a dark brand). Covers brand-colored buttons,
+   chips and badges so their labels never disappear. */
+.bg-brand-400, .bg-brand-500 { color: var(--brand-contrast, #fff) !important; }
 
 /* ── Light mode — warm, defined, not washed out ─── */
 body {

@@ -322,7 +322,7 @@ export default function AddExpensePage() {
                 Cancel & review
               </button>
               <button onClick={() => { const a = pendingAction; setDupAcknowledged(true); setDupes([]); setPendingAction(null); setTimeout(() => handleSubmit(a), 0); }}
-                className="flex-1 py-2 rounded-lg text-sm font-medium text-white" style={{ backgroundColor: brandColor }}>
+                className="flex-1 py-2 rounded-lg text-sm font-medium text-white" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
                 Submit anyway
               </button>
             </div>
