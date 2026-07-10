@@ -187,7 +187,7 @@ export default function AddExpensePage() {
               </div>
             ) : (
               <img src={receiptPreview} alt="Receipt"
-                className="w-full max-h-56 object-contain rounded-lg border border-gray-200 bg-gray-50 cursor-zoom-in"
+                className="w-full max-h-56 object-contain rounded-lg border border-gray-100 bg-gray-50 cursor-zoom-in"
                 onClick={() => { setZoomScale(1); setZoomOpen(true); }}
                 onError={e => { e.target.style.display='none'; }} />
             )}
@@ -291,8 +291,8 @@ export default function AddExpensePage() {
       {success && <div className="mb-3 px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-sm text-green-700">{success}</div>}
 
       <div className="flex gap-3">
-        <button onClick={() => handleSubmit("submit")} disabled={submitting || scanning}
-          className="flex-1 py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
+        <button onClick={() => handleSubmit("submit")} disabled={submitting || scanning || !String(form.merchant || '').trim() || !(parseFloat(form.amount) > 0)}
+          className="flex-1 py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{backgroundColor:brandColor, color:'var(--brand-contrast,#fff)'}}>
           {submitting ? 'Submitting...' : '📤 Submit for approval'}
         </button>
