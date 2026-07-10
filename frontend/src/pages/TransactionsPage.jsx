@@ -216,16 +216,15 @@ export default function TransactionsPage() {
   };
 
   const [uploadingProof, setUploadingProof] = useState(false);
-  const uploadProof = async (id, file) => {
+  const uploadProof = async (expenseId, file) => {
     if (!file) return;
     setUploadingProof(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const endpoint = source === 'ledger' ? `/ocr/ledger-proof-of-payment/${id}` : `/ocr/proof-of-payment/${id}`;
-      const r = await api.post(endpoint, fd);
+      const r = await api.post(`/ocr/proof-of-payment/${expenseId}`, fd);
       toast.success('Proof of payment uploaded');
-      setDetail(d => (d && d.id === id) ? { ...d, proofOfPayment: { id: r.id, mimeType: r.mimeType } } : d);
+      setDetail(d => (d && d.id === expenseId) ? { ...d, proofOfPayment: { id: r.id, mimeType: r.mimeType } } : d);
       await load();
     } catch (e) {
       setMsg({ text: e.error || e.message || 'Upload failed', ok: false });
@@ -347,13 +346,13 @@ export default function TransactionsPage() {
       </div>
 
       {/* Source toggle: Expenses vs AP & AR invoices */}
-      <div className="seg-group mb-4">
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
         <button onClick={() => { setSource('expense'); setSelected([]); }}
-          className={`seg-btn ${source === 'expense' ? 'active' : ''}`}>
+          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'expense' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           Expenses
         </button>
         <button onClick={() => { setSource('ledger'); setSelected([]); }}
-          className={`seg-btn ${source === 'ledger' ? 'active' : ''}`}>
+          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'ledger' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           AP &amp; AR
         </button>
       </div>
@@ -556,8 +555,8 @@ export default function TransactionsPage() {
                 {e.description && e.description !== e.title ? row('Notes', e.description) : null}
               </div>
 
-              {/* Proof of payment (expenses and AP/AR) */}
-              {(source === 'expense' || source === 'ledger') && (
+              {/* Proof of payment (expenses only) */}
+              {source === 'expense' && (
               <div className="mt-4 pt-3 border-t border-gray-100">
                 <p className="text-xs font-medium text-gray-700 mb-2">Proof of payment</p>
                 {e.proofOfPayment?.id ? (

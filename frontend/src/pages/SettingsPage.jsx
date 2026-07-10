@@ -421,7 +421,7 @@ export default function SettingsPage() {
         <p className="text-sm text-gray-500 mt-0.5">Organization configuration</p>
       </div>
 
-      <div className="seg-group mb-5 flex-wrap">
+      <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1 flex-wrap">
         {TABS.filter(t => {
           if (t === 'Branding') return canSeeBranding;
           if (t === 'Expense Types') return canExpenseTypes;
@@ -432,7 +432,7 @@ export default function SettingsPage() {
           return true; // General, Categories
         }).map(t => (
           <button key={t} onClick={()=>setTab(t)}
-            className={`seg-btn ${tab===t?'active':''}`}>
+            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${tab===t?'bg-white font-medium shadow-sm':'text-gray-500 hover:text-gray-700'}`}>
             {t}
           </button>
         ))}
@@ -1174,10 +1174,10 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
       </p>
 
       {/* Expense / AP & AR toggle */}
-      <div className="seg-group mb-4">
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
         {[['expense', 'Expense emails'], ['apar', 'AP & AR emails']].map(([val, label]) => (
           <button key={val} onClick={() => setMode(val)}
-            className={`seg-btn ${mode === val ? 'active' : ''}`}>
+            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${mode === val ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
             {label}
           </button>
         ))}

@@ -360,15 +360,15 @@ export default function Layout() {
           {/* + New AP/AR Invoice (desktop; mobile uses the FAB) */}
           {canManageApAr && (
             <button onClick={() => navigate('/payables')}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold hover:opacity-90 shrink-0"
-              style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
+              style={{ backgroundColor: brandColor }}>
               + New AP/AR Invoice
             </button>
           )}
 
           <button onClick={() => navigate('/expenses/new')}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold hover:opacity-90 shrink-0"
-            style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
+            style={{ backgroundColor: brandColor }}>
             + New Expense
           </button>
 
@@ -449,8 +449,8 @@ export default function Layout() {
               </>
             )}
             <button onClick={() => setFabOpen(o => !o)}
-              className="w-14 h-14 rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
-              style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }} aria-label="Quick add">
+              className="w-14 h-14 rounded-full text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+              style={{ backgroundColor: brandColor }} aria-label="Quick add">
               <span className={`text-3xl leading-none transition-transform ${fabOpen ? 'rotate-45' : ''}`}>+</span>
             </button>
           </div>

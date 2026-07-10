@@ -239,10 +239,10 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Source toggle: Expenses vs AP & AR */}
-      <div className="seg-group mb-4">
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
         {[['expense', 'Expenses'], ['ledger', 'AP & AR']].map(([val, label]) => (
           <button key={val} onClick={() => setSource(val)}
-            className={`seg-btn ${source === val ? 'active' : ''}`}>
+            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === val ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
             {label}
           </button>
         ))}

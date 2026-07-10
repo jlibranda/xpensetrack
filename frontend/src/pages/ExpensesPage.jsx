@@ -105,10 +105,11 @@ export default function ExpensesPage() {
 
       {/* Scope toggle */}
       {scopeTabs.length > 0 && (
-        <div className="seg-group mb-3">
+        <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
           {scopeTabs.map(([val, label]) => (
             <button key={val} onClick={() => { setScope(val); setSelected(null); }}
-              className={`seg-btn ${scope === val ? 'active' : ''}`}>
+              className={`px-3 py-1.5 rounded-md text-xs transition-colors ${scope === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+              style={scope === val ? { backgroundColor: 'var(--brand-color,#1D9E75)' } : {}}>
               {label}
             </button>
           ))}
@@ -116,10 +117,10 @@ export default function ExpensesPage() {
       )}
 
       {/* Filter tabs */}
-      <div className="seg-group mb-4 flex-wrap">
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">
         {[['','All'],['DRAFT','Drafts'],['PENDING','Pending'],['APPROVED','Approved'],['RETURNED','Returned'],['REJECTED','Rejected'],['PROCESSED','Processed'],['CANCELLED','Cancelled']].map(([val, label]) => (
           <button key={val} onClick={() => setFilter(val)}
-            className={`seg-btn ${filter === val ? 'active' : ''}`}>
+            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${filter === val ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
             {label}
           </button>
         ))}

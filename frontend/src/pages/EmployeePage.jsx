@@ -104,10 +104,10 @@ export default function EmployeePage() {
       </div>
 
       {/* Tabs */}
-      <div className="seg-group mb-4">
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
         {[['info','Employee Info'],['expenses','Expense History']].map(([val, label]) => (
           <button key={val} onClick={() => setTab(val)}
-            className={`seg-btn ${tab===val ? 'active' : ''}`}>
+            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${tab===val ? 'bg-white font-medium shadow-sm' : 'text-gray-500'}`}>
             {label}
           </button>
         ))}

@@ -270,10 +270,13 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
       'Description': e.title || '',
       'Notes': e.description || '',
       'Category': e.category || '',
+      'GL Code': e.glCode || glCodes[String(e.category || '').trim().toUpperCase()] || '',
       'Type': e.expenseType || '',
       'Amount': e.amount,
       'Currency': e.currency,
       'Amount (PHP)': Number(e.amountPhp.toFixed(2)),
+      'VATable (PHP)': Number((e.amountPhp / 1.12).toFixed(2)),
+      'Input VAT (PHP)': Number((e.amountPhp - e.amountPhp / 1.12).toFixed(2)),
       'Status': e.status,
       'Processed': e.processedAt ? 'Yes' : 'No',
       'Processed Date': fmtDate(e.processedAt),
@@ -287,7 +290,7 @@ router.get('/export', authenticate, requirePermission('export_reports', ['MANAGE
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
       {wch:12},{wch:16},{wch:26},{wch:16},{wch:14},{wch:30},{wch:25},
-      {wch:18},{wch:16},{wch:12},{wch:8},{wch:14},{wch:12},{wch:11},{wch:14},{wch:14},{wch:24},{wch:16},{wch:18}
+      {wch:18},{wch:12},{wch:16},{wch:12},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:11},{wch:14},{wch:14},{wch:24},{wch:16},{wch:18}
     ];
     // Bold header row
     const headerRange = XLSX.utils.decode_range(ws['!ref']);

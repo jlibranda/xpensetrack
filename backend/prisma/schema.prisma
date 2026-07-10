@@ -107,7 +107,6 @@ model Receipt {
   expenses  Expense[] @relation("ExpenseReceipt")
   proofForExpenses Expense[] @relation("ExpenseProofOfPayment")
   ledgerDocs LedgerDoc[]
-  proofForLedger LedgerDoc[] @relation("LedgerProofOfPayment")
   createdAt DateTime  @default(now())
 }
 
@@ -151,8 +150,6 @@ model LedgerDoc {
   payoutDate    DateTime?
   receiptId     String?
   receipt       Receipt?  @relation(fields: [receiptId], references: [id])
-  proofOfPaymentId String?
-  proofOfPayment   Receipt? @relation("LedgerProofOfPayment", fields: [proofOfPaymentId], references: [id])
   assignedToId  String?
   assignedTo    User?     @relation("LedgerAssignedTo", fields: [assignedToId], references: [id])
   lastEditedById String?

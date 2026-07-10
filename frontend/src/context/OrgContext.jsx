@@ -1,4 +1,3 @@
-import { contrastText } from '../lib/contrast';
 // src/context/OrgContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../lib/api';
@@ -66,9 +65,6 @@ export function applyThemeToDOM(s) {
   // Brand color
   if (s.primaryColor) {
     document.documentElement.style.setProperty('--brand-color', s.primaryColor);
-    // Readable text color on top of the brand color (dark text on light brands
-    // like yellow, white text on dark brands) so button/toggle labels stay visible.
-    document.documentElement.style.setProperty('--brand-contrast', contrastText(s.primaryColor));
   }
   // Dark mode: a personal per-device choice wins over the org default.
   const personal = (() => {
