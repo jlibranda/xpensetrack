@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../lib/api';
 import toast from '../lib/toast';
 import { useOrg } from '../context/OrgContext';
+import ReceiptImage from '../components/ReceiptImage';
 
 const ICONS = { MEALS:'🍽️', TRAVEL:'✈️', ACCOMMODATION:'🏨', SUPPLIES:'📦', COMMUNICATIONS:'📱', OTHER:'📎' };
 const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
@@ -101,7 +102,7 @@ export default function AddExpensePage() {
           title: f.title,
           orNumber: res.parsed.orNumber || f.orNumber,
           amount: res.parsed.amount?.toString() || f.amount,
-          currency: res.parsed.currency || f.currency,
+          currency: f.currency || 'PHP',
           // Reflect the scanned category on the dropdown only if it's a valid system category.
           category: (res.parsed.category && categories.includes(res.parsed.category)) ? res.parsed.category : f.category,
           expenseDate: res.parsed.date || f.expenseDate,
@@ -179,16 +180,17 @@ export default function AddExpensePage() {
         <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={handleScan} />
         {receiptPreview ? (
           <div className="space-y-2">
-            {receiptIsPdf ? (
+            {receiptId ? (
+              <ReceiptImage receiptId={receiptId} className="w-full max-h-56 object-contain rounded-lg border border-gray-100" />
+            ) : receiptIsPdf ? (
               <div onClick={() => setPdfOpen(true)}
-                className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer flex flex-col items-center justify-center bg-gray-50 text-gray-500">
+                className="w-full h-40 rounded-lg border border-gray-100 cursor-pointer flex flex-col items-center justify-center bg-gray-50 text-gray-500">
                 <span className="text-3xl">📄</span>
                 <span className="text-xs mt-1 font-medium">PDF receipt — tap to view</span>
               </div>
             ) : (
               <img src={receiptPreview} alt="Receipt"
-                className="w-full max-h-56 object-contain rounded-lg border border-gray-100 bg-gray-50 cursor-zoom-in"
-                onClick={() => { setZoomScale(1); setZoomOpen(true); }}
+                className="w-full max-h-56 object-contain rounded-lg border border-gray-100 bg-gray-50"
                 onError={e => { e.target.style.display='none'; }} />
             )}
             <div className="flex items-center justify-between">
@@ -199,7 +201,6 @@ export default function AddExpensePage() {
               </div>
             </div>
             {scanning && <p className="text-xs text-gray-400 animate-pulse">Extracting details...</p>}
-            {!scanning && !receiptIsPdf && <p className="text-[11px] text-gray-400">Tap the image to zoom in</p>}
           </div>
         ) : (
           <button onClick={() => fileRef.current.click()}

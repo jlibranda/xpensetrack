@@ -196,7 +196,7 @@ export default function LedgerPage({ mode = 'manage' }) {
         amount: p.amount != null ? String(p.amount) : e.amount,
         docNumber: p.orNumber || e.docNumber,
         docDate: p.date ? String(p.date).slice(0, 10) : e.docDate,
-        currency: p.currency || e.currency,
+        currency: e.currency || 'PHP',
         category: p.category || e.category,
         receiptId: res.receiptId || e.receiptId,
       }));
@@ -227,7 +227,7 @@ export default function LedgerPage({ mode = 'manage' }) {
         rows.push({ docType: tab === 'AR_INVOICE' ? 'AR_INVOICE' : (tab === 'AP_RECEIPT' ? 'AP_RECEIPT' : 'AP_INVOICE'),
           clientId: clientFilter || defaultClientId(), vendorName: p.merchant || '',
           amount: p.amount != null ? String(p.amount) : '', docNumber: p.orNumber || '',
-          docDate: p.date ? String(p.date).slice(0, 10) : '', currency: p.currency || 'PHP',
+          docDate: p.date ? String(p.date).slice(0, 10) : '', currency: 'PHP',
           category: p.category || '', status: 'UNPAID', receiptId: res.receiptId || '', fileName: file.name });
       } catch {
         rows.push({ docType: 'AP_INVOICE', clientId: clientFilter || defaultClientId(), vendorName: '', amount: '', docNumber: '', docDate: '', currency: 'PHP', status: 'UNPAID', receiptId: '', fileName: file.name, failed: true });
@@ -326,7 +326,7 @@ export default function LedgerPage({ mode = 'manage' }) {
           <Field label="Due date"><input type="date" className="inp" value={editing.dueDate} onChange={(e) => setEditing({ ...editing, dueDate: e.target.value })} /></Field>
           <Field label="Amount"><div className="flex gap-1">
             <input type="number" step="0.01" className="inp" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value })} />
-            <select value={editing.currency} onChange={(e) => setEditing({ ...editing, currency: e.target.value })} className="inp w-20"><option>PHP</option><option>USD</option></select>
+            <select value={editing.currency} onChange={(e) => setEditing({ ...editing, currency: e.target.value })} className="inp w-24"><option value="PHP">₱ PHP</option><option value="USD">$ USD</option></select>
           </div></Field>
           <div className="sm:col-span-2"><Field label="Remarks"><input className="inp" value={editing.remarks} onChange={(e) => setEditing({ ...editing, remarks: e.target.value })} placeholder="Notes visible in the list" /></Field></div>
 
