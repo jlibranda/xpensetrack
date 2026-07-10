@@ -6,6 +6,7 @@ import useUnsavedChanges from '../hooks/useUnsavedChanges';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import toast from '../lib/toast';
+import RecordModal from '../components/RecordModal';
 
 const TABS = ['General','Branding','Categories','Expense Types','Vendors/Payees','Password','Email Templates','Access Control'];
 
@@ -266,6 +267,7 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('General');
   const [form, setForm] = useState(null);
+  const [rec, setRec] = useState(null); // active add/edit record modal
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const logoRef = useRef();
@@ -350,22 +352,16 @@ export default function SettingsPage() {
         approvalLevels: s.approvalLevels,
         primaryColor: s.primaryColor,
         darkMode: s.darkMode ?? settings?.darkMode,
-        categories: cats,
-        expenseTypes: types,
-        categoryGlCodes: glCodes,
-        categoryTypes: catTypes,
         defaultPassword: s.defaultPassword,
         wallpaperStyle: s.wallpaperStyle ?? settings?.wallpaperStyle,
         autoReapplyApprovalFlow: s.autoReapplyApprovalFlow ?? settings?.autoReapplyApprovalFlow,
         loginMaxAttempts: s.loginMaxAttempts ?? settings?.loginMaxAttempts,
         loginLockoutMinutes: s.loginLockoutMinutes ?? settings?.loginLockoutMinutes,
-        vendors: Array.isArray(s?.vendors) ? s.vendors : (settings?.vendors || []),
         companyAddress: s.companyAddress ?? settings?.companyAddress,
         companyZip: s.companyZip ?? settings?.companyZip,
         signatoryName: s.signatoryName ?? settings?.signatoryName,
         signatoryTitle: s.signatoryTitle ?? settings?.signatoryTitle,
         signatoryTin: s.signatoryTin ?? settings?.signatoryTin,
-        atcCodes: Array.isArray(s?.atcCodes) ? s.atcCodes : (settings?.atcCodes || []),
       };
       const updated = await api.patch('/settings', payload);
       applyTheme(updated);
@@ -375,6 +371,101 @@ export default function SettingsPage() {
       setTimeout(() => setMsg(''), 3000);
     } catch(err) { setMsg('❌ ' + (err.error||'Failed')); }
     finally { setSaving(false); }
+  };
+
+  // ---- Record-modal handlers for the "Add" list sections ----
+  // These lists persist immediately (their own PATCH), so there's nothing separate to
+  // remember to save. They read from the live `settings`, independent of the General draft.
+  const brandColor = settings?.primaryColor || '#1D9E75';
+  const persistPartial = async (partial) => { const updated = await api.patch('/settings', partial); applyTheme(updated); refresh(); return updated; };
+
+  const liveCats = Array.isArray(settings?.categories) ? settings.categories : (settings?.categories?.split(',').map(c=>c.trim()).filter(Boolean) || []);
+  const liveGl = settings?.categoryGlCodes || {};
+  const liveCatTypes = settings?.categoryTypes || {};
+  const liveTypes = Array.isArray(settings?.expenseTypes) ? settings.expenseTypes : (settings?.expenseTypes?.split(',').map(t=>t.trim()).filter(Boolean) || []);
+  const liveVendors = Array.isArray(settings?.vendors) ? settings.vendors : [];
+  const liveAtc = Array.isArray(settings?.atcCodes) ? settings.atcCodes : [];
+  const CAT_TYPE_LABEL = { EXPENSE: 'Expense', AP_AR: 'AP/AR Invoice', BOTH: 'Both' };
+
+  // Categories & GL codes
+  const catFields = [
+    { key:'name', label:'Category name', type:'text', uppercase:true, required:true, placeholder:'e.g. TRAVEL' },
+    { key:'glCode', label:'GL code', type:'text', mono:true, placeholder:'e.g. 6010', help:'General Ledger account code for accounting integration.' },
+    { key:'type', label:'Applies to', type:'select', default:'BOTH', options:[{value:'EXPENSE',label:'Expense'},{value:'AP_AR',label:'AP/AR Invoice'},{value:'BOTH',label:'Both'}] },
+  ];
+  const saveCat = (oldName) => async (v) => {
+    const name = String(v.name).trim().toUpperCase();
+    if (!name) throw new Error('Category name is required.');
+    if (name !== oldName && liveCats.some(c => String(c).toUpperCase() === name)) throw new Error('That category already exists.');
+    const categories = oldName ? liveCats.map(c => c === oldName ? name : c) : [...liveCats, name];
+    const categoryGlCodes = { ...liveGl }; if (oldName) delete categoryGlCodes[oldName]; categoryGlCodes[name] = v.glCode || '';
+    const categoryTypes = { ...liveCatTypes }; if (oldName) delete categoryTypes[oldName]; categoryTypes[name] = v.type || 'BOTH';
+    await persistPartial({ categories, categoryGlCodes, categoryTypes });
+    toast.success(oldName ? 'Category updated' : 'Category added'); setRec(null);
+  };
+  const deleteCat = async (name) => {
+    if (!window.confirm(`Delete category "${name}"?`)) return;
+    const categoryGlCodes = { ...liveGl }; delete categoryGlCodes[name];
+    const categoryTypes = { ...liveCatTypes }; delete categoryTypes[name];
+    try { await persistPartial({ categories: liveCats.filter(c => c !== name), categoryGlCodes, categoryTypes }); toast.success('Category deleted'); }
+    catch (e) { toast.error(e.error || 'Delete failed'); }
+  };
+
+  // Expense types
+  const typeFields = [{ key:'name', label:'Type name', type:'text', uppercase:true, required:true, placeholder:'e.g. REIMBURSEMENT' }];
+  const saveType = (oldName) => async (v) => {
+    const name = String(v.name).trim().toUpperCase();
+    if (!name) throw new Error('Type name is required.');
+    if (name !== oldName && liveTypes.some(t => String(t).toUpperCase() === name)) throw new Error('That type already exists.');
+    const expenseTypes = oldName ? liveTypes.map(t => t === oldName ? name : t) : [...liveTypes, name];
+    await persistPartial({ expenseTypes });
+    toast.success(oldName ? 'Type updated' : 'Type added'); setRec(null);
+  };
+  const deleteType = async (name) => {
+    if (!window.confirm(`Delete type "${name}"?`)) return;
+    try { await persistPartial({ expenseTypes: liveTypes.filter(t => t !== name) }); toast.success('Type deleted'); }
+    catch (e) { toast.error(e.error || 'Delete failed'); }
+  };
+
+  // Vendors / Payees
+  const vendorFields = [
+    { key:'name', label:'Vendor / payee name', type:'text', required:true },
+    { key:'type', label:'Type', type:'select', default:'COMPANY', options:[{value:'COMPANY',label:'Company/Payee'},{value:'GOVERNMENT',label:'Government'},{value:'LGU',label:'LGU'}] },
+    { key:'tin', label:'TIN (optional)', type:'text', mono:true, numericOnly:true },
+    { key:'address', label:'Registered address (for BIR 2307)', type:'text' },
+    { key:'zip', label:'ZIP', type:'text', numericOnly:true, maxLen:4 },
+  ];
+  const saveVendor = (idx) => async (v) => {
+    if (!String(v.name).trim()) throw new Error('Vendor / payee name is required.');
+    const rec = { name: v.name.trim(), type: v.type || 'COMPANY', tin: v.tin || '', address: v.address || '', zip: v.zip || '' };
+    const vendors = idx == null ? [...liveVendors, rec] : liveVendors.map((x, i) => i === idx ? rec : x);
+    await persistPartial({ vendors });
+    toast.success(idx == null ? 'Vendor added' : 'Vendor updated'); setRec(null);
+  };
+  const deleteVendor = async (idx) => {
+    if (!window.confirm('Delete this vendor / payee?')) return;
+    try { await persistPartial({ vendors: liveVendors.filter((_, i) => i !== idx) }); toast.success('Vendor deleted'); }
+    catch (e) { toast.error(e.error || 'Delete failed'); }
+  };
+
+  // ATC codes & EWT rates
+  const atcFields = [
+    { key:'code', label:'ATC code', type:'text', uppercase:true, mono:true, required:true, placeholder:'e.g. WC160' },
+    { key:'description', label:'Description', type:'text', placeholder:'e.g. Services — regular supplier' },
+    { key:'rate', label:'EWT rate (%)', type:'number', step:'0.01', placeholder:'e.g. 2' },
+  ];
+  const saveAtc = (idx) => async (v) => {
+    const code = String(v.code).trim().toUpperCase();
+    if (!code) throw new Error('ATC code is required.');
+    const rec = { code, description: v.description || '', rate: v.rate === '' || v.rate == null ? 0 : Number(v.rate) };
+    const atcCodes = idx == null ? [...liveAtc, rec] : liveAtc.map((x, i) => i === idx ? rec : x);
+    await persistPartial({ atcCodes });
+    toast.success(idx == null ? 'ATC added' : 'ATC updated'); setRec(null);
+  };
+  const deleteAtc = async (idx) => {
+    if (!window.confirm('Delete this ATC code?')) return;
+    try { await persistPartial({ atcCodes: liveAtc.filter((_, i) => i !== idx) }); toast.success('ATC deleted'); }
+    catch (e) { toast.error(e.error || 'Delete failed'); }
   };
 
   const uploadLogo = async (e) => {
@@ -680,30 +771,29 @@ export default function SettingsPage() {
                   refresh();
                   window.location.reload();
                 }} className="px-3 py-1.5 text-xs border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-50">↺ Reset to defaults</button>
-                <button onClick={addCat} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">+ Add</button>
+                <button onClick={() => setRec({ title:'Add category', fields:catFields, initial:{ type:'BOTH' }, onSave: saveCat(null) })}
+                  className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add</button>
               </div>
               )}
             </div>
             <div className="space-y-2">
-              {cats.map((cat, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input value={cat} onChange={e=>updateCat(i,e.target.value)} placeholder="Category name" disabled={!canEditCategories}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 uppercase disabled:bg-gray-50 disabled:text-gray-500" />
-                  <input value={glCodes[cat]||''} onChange={e=>updateGl(cat,e.target.value)} placeholder="GL code" disabled={!canEditCategories}
-                    className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono disabled:bg-gray-50 disabled:text-gray-500" />
-                  <select value={catTypes[cat]||'BOTH'} onChange={e=>updateType(cat,e.target.value)} disabled={!canEditCategories}
-                    className="w-44 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-brand-400 disabled:bg-gray-50 disabled:text-gray-500">
-                    <option value="EXPENSE">Expense</option>
-                    <option value="AP_AR">AP/AR Invoice</option>
-                    <option value="BOTH">Both</option>
-                  </select>
+              {liveCats.map((cat) => (
+                <div key={cat} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2">
+                  <span className="flex-1 text-sm font-medium text-gray-800 uppercase">{cat}</span>
+                  <span className="w-24 text-sm font-mono text-gray-500">{liveGl[cat] || '—'}</span>
+                  <span className="w-32 text-xs text-gray-400">{CAT_TYPE_LABEL[liveCatTypes[cat] || 'BOTH']}</span>
                   {canEditCategories && (
-                    <button onClick={()=>removeCat(i)} className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                    <>
+                      <button onClick={() => setRec({ title:'Edit category', fields:catFields, initial:{ name:cat, glCode:liveGl[cat]||'', type:liveCatTypes[cat]||'BOTH' }, onSave: saveCat(cat) })}
+                        className="text-xs hover:underline" style={{ color: brandColor }}>Edit</button>
+                      <button onClick={() => deleteCat(cat)} className="px-2 py-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                    </>
                   )}
                 </div>
               ))}
+              {liveCats.length === 0 && <p className="text-xs text-gray-400">No categories yet. Click “+ Add” to create one.</p>}
             </div>
-            <p className="text-xs text-gray-400 mt-2">{canEditCategories ? 'GL code is the General Ledger account code for accounting integration.' : 'You have view-only access to categories.'}</p>
+            <p className="text-xs text-gray-400 mt-2">{canEditCategories ? 'Add/Edit opens a window and saves right away — no separate Save needed here.' : 'You have view-only access to categories.'}</p>
           </div>
         )}
 
@@ -711,92 +801,69 @@ export default function SettingsPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium text-gray-700">Expense types</h2>
-              <button onClick={()=>set('expenseTypes',[...types,''])} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">+ Add</button>
+              <button onClick={() => setRec({ title:'Add expense type', fields:typeFields, initial:{}, onSave: saveType(null) })}
+                className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add</button>
             </div>
             <div className="space-y-2">
-              {types.map((type, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input value={type} onChange={e=>set('expenseTypes',types.map((t,idx)=>idx===i?e.target.value.toUpperCase():t))}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 uppercase" />
-                  <button onClick={()=>set('expenseTypes',types.filter((_,idx)=>idx!==i))}
-                    className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+              {liveTypes.map((type) => (
+                <div key={type} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2">
+                  <span className="flex-1 text-sm font-medium text-gray-800 uppercase">{type}</span>
+                  <button onClick={() => setRec({ title:'Edit expense type', fields:typeFields, initial:{ name:type }, onSave: saveType(type) })}
+                    className="text-xs hover:underline" style={{ color: brandColor }}>Edit</button>
+                  <button onClick={() => deleteType(type)} className="px-2 py-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
                 </div>
               ))}
+              {liveTypes.length === 0 && <p className="text-xs text-gray-400">No expense types yet. Click “+ Add” to create one.</p>}
             </div>
           </div>
         )}
 
-        {tab === 'Vendors/Payees' && (canApAr || canManageSettings) && (() => {
-          const vlist = Array.isArray(s?.vendors) ? s.vendors : (settings?.vendors || []);
-          const upd = (i, key, val) => set('vendors', vlist.map((v, idx) => idx === i ? { ...v, [key]: val } : v));
-          return (
-            <div>
+        {tab === 'Vendors/Payees' && (canApAr || canManageSettings) && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-medium text-gray-700">Vendors / Payees</h2>
+              <button onClick={() => setRec({ title:'Add vendor / payee', fields:vendorFields, initial:{ type:'COMPANY' }, onSave: saveVendor(null) })}
+                className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add vendor</button>
+            </div>
+            {liveVendors.length === 0 && <p className="text-xs text-gray-400 mb-2">No vendors yet. Add vendors here so they appear in the Add Document dropdown.</p>}
+            <div className="space-y-2">
+              {liveVendors.map((v, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2 border border-gray-100 rounded-lg px-3 py-2">
+                  <span className="flex-1 min-w-[140px] text-sm font-medium text-gray-800">{v.name || '(unnamed)'}</span>
+                  <span className="text-xs text-gray-400">{ {COMPANY:'Company',GOVERNMENT:'Government',LGU:'LGU'}[v.type||'COMPANY'] }</span>
+                  {v.tin ? <span className="text-xs font-mono text-gray-500">{v.tin}</span> : null}
+                  <button onClick={() => setRec({ title:'Edit vendor / payee', fields:vendorFields, initial:v, onSave: saveVendor(i) })}
+                    className="text-xs hover:underline" style={{ color: brandColor }}>Edit</button>
+                  <button onClick={() => deleteVendor(i)} className="px-2 py-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">Add/Edit opens a window and saves right away. These appear in the AP/AR “Add Document” Vendor/Payee dropdown; Government hides Vendor TIN, Doc/OR no., and PO no.</p>
+
+            {/* ATC codes for BIR 2307 / EWT */}
+            <div className="mt-8 pt-6 border-t border-gray-100">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium text-gray-700">Vendors / Payees</h2>
-                <button onClick={() => set('vendors', [...vlist, { name: '', tin: '' }])}
-                  className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">+ Add vendor</button>
+                <h2 className="text-sm font-medium text-gray-700">ATC codes &amp; EWT rates <span className="text-gray-400 font-normal">(for BIR 2307)</span></h2>
+                <button onClick={() => setRec({ title:'Add ATC code', fields:atcFields, initial:{ rate:'' }, onSave: saveAtc(null) })}
+                  className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add ATC</button>
               </div>
-              {vlist.length === 0 && <p className="text-xs text-gray-400 mb-2">No vendors yet. Add vendors here so they appear in the Add Document dropdown.</p>}
+              {liveAtc.length === 0 && <p className="text-xs text-gray-400 mb-2">Add the ATCs your company uses (e.g. WC158 — goods 1%, WC160 — services 2%). These populate the ATC dropdown on AP invoices and auto-fill the EWT rate.</p>}
               <div className="space-y-2">
-                {vlist.map((v, i) => (
-                  <div key={i} className="flex flex-wrap items-center gap-2 border border-gray-100 rounded-lg p-2">
-                    <input value={v.name || ''} onChange={e => upd(i, 'name', e.target.value)} placeholder="Vendor / payee name"
-                      className="flex-1 min-w-[160px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
-                    <select value={v.type || 'COMPANY'} onChange={e => upd(i, 'type', e.target.value)}
-                      className="w-40 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-brand-400">
-                      <option value="COMPANY">Company/Payee</option>
-                      <option value="GOVERNMENT">Government</option>
-                      <option value="LGU">LGU</option>
-                    </select>
-                    <input value={v.tin || ''} onChange={e => upd(i, 'tin', e.target.value)} placeholder="TIN (optional)"
-                      className="w-36 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
-                    <button onClick={() => set('vendors', vlist.filter((_, idx) => idx !== i))}
-                      className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
-                    <input value={v.address || ''} onChange={e => upd(i, 'address', e.target.value)} placeholder="Registered address (for BIR 2307)"
-                      className="flex-1 min-w-[200px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
-                    <input value={v.zip || ''} onChange={e => upd(i, 'zip', e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="ZIP"
-                      className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+                {liveAtc.map((a, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-2 border border-gray-100 rounded-lg px-3 py-2">
+                    <span className="w-24 text-sm font-mono font-medium text-gray-800">{a.code}</span>
+                    <span className="flex-1 min-w-[160px] text-xs text-gray-500">{a.description || '—'}</span>
+                    <span className="text-sm text-gray-600">{a.rate != null ? `${a.rate}%` : ''}</span>
+                    <button onClick={() => setRec({ title:'Edit ATC code', fields:atcFields, initial:{ code:a.code, description:a.description||'', rate:a.rate ?? '' }, onSave: saveAtc(i) })}
+                      className="text-xs hover:underline" style={{ color: brandColor }}>Edit</button>
+                    <button onClick={() => deleteAtc(i)} className="px-2 py-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-2">These appear in the AP/AR "Add Document" Vendor/Payee dropdown. Type controls which fields show (Government hides Vendor TIN, Doc/OR no., and PO no.). Users can still pick "Others" to type a name manually. Remember to click Save.</p>
-
-              {/* ATC codes for BIR 2307 / EWT */}
-              {(() => {
-                const alist = Array.isArray(s?.atcCodes) ? s.atcCodes : (settings?.atcCodes || []);
-                const aupd = (i, key, val) => set('atcCodes', alist.map((a, idx) => idx === i ? { ...a, [key]: val } : a));
-                return (
-                  <div className="mt-8 pt-6 border-t border-gray-100">
-                    <div className="flex items-center justify-between mb-3">
-                      <h2 className="text-sm font-medium text-gray-700">ATC codes &amp; EWT rates <span className="text-gray-400 font-normal">(for BIR 2307)</span></h2>
-                      <button onClick={() => set('atcCodes', [...alist, { code: '', description: '', rate: 0 }])}
-                        className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">+ Add ATC</button>
-                    </div>
-                    {alist.length === 0 && <p className="text-xs text-gray-400 mb-2">Add the ATCs your company uses (e.g. WC158 — goods 1%, WC160 — services 2%). These populate the ATC dropdown on AP invoices and auto-fill the EWT rate.</p>}
-                    <div className="space-y-2">
-                      {alist.map((a, i) => (
-                        <div key={i} className="flex flex-wrap items-center gap-2 border border-gray-100 rounded-lg p-2">
-                          <input value={a.code || ''} onChange={e => aupd(i, 'code', e.target.value.toUpperCase())} placeholder="ATC (e.g. WC160)"
-                            className="w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400 font-mono" />
-                          <input value={a.description || ''} onChange={e => aupd(i, 'description', e.target.value)} placeholder="Description (e.g. Services — regular supplier)"
-                            className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
-                          <div className="flex items-center gap-1">
-                            <input type="number" step="0.01" value={a.rate ?? ''} onChange={e => aupd(i, 'rate', e.target.value === '' ? '' : Number(e.target.value))} placeholder="Rate"
-                              className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
-                            <span className="text-sm text-gray-400">%</span>
-                          </div>
-                          <button onClick={() => set('atcCodes', alist.filter((_, idx) => idx !== i))}
-                            className="px-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">⚠️ Verify the exact ATC codes and rates with your accountant/BIR. Common under RR 11-2018: goods 1%, services 2% for regular suppliers.</p>
-                  </div>
-                );
-              })()}
+              <p className="text-xs text-gray-400 mt-2">⚠️ Verify the exact ATC codes and rates with your accountant/BIR. Common under RR 11-2018: goods 1%, services 2% for regular suppliers.</p>
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {tab === 'Password' && canPassword && (
           <div>
@@ -837,6 +904,17 @@ export default function SettingsPage() {
               {saving ? 'Saving...' : dirty ? 'Save settings •' : 'Save settings'}
             </button>
           </>
+        )}
+
+        {rec && (
+          <RecordModal
+            title={rec.title}
+            fields={rec.fields}
+            initial={rec.initial}
+            brand={brandColor}
+            onCancel={() => setRec(null)}
+            onSave={rec.onSave}
+          />
         )}
       </div>
     </div>
