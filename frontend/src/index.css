@@ -8,16 +8,17 @@
 }
 
 /* ── Segmented toggle (source/scope/view switches) ───────────────────
-   Original clean look: subtle gray track, thin separators, and a
-   white "pill" for the selected option with dark, always-readable text. */
+   Original layout: subtle gray track with a small gap between options
+   (no separator bars). The selected option is filled with the primary/brand
+   color, with contrast-aware text (black on a light brand, white on a dark one). */
 .seg-group {
   display: inline-flex;
+  gap: 0.25rem;
   width: fit-content;
   background-color: rgba(226,232,240,0.93);
   border-radius: 0.5rem;
   padding: 0.25rem;
 }
-.seg-group > .seg-btn + .seg-btn { border-left: 1px solid rgba(100,116,139,0.18); }
 .seg-btn {
   padding: 0.375rem 1rem;
   border-radius: 0.375rem;
