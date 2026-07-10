@@ -5,6 +5,20 @@ const ENV_APP_NAME = process.env.EMAIL_BRAND || null;
 const ENV_BRAND_COLOR = process.env.EMAIL_BRAND_COLOR || null;
 const FALLBACK_APP_NAME = 'Cashalo';
 const FALLBACK_COLOR = '#1D9E75';
+
+// Readable text color (black or white) for text placed on top of a brand-colored
+// area in emails — black when the brand color is light (e.g. yellow), white when
+// dark. Mirrors the app's on-screen contrast behavior.
+function emailContrast(hex) {
+  if (!hex || typeof hex !== 'string') return '#ffffff';
+  let h = hex.trim().replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  if (h.length !== 6) return '#ffffff';
+  const v = (i) => parseInt(h.slice(i, i + 2), 16) / 255;
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const L = 0.2126 * lin(v(0)) + 0.7152 * lin(v(2)) + 0.0722 * lin(v(4));
+  return L > 0.55 ? '#1f2937' : '#ffffff';
+}
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -116,15 +130,16 @@ function html(title, body, brand) {
   const b = brand || {};
   const name = b.appName || FALLBACK_APP_NAME;
   const color = b.brandColor || FALLBACK_COLOR;
+  const onBrand = emailContrast(color); // readable text on the brand-colored header
   // Use a hosted logo if available; data-URI logos are unreliable in email clients,
   // so fall back to the company name text in that case.
   const useLogo = b.logoUrl && /^https?:\/\//i.test(b.logoUrl);
   const header = useLogo
     ? `<table style="border-collapse:collapse"><tr>
          <td style="vertical-align:middle;padding-right:10px"><img src="${b.logoUrl}" alt="${name}" style="max-height:36px;display:block" /></td>
-         <td style="vertical-align:middle"><span style="color:#fff;font-size:18px;font-weight:600">${name}</span></td>
+         <td style="vertical-align:middle"><span style="color:${onBrand};font-size:18px;font-weight:600">${name}</span></td>
        </tr></table>`
-    : `<h1 style="margin:0;color:#fff;font-size:20px;font-weight:600">${name}</h1>`;
+    : `<h1 style="margin:0;color:${onBrand};font-size:20px;font-weight:600">${name}</h1>`;
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
@@ -145,7 +160,8 @@ function html(title, body, brand) {
 
 function btn(url, label, brand) {
   const color = (brand && brand.brandColor) || FALLBACK_COLOR;
-  return `<a href="${url}" style="display:inline-block;background:${color};color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px;margin:16px 0">${label}</a>`;
+  const onBrand = emailContrast(color);
+  return `<a href="${url}" style="display:inline-block;background:${color};color:${onBrand};padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px;margin:16px 0">${label}</a>`;
 }
 
 function row(label, value) {

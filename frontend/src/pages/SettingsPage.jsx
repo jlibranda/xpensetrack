@@ -1213,8 +1213,8 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
       {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
 
       <button onClick={save} disabled={saving}
-        className="mt-5 w-full py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
-        style={{ backgroundColor: brand }}>
+        className="mt-5 w-full py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
+        style={{ backgroundColor: brand, color: 'var(--brand-contrast,#fff)' }}>
         {saving ? 'Saving...' : 'Save email templates'}
       </button>
     </div>
