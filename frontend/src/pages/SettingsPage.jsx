@@ -892,7 +892,7 @@ export default function SettingsPage() {
 
         {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
 
-        {tab !== 'Access Control' && tab !== 'Email Templates' && (
+        {!['Access Control', 'Email Templates', 'Categories', 'Expense Types', 'Vendors/Payees'].includes(tab) && (
           <>
             {dirty && !saving && (
               <div className="mt-4 flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #f59e0b' }}>
