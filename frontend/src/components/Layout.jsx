@@ -80,6 +80,15 @@ export default function Layout() {
   const [fabOpen, setFabOpen] = useState(false);
   const notifRef = useRef();
 
+  // On a full page load / refresh (Layout mounts once), always land on the Dashboard.
+  // In-app navigation does not remount Layout, so this only fires on refresh/first load.
+  const didInitRedirect = useRef(false);
+  useEffect(() => {
+    if (didInitRedirect.current) return;
+    didInitRedirect.current = true;
+    if (window.location.pathname !== '/') navigate('/', { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const canApprove = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
   const isManagerOnly = user?.role === 'MANAGER'; // managers don't get Analytics
   // Permission check driven by Access Control settings (ADMIN always allowed).
