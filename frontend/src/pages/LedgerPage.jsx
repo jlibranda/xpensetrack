@@ -388,7 +388,7 @@ export default function LedgerPage({ mode = 'manage' }) {
 
       {/* Scope toggle: Self / Team / All (mirrors My Expenses) */}
       {scopeTabs.length > 0 && (
-        <div className="seg-group mb-3">
+        <div className="seg-group brand mb-3">
           {scopeTabs.map(([val, label]) => (
             <button key={val} onClick={() => { setScope(val); setViewing(null); }}
               className={`seg-btn ${scope === val ? 'active' : ''}`}>
@@ -399,7 +399,7 @@ export default function LedgerPage({ mode = 'manage' }) {
       )}
 
       {/* Type toggle (AP / AR) */}
-      <div className="seg-group mb-3">
+      <div className="seg-group brand mb-3">
         {typeTabs.map(([val, label]) => (
           <button key={val} onClick={() => { setTab(val); setViewing(null); }}
             className={`seg-btn ${tab === val ? 'active' : ''}`}>
