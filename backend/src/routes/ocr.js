@@ -514,7 +514,20 @@ router.post('/proof-of-payment/:expenseId', authenticate, requireRole('FINANCE',
       receiptData.data = storeBuf;
     }
     const rec = await prisma.receipt.create({ data: receiptData });
+    // Capture the previous proof (if any) so we can clean it up after re-linking.
+    const prevExpense = await prisma.expense.findUnique({ where: { id: req.params.expenseId }, select: { proofOfPaymentId: true } });
+    const oldProofId = prevExpense?.proofOfPaymentId || null;
     await prisma.expense.update({ where: { id: req.params.expenseId }, data: { proofOfPaymentId: rec.id } });
+    // Auto-cleanup: remove the replaced proof-of-payment receipt (storage object + DB row).
+    if (oldProofId && oldProofId !== rec.id) {
+      try {
+        const old = await prisma.receipt.findUnique({ where: { id: oldProofId } });
+        if (old?.storageKey && storage.storageConfigured()) {
+          try { await storage.deleteObject(old.storageKey); } catch (e) { console.error('POP old-object delete failed:', e.message); }
+        }
+        await prisma.receipt.delete({ where: { id: oldProofId } });
+      } catch (e) { console.error('POP old-receipt cleanup failed:', e.message); }
+    }
     try {
       const { logAudit } = require('../lib/audit');
       await logAudit(req.user, 'PROOF_OF_PAYMENT_UPLOADED', { targetType: 'EXPENSE', targetId: req.params.expenseId, details: `Uploaded proof of payment (${receiptData.filename})` });
@@ -550,7 +563,19 @@ router.post('/ledger-proof-of-payment/:ledgerId', authenticate, requireRole('FIN
       receiptData.data = storeBuf;
     }
     const rec = await prisma.receipt.create({ data: receiptData });
+    const prevDoc = await prisma.ledgerDoc.findUnique({ where: { id: req.params.ledgerId }, select: { proofOfPaymentId: true } });
+    const oldProofId = prevDoc?.proofOfPaymentId || null;
     await prisma.ledgerDoc.update({ where: { id: req.params.ledgerId }, data: { proofOfPaymentId: rec.id } });
+    // Auto-cleanup: remove the replaced proof-of-payment receipt (storage object + DB row).
+    if (oldProofId && oldProofId !== rec.id) {
+      try {
+        const old = await prisma.receipt.findUnique({ where: { id: oldProofId } });
+        if (old?.storageKey && storage.storageConfigured()) {
+          try { await storage.deleteObject(old.storageKey); } catch (e) { console.error('POP old-object delete failed:', e.message); }
+        }
+        await prisma.receipt.delete({ where: { id: oldProofId } });
+      } catch (e) { console.error('POP old-receipt cleanup failed:', e.message); }
+    }
     try {
       const { logAudit } = require('../lib/audit');
       await logAudit(req.user, 'PROOF_OF_PAYMENT_UPLOADED', { targetType: 'LEDGER', targetId: req.params.ledgerId, details: `Uploaded proof of payment (${receiptData.filename})` });

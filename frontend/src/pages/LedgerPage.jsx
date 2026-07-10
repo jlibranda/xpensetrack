@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import ReceiptImage from '../components/ReceiptImage';
+import useUnsavedChanges from '../hooks/useUnsavedChanges';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
 import { useAuth } from '../context/AuthContext';
@@ -130,6 +131,18 @@ export default function LedgerPage({ mode = 'manage' }) {
   // After save/submit: in add mode reset to a fresh form; in manage mode close + reload.
   const afterSave = () => { if (isAddMode) initAddForm(); else { setEditing(null); load(); } };
   const cancelForm = () => { if (isAddMode) initAddForm(); else setEditing(null); };
+
+  // Warn before leaving the Add AP/AR form with content that hasn't been saved/submitted.
+  const addFormDirty = isAddMode && !!editing && (
+    String(editing.vendorName || '').trim() !== '' ||
+    String(editing.amount || '') !== '' ||
+    String(editing.docNumber || '').trim() !== '' ||
+    String(editing.poNumber || '').trim() !== '' ||
+    String(editing.remarks || '').trim() !== '' ||
+    String(editing.notes || '').trim() !== '' ||
+    !!editing.receiptId
+  );
+  useUnsavedChanges(addFormDirty);
 
   // ---- single doc ----
   // Validate the AP/AR form before saving/submitting (mirrors the expense form).

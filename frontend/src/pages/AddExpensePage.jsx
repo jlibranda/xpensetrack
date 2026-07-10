@@ -5,6 +5,7 @@ import api from '../lib/api';
 import toast from '../lib/toast';
 import { useOrg } from '../context/OrgContext';
 import ReceiptImage from '../components/ReceiptImage';
+import useUnsavedChanges from '../hooks/useUnsavedChanges';
 
 const ICONS = { MEALS:'🍽️', TRAVEL:'✈️', ACCOMMODATION:'🏨', SUPPLIES:'📦', COMMUNICATIONS:'📱', OTHER:'📎' };
 const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
@@ -43,21 +44,29 @@ export default function AddExpensePage() {
   useEffect(() => {
     if (id) {
       api.get(`/expenses/${id}`).then(e => {
-        setForm({
+        const loaded = {
           // Legacy expenses (created before merchant was persisted) only have the
           // name in `title`; fall back to it so the required Merchant field isn't blank.
           title: e.title, orNumber: e.orNumber||'', merchant: e.merchant || e.title || '',
           amount: e.amount, currency: e.currency, category: e.category,
           expenseType: e.expenseType, expenseDate: e.expenseDate.split('T')[0],
-        });
+        };
+        setForm(loaded);
         if (e.receipt?.id) {
           setReceiptId(e.receipt.id);
           const tok = localStorage.getItem('token');
           setReceiptPreview(`${API_BASE}/ocr/receipt/${e.receipt.id}?token=${encodeURIComponent(tok)}`);
         }
+        initialRef.current = JSON.stringify({ form: loaded, receiptId: e.receipt?.id || '' });
       }).catch(() => navigate('/expenses'));
     }
   }, [id]);
+
+  // Baseline for unsaved-changes detection: for a NEW expense capture the blank form once.
+  const initialRef = useRef(null);
+  useEffect(() => { if (!id) initialRef.current = JSON.stringify({ form, receiptId }); /* eslint-disable-next-line */ }, []);
+  const dirty = initialRef.current !== null && !submitting && JSON.stringify({ form, receiptId }) !== initialRef.current;
+  useUnsavedChanges(dirty);
 
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
 

@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrg } from '../context/OrgContext';
+import useUnsavedChanges from '../hooks/useUnsavedChanges';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import toast from '../lib/toast';
@@ -328,6 +329,10 @@ export default function SettingsPage() {
 
   const s = form || settings;
   const set = (k,v) => setForm(f=>({...(f||settings),[k]:v}));
+
+  // Warn before leaving with unsaved edits (draft form, or an unsaved manual FX rate).
+  const dirty = (form !== null) || (fx != null && String(fx.usdPhpRate) !== fxRateInput);
+  useUnsavedChanges(dirty);
 
   const cats = Array.isArray(s?.categories) ? s.categories : (s?.categories?.split(',').map(c=>c.trim())||[]);
   const types = Array.isArray(s?.expenseTypes) ? s.expenseTypes : (s?.expenseTypes?.split(',').map(t=>t.trim())||[]);
@@ -819,11 +824,19 @@ export default function SettingsPage() {
         {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
 
         {tab !== 'Access Control' && tab !== 'Email Templates' && (
-          <button onClick={save} disabled={saving}
-            className="mt-5 w-full py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
-            style={{backgroundColor:settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
-            {saving ? 'Saving...' : 'Save settings'}
-          </button>
+          <>
+            {dirty && !saving && (
+              <div className="mt-4 flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #f59e0b' }}>
+                <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: '#f59e0b' }} />
+                You have unsaved changes — click <span className="font-semibold">Save settings</span> to keep them.
+              </div>
+            )}
+            <button onClick={save} disabled={saving}
+              className="mt-3 w-full py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
+              style={{backgroundColor:settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
+              {saving ? 'Saving...' : dirty ? 'Save settings •' : 'Save settings'}
+            </button>
+          </>
         )}
       </div>
     </div>
