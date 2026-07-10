@@ -87,6 +87,7 @@ const toPhp = async (amt, cur) => {
 const include = {
   client: { select: { id: true, name: true } },
   receipt: { select: { id: true, mimeType: true, filename: true } },
+  proofOfPayment: { select: { id: true, mimeType: true, filename: true } },
   createdBy: { select: { id: true, firstName: true, lastName: true } },
   assignedTo: { select: { id: true, firstName: true, lastName: true } },
   lastEditedBy: { select: { id: true, firstName: true, lastName: true } },
@@ -242,11 +243,12 @@ router.get('/export', authenticate, requirePermission(PERM, FALLBACK), async (re
       'Remarks': d.remarks || '',
       'Created By': d.createdBy ? `${d.createdBy.lastName || ''}, ${d.createdBy.firstName || ''}`.replace(/^,\s*|,\s*$/g, '').trim() : '',
       'Document': d.receiptId ? 'View document' : '',
+      'Proof of Payment': d.proofOfPaymentId ? 'View proof' : '',
     }));
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{wch:12},{wch:12},{wch:26},{wch:14},{wch:16},{wch:12},{wch:18},{wch:12},{wch:12},{wch:12},{wch:8},{wch:14},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10},{wch:14},{wch:24},{wch:22},{wch:16}];
+    ws['!cols'] = [{wch:12},{wch:12},{wch:26},{wch:14},{wch:16},{wch:12},{wch:18},{wch:12},{wch:12},{wch:12},{wch:8},{wch:14},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10},{wch:14},{wch:24},{wch:22},{wch:16},{wch:18}];
     const headerRange = XLSX.utils.decode_range(ws['!ref']);
     const colOf = {};
     for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
@@ -256,13 +258,16 @@ router.get('/export', authenticate, requirePermission(PERM, FALLBACK), async (re
       ws[addr].s = { font: { bold: true }, fill: { fgColor: { rgb: '1D9E75' } } };
     }
     const apiBase = (process.env.PUBLIC_API_URL || 'https://xpensetrack-production.up.railway.app/api').replace(/\/$/, '');
-    for (let i = 0; i < docs.length; i++) {
-      const colIdx = colOf['Document'];
-      if (colIdx == null || !docs[i].receiptId) continue;
+    const linkDoc = (i, colIdx, docId) => {
+      if (colIdx == null || !docId) return;
       const addr = XLSX.utils.encode_cell({ r: i + 1, c: colIdx });
-      if (!ws[addr]) continue;
-      ws[addr].l = { Target: `${apiBase}/ocr/receipt/${docs[i].receiptId}?token=${signReceiptToken(docs[i].receiptId)}`, Tooltip: 'Open document' };
+      if (!ws[addr]) return;
+      ws[addr].l = { Target: `${apiBase}/ocr/receipt/${docId}?token=${signReceiptToken(docId)}`, Tooltip: 'Open document' };
       ws[addr].s = { font: { color: { rgb: '1155CC' }, underline: true } };
+    };
+    for (let i = 0; i < docs.length; i++) {
+      linkDoc(i, colOf['Document'], docs[i].receiptId);
+      linkDoc(i, colOf['Proof of Payment'], docs[i].proofOfPaymentId);
     }
     XLSX.utils.book_append_sheet(wb, ws, 'AP-AR Invoices');
 
@@ -419,6 +424,38 @@ async function fill2307Pdf(d) {
   };
   const cellChars = (cells, vc, str, size = 9) => { const s = String(str || ''); for (let i = 0; i < cells.length && i < s.length; i++) put(cells[i], vc, s[i], size, 'center'); };
   const digits = (iso) => { if (!iso) return ''; const [y, m, dd] = String(iso).split('-'); return `${m || ''}${dd || ''}${y || ''}`.replace(/\D/g, ''); };
+  // Wrap the ATC description into multiple lines that fit the description column
+  // width, instead of truncating it to a single overflowing line.
+  const wrapText = (str, maxW, size) => {
+    const words = String(str).split(/\s+/).filter(Boolean);
+    const lines = []; let cur = '';
+    for (const w of words) {
+      const test = cur ? cur + ' ' + w : w;
+      if (font.widthOfTextAtSize(test, size) <= maxW) { cur = test; continue; }
+      if (cur) lines.push(cur);
+      if (font.widthOfTextAtSize(w, size) > maxW) { // word longer than a line -> hard break
+        let chunk = '';
+        for (const ch of w) {
+          if (font.widthOfTextAtSize(chunk + ch, size) <= maxW) chunk += ch;
+          else { if (chunk) lines.push(chunk); chunk = ch; }
+        }
+        cur = chunk;
+      } else cur = w;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  };
+  const putDesc = (cx, vc, text) => {
+    if (!text) return;
+    const maxW = COORD.col.atc - COORD.col.desc - 6;
+    // Shrink a little for longer text, then draw ALL wrapped lines downward
+    // (never truncated). Overflowing below is acceptable; overflowing right is not.
+    let size = 6;
+    let lines = wrapText(text, maxW, size);
+    if (lines.length > 2) { size = 5; lines = wrapText(text, maxW, size); }
+    const lh = size + 0.8;
+    lines.forEach((ln, li) => put(cx, vc + li * lh, ln, size, 'left'));
+  };
 
   cellChars(COORD.fromCells, COORD.periodVc, digits(d.periodFrom));
   cellChars(COORD.toCells, COORD.periodVc, digits(d.periodTo));
@@ -435,7 +472,7 @@ async function fill2307Pdf(d) {
   let t1 = 0, t2 = 0, t3 = 0, tt = 0;
   rows.forEach((r, i) => {
     const vc = COORD.rowVc[i];
-    if (r.desc) put(COORD.col.desc, vc, String(r.desc).slice(0, 60), 6, 'left');
+    if (r.desc) putDesc(COORD.col.desc, vc - 2, String(r.desc));
     put(COORD.col.atc, vc, r.atc || '');
     if (Number(r.m1)) put(COORD.col.m1, vc, money(r.m1));
     if (Number(r.m2)) put(COORD.col.m2, vc, money(r.m2));

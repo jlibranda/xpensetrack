@@ -154,8 +154,13 @@ export default function Layout() {
 
   const navLinkClass = ({ isActive }) =>
     `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-      isActive ? 'text-white font-medium' : 'text-gray-300 hover:bg-white/10 hover:text-white'
+      isActive ? 'font-medium' : 'text-gray-300 hover:bg-white/10 hover:text-white'
     }`;
+  // Active menu item: brand background with contrast-aware text (black when the
+  // brand color is light, e.g. yellow) so the label stays readable.
+  const navLinkStyle = ({ isActive }) => isActive
+    ? { backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }
+    : {};
 
   const sidebarBg = darkMode ? '#0f172a' : '#1e293b';
 
@@ -195,7 +200,7 @@ export default function Layout() {
             {settings?.logoUrl
               ? <img src={settings.logoUrl} alt="Logo" className="w-7 h-7 rounded-lg object-cover" />
               : <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                  style={{ backgroundColor: brandColor }}>
+                  style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
                   {settings?.companyName?.[0] || 'X'}
                 </div>
             }
@@ -206,7 +211,7 @@ export default function Layout() {
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto" onClick={() => setMobileNavOpen(false)}>
           {NAV.filter(item => !(showManagement && item.to === '/expenses')).map(item => (
             <NavLink key={item.to} to={item.to} end={item.exact} className={navLinkClass}
-              style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+              style={navLinkStyle}>
               <span className="w-4 text-center text-sm">{item.icon}</span>
               <span>{item.label}</span>
               {item.to === '/expenses' && (pendingCounts.myPending > 0 || pendingCounts.myReturned > 0) && (
@@ -218,7 +223,7 @@ export default function Layout() {
           {/* AP & AR Invoice — grouped with Add Expense, gated like before */}
           {navVisible({ perm:'manage_ap_ar' }) && (
             <NavLink to="/payables" className={navLinkClass}
-              style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+              style={navLinkStyle}>
               <span className="w-4 text-center text-sm">+</span>
               <span>Add AP &amp; AR Invoice</span>
             </NavLink>
@@ -229,14 +234,14 @@ export default function Layout() {
               <p className="pt-3 pb-1 px-3 text-xs text-gray-400 uppercase tracking-wider font-medium">Management</p>
               {['FINANCE','ADMIN'].includes(user?.role) && (
                 <NavLink to="/transactions" className={navLinkClass}
-                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  style={navLinkStyle}>
                   <span className="w-4 text-center text-sm">💳</span>
                   <span>Transactions</span>
                 </NavLink>
               )}
               {navVisible({ perm:'view_approvals' }) && (
                 <NavLink to="/approvals" className={navLinkClass}
-                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  style={navLinkStyle}>
                   <span className="w-4 text-center text-sm">✓</span>
                   <span>My Approvals</span>
                   {(pendingCounts.toApprove + (pendingCounts.toApproveLedger || 0)) > 0 && (
@@ -245,7 +250,7 @@ export default function Layout() {
                 </NavLink>
               )}
               <NavLink to="/expenses" end className={navLinkClass}
-                style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                style={navLinkStyle}>
                 <span className="w-4 text-center text-sm">🧾</span>
                 <span>My Expenses</span>
                 {(pendingCounts.myPending > 0 || pendingCounts.myReturned > 0) && (
@@ -254,21 +259,21 @@ export default function Layout() {
               </NavLink>
               {(navVisible({ perm:'manage_ap_ar' }) || navVisible({ perm:'view_approvals' })) && (
                 <NavLink to="/ap-ar" className={navLinkClass}
-                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  style={navLinkStyle}>
                   <span className="w-4 text-center text-sm">📑</span>
                   <span>My AP &amp; AR Invoices</span>
                 </NavLink>
               )}
               {navVisible({ perm:'view_reports' }) && (
                 <NavLink to="/reports" className={navLinkClass}
-                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  style={navLinkStyle}>
                   <span className="w-4 text-center text-sm">📊</span>
                   <span>Reports</span>
                 </NavLink>
               )}
               {navVisible({ perm:'view_analytics' }) && (
                 <NavLink to="/analytics" className={navLinkClass}
-                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  style={navLinkStyle}>
                   <span className="w-4 text-center text-sm">📈</span>
                   <span>Analytics</span>
                 </NavLink>
@@ -281,21 +286,21 @@ export default function Layout() {
               <p className="pt-3 pb-1 px-3 text-xs text-gray-400 uppercase tracking-wider font-medium">Admin</p>
               {canUsers && (
                 <NavLink to="/users" className={navLinkClass}
-                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  style={navLinkStyle}>
                   <span className="w-4 text-center text-sm">👥</span>
                   <span>Users</span>
                 </NavLink>
               )}
               {canSettings && (
                 <NavLink to="/settings" className={navLinkClass}
-                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  style={navLinkStyle}>
                   <span className="w-4 text-center text-sm">⚙</span>
                   <span>Settings</span>
                 </NavLink>
               )}
               {canAudit && (
                 <NavLink to="/audit" className={navLinkClass}
-                  style={({ isActive }) => isActive ? { backgroundColor: brandColor } : {}}>
+                  style={navLinkStyle}>
                   <span className="w-4 text-center text-sm">📋</span>
                   <span>Audit Logs</span>
                 </NavLink>
@@ -314,7 +319,7 @@ export default function Layout() {
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/profile')}
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-              style={{ backgroundColor: brandColor }}>
+              style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
               {initials}
             </button>
             <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate('/profile')}>
@@ -360,15 +365,15 @@ export default function Layout() {
           {/* + New AP/AR Invoice (desktop; mobile uses the FAB) */}
           {canManageApAr && (
             <button onClick={() => navigate('/payables')}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
-              style={{ backgroundColor: brandColor }}>
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold hover:opacity-90 shrink-0"
+              style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
               + New AP/AR Invoice
             </button>
           )}
 
           <button onClick={() => navigate('/expenses/new')}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-semibold hover:opacity-90 shrink-0"
-            style={{ backgroundColor: brandColor }}>
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold hover:opacity-90 shrink-0"
+            style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
             + New Expense
           </button>
 
@@ -388,7 +393,7 @@ export default function Layout() {
               <span className="text-lg">🔔</span>
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-white flex items-center justify-center font-bold"
-                  style={{ backgroundColor: brandColor, fontSize: '9px' }}>
+                  style={{ backgroundColor: brandColor, fontSize: '9px', color: 'var(--brand-contrast,#fff)' }}>
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
@@ -449,8 +454,8 @@ export default function Layout() {
               </>
             )}
             <button onClick={() => setFabOpen(o => !o)}
-              className="w-14 h-14 rounded-full text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
-              style={{ backgroundColor: brandColor }} aria-label="Quick add">
+              className="w-14 h-14 rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+              style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }} aria-label="Quick add">
               <span className={`text-3xl leading-none transition-transform ${fabOpen ? 'rotate-45' : ''}`}>+</span>
             </button>
           </div>

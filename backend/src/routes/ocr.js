@@ -526,6 +526,43 @@ router.post('/proof-of-payment/:expenseId', authenticate, requireRole('FINANCE',
   }
 });
 
+// Finance/Admin upload a proof-of-payment document for an AP/AR ledger doc.
+// Same storage + linking as the expense proof-of-payment above.
+router.post('/ledger-proof-of-payment/:ledgerId', authenticate, requireRole('FINANCE', 'ADMIN'), upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const storage = require('../lib/storage');
+    const { buffer: storeBuf, mime: storeMime } = await compressForStorage(
+      req.file.buffer, req.file.mimetype, req.file.originalname
+    );
+    const receiptData = { mimeType: storeMime, filename: req.file.originalname || 'proof-of-payment' };
+    if (storage.storageConfigured()) {
+      try {
+        const ext = storeMime.includes('pdf') ? 'pdf' : 'jpg';
+        const key = `pop/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        await storage.putObject(key, storeBuf, storeMime);
+        receiptData.storageKey = key;
+      } catch (e) {
+        console.error('POP storage upload failed, falling back to DB:', e.message);
+        receiptData.data = storeBuf;
+      }
+    } else {
+      receiptData.data = storeBuf;
+    }
+    const rec = await prisma.receipt.create({ data: receiptData });
+    await prisma.ledgerDoc.update({ where: { id: req.params.ledgerId }, data: { proofOfPaymentId: rec.id } });
+    try {
+      const { logAudit } = require('../lib/audit');
+      await logAudit(req.user, 'PROOF_OF_PAYMENT_UPLOADED', { targetType: 'LEDGER', targetId: req.params.ledgerId, details: `Uploaded proof of payment (${receiptData.filename})` });
+    } catch (e) { /* non-blocking */ }
+    res.json({ id: rec.id, mimeType: rec.mimeType });
+  } catch (err) {
+    console.error('Ledger POP upload failed:', err.message);
+    res.status(500).json({ error: 'Proof-of-payment upload failed', message: err.message });
+  }
+});
+
+
 router.get('/receipt/:id', async (req, res) => {
   try {
     const jwt = require('jsonwebtoken');

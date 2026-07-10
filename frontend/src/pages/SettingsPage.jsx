@@ -421,7 +421,7 @@ export default function SettingsPage() {
         <p className="text-sm text-gray-500 mt-0.5">Organization configuration</p>
       </div>
 
-      <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1 flex-wrap">
+      <div className="seg-group mb-5 flex-wrap">
         {TABS.filter(t => {
           if (t === 'Branding') return canSeeBranding;
           if (t === 'Expense Types') return canExpenseTypes;
@@ -432,7 +432,7 @@ export default function SettingsPage() {
           return true; // General, Categories
         }).map(t => (
           <button key={t} onClick={()=>setTab(t)}
-            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${tab===t?'bg-white font-medium shadow-sm':'text-gray-500 hover:text-gray-700'}`}>
+            className={`seg-btn ${tab===t?'active':''}`}>
             {t}
           </button>
         ))}
@@ -853,7 +853,7 @@ function EmailNotificationsCard({ settings }) {
         </div>
         <button onClick={() => apply(!on)} disabled={saving} role="switch" aria-checked={on}
           className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors ${on ? '' : 'bg-gray-300'}`}
-          style={on ? { backgroundColor: 'var(--brand-color,#1D9E75)' } : {}}>
+          style={on ? { backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' } : {}}>
           <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform mt-0.5 ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
         </button>
       </div>
@@ -905,7 +905,7 @@ function ReminderSettingsCard({ settings }) {
         </div>
         <button onClick={save} disabled={saving}
           className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+          style={{ backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' }}>
           {saving ? 'Saving…' : 'Save'}
         </button>
         {msg && <span className={`text-xs ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.ok ? '✓ ' : '✕ '}{msg.text}</span>}
@@ -958,7 +958,7 @@ function PayoutReversalCard({ settings }) {
       <div className="flex items-center gap-3 mt-3">
         <button onClick={save} disabled={saving}
           className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+          style={{ backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' }}>
           {saving ? 'Saving…' : 'Save reversal access'}
         </button>
         <span className="text-xs text-gray-500">{ids.length} selected</span>
@@ -1039,7 +1039,7 @@ function ReceiptStorageCard() {
       <div className="flex gap-2 flex-wrap items-center">
         <button onClick={download} disabled={downloading}
           className="px-4 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-          style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>
+          style={{ backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' }}>
           {downloading ? 'Preparing…' : '⬇ Download all receipts (ZIP)'}
         </button>
         <button onClick={purgeOrphans} disabled={cleaningOrphans || (stats && stats.orphans === 0)}
@@ -1174,10 +1174,10 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
       </p>
 
       {/* Expense / AP & AR toggle */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="seg-group mb-4">
         {[['expense', 'Expense emails'], ['apar', 'AP & AR emails']].map(([val, label]) => (
           <button key={val} onClick={() => setMode(val)}
-            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${mode === val ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`seg-btn ${mode === val ? 'active' : ''}`}>
             {label}
           </button>
         ))}

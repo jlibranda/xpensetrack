@@ -320,7 +320,7 @@ export default function LedgerPage({ mode = 'manage' }) {
         <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
           <div className="flex items-center gap-2 mb-3">
             <h2 className="text-sm font-medium text-gray-700">Invoice / receipt</h2>
-            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: BRAND }}>✨ AI auto-fill</span>
+            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: BRAND, color: 'var(--brand-contrast,#fff)' }}>✨ AI auto-fill</span>
           </div>
           {hasFile ? (
             <div className="flex items-center justify-between">
@@ -348,7 +348,7 @@ export default function LedgerPage({ mode = 'manage' }) {
         <div className="flex gap-3">
           <button onClick={saveAndSubmitDoc}
             className="flex-1 py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90"
-            style={{ backgroundColor: BRAND }}>📤 Submit for approval</button>
+            style={{ backgroundColor: BRAND, color: 'var(--brand-contrast,#fff)' }}>📤 Submit for approval</button>
           <button onClick={saveDoc}
             className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">💾 Draft</button>
         </div>
@@ -374,7 +374,7 @@ export default function LedgerPage({ mode = 'manage' }) {
         <h1 className="text-xl font-medium text-gray-900">My AP &amp; AR invoices</h1>
         {canManageApAr && (
           <button onClick={() => navigate('/payables')}
-            className="px-3 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90" style={{ backgroundColor: BRAND }}>
+            className="px-3 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90" style={{ backgroundColor: BRAND, color: 'var(--brand-contrast,#fff)' }}>
             + Add AP &amp; AR invoice
           </button>
         )}
@@ -388,11 +388,10 @@ export default function LedgerPage({ mode = 'manage' }) {
 
       {/* Scope toggle: Self / Team / All (mirrors My Expenses) */}
       {scopeTabs.length > 0 && (
-        <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+        <div className="seg-group brand mb-3">
           {scopeTabs.map(([val, label]) => (
             <button key={val} onClick={() => { setScope(val); setViewing(null); }}
-              className={`px-3 py-1.5 rounded-md text-xs transition-colors ${scope === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-              style={scope === val ? { backgroundColor: BRAND } : {}}>
+              className={`seg-btn ${scope === val ? 'active' : ''}`}>
               {label}
             </button>
           ))}
@@ -400,21 +399,20 @@ export default function LedgerPage({ mode = 'manage' }) {
       )}
 
       {/* Type toggle (AP / AR) */}
-      <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="seg-group brand mb-3">
         {typeTabs.map(([val, label]) => (
           <button key={val} onClick={() => { setTab(val); setViewing(null); }}
-            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${tab === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-            style={tab === val ? { backgroundColor: BRAND } : {}}>
+            className={`seg-btn ${tab === val ? 'active' : ''}`}>
             {label}
           </button>
         ))}
       </div>
 
       {/* Status filter tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">
+      <div className="seg-group mb-4 flex-wrap">
         {statusTabs.map(([val, label]) => (
           <button key={label} onClick={() => setStatusFilter(val)}
-            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${statusFilter === val ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`seg-btn ${statusFilter === val ? 'active' : ''}`}>
             {label}
           </button>
         ))}
@@ -533,7 +531,7 @@ export default function LedgerPage({ mode = 'manage' }) {
               {canManageApAr && (
                 <div className="flex flex-col gap-2 border-t border-gray-50 pt-3">
                   {!['PENDING', 'APPROVED', 'PROCESSED', 'PAID'].includes(viewing.status) && (
-                    <button onClick={() => submitDoc(viewing)} className="w-full py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: BRAND }}>📤 Submit for approval</button>
+                    <button onClick={() => submitDoc(viewing)} className="w-full py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: BRAND, color: 'var(--brand-contrast,#fff)' }}>📤 Submit for approval</button>
                   )}
                   {canEditDoc(viewing)
                     ? <button onClick={() => { const d = viewing; setViewing(null); openEdit(d); }} className="w-full py-2 border border-gray-200 text-gray-700 rounded-lg text-xs hover:bg-gray-50">✏️ Edit</button>
@@ -566,7 +564,7 @@ export default function LedgerPage({ mode = 'manage' }) {
           <div className="flex justify-end gap-2 mt-4">
             <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
             <button onClick={saveDoc} className="px-4 py-2 text-sm rounded-lg font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">Save</button>
-            <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND }}>Submit for approval</button>
+            <button onClick={saveAndSubmitDoc} className="px-4 py-2 text-sm text-white rounded-lg font-medium" style={{ backgroundColor: BRAND, color: 'var(--brand-contrast,#fff)' }}>Submit for approval</button>
           </div>
         </Modal>
       )}
@@ -603,7 +601,7 @@ function ClientsView({ clients, onAdd, onEdit, onDelete }) {
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
       <div className="flex justify-between items-center p-4 border-b border-gray-100">
         <p className="text-sm font-medium text-gray-700">Clients</p>
-        <button onClick={onAdd} className="px-3 py-1.5 text-white rounded-lg text-sm font-medium" style={{ backgroundColor: BRAND }}>+ Add client</button>
+        <button onClick={onAdd} className="px-3 py-1.5 text-white rounded-lg text-sm font-medium" style={{ backgroundColor: BRAND, color: 'var(--brand-contrast,#fff)' }}>+ Add client</button>
       </div>
       {clients.length === 0 ? <p className="text-sm text-gray-400 p-10 text-center">No clients yet.</p> : (
         <table className="w-full text-sm">

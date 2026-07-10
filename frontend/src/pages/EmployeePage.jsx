@@ -104,10 +104,10 @@ export default function EmployeePage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="seg-group mb-4">
         {[['info','Employee Info'],['expenses','Expense History']].map(([val, label]) => (
           <button key={val} onClick={() => setTab(val)}
-            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${tab===val ? 'bg-white font-medium shadow-sm' : 'text-gray-500'}`}>
+            className={`seg-btn ${tab===val ? 'active' : ''}`}>
             {label}
           </button>
         ))}
@@ -144,7 +144,7 @@ export default function EmployeePage() {
                   {user.approvalSteps.map((step) => (
                     <div key={step.stepOrder} className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(29,158,117,0.10)', border: '1px solid rgba(29,158,117,0.35)' }}>
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-white shrink-0" style={{ backgroundColor: 'var(--brand-color,#1D9E75)' }}>{step.stepOrder}</span>
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-white shrink-0" style={{ backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' }}>{step.stepOrder}</span>
                         <span className="text-xs font-semibold" style={{ color: 'var(--trail-name-color,#374151)' }}>
                           Step {step.stepOrder}
                         </span>
