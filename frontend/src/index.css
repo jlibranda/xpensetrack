@@ -4,6 +4,37 @@
 
 :root {
   --brand-color: #1D9E75;
+  --brand-contrast: #ffffff;
+}
+
+/* ── Unified segmented toggle (source/scope/view switches) ────────────
+   .seg-group wraps the buttons; a thin bar separates each option; the
+   selected .seg-btn.active uses the brand color with readable text. */
+.seg-group {
+  display: inline-flex;
+  width: fit-content;
+  background-color: rgba(226,232,240,0.93);
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+}
+.seg-group > .seg-btn + .seg-btn { border-left: 1px solid rgba(100,116,139,0.35); }
+.seg-btn {
+  padding: 0.375rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #64748b;
+  background: transparent;
+  transition: background-color .15s, color .15s;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg-btn:hover { color: #334155; }
+.seg-btn.active {
+  background-color: var(--brand-color);
+  color: var(--brand-contrast, #fff) !important;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
 }
 
 /* ── Light mode — warm, defined, not washed out ─── */

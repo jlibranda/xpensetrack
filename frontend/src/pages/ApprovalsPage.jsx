@@ -128,16 +128,16 @@ export default function ApprovalsPage() {
       </div>
 
       {/* Source toggle: Expenses vs AP & AR invoices */}
-      <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="seg-group mb-3">
         <button onClick={() => setSource('expense')}
-          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'expense' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`seg-btn ${source === 'expense' ? 'active' : ''}`}>
           Expenses
           {counts.expense > 0 && (
             <span className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 bg-red-500 text-white text-xs font-bold rounded-full">{counts.expense}</span>
           )}
         </button>
         <button onClick={() => setSource('ledger')}
-          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'ledger' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`seg-btn ${source === 'ledger' ? 'active' : ''}`}>
           AP &amp; AR
           {counts.ledger > 0 && (
             <span className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 bg-red-500 text-white text-xs font-bold rounded-full">{counts.ledger}</span>
@@ -146,15 +146,15 @@ export default function ApprovalsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="seg-group mb-4">
         <button onClick={() => setTab('pending')}
-          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${tab === 'pending' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`seg-btn ${tab === 'pending' ? 'active' : ''}`}>
           Pending {approvals.length > 0 && (
             <span className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 bg-red-500 text-white text-xs font-bold rounded-full">{approvals.length}</span>
           )}
         </button>
         <button onClick={() => setTab('history')}
-          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${tab === 'history' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`seg-btn ${tab === 'history' ? 'active' : ''}`}>
           History
         </button>
       </div>

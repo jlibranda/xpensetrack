@@ -110,13 +110,10 @@ export default function DashboardPage() {
           <p className="text-sm text-gray-500 mt-0.5">This month's overview</p>
         </div>
         {scopeTabs.length > 0 && (
-          <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-sm divide-x divide-gray-200">
+          <div className="seg-group text-sm">
             {scopeTabs.map(([val, label]) => (
               <button key={val} onClick={() => setScope(val)}
-                className="px-4 py-1.5 font-medium transition-colors"
-                style={scope === val
-                  ? { backgroundColor: 'var(--brand-color,#1D9E75)', color: '#fff' }
-                  : { backgroundColor: 'transparent', color: isDark ? '#cbd5e1' : '#475569' }}>
+                className={`seg-btn ${scope === val ? 'active' : ''}`}>
                 {label}
               </button>
             ))}
@@ -127,10 +124,10 @@ export default function DashboardPage() {
       {/* Source toggle — keeps the dashboard clean by showing one view at a time.
           The AP & AR option only appears for users who can view the ledger. */}
       {apArAllowed && (
-        <div className="flex mb-5 bg-gray-100 rounded-lg p-1 w-fit divide-x divide-gray-300">
+        <div className="seg-group mb-5">
           {[['expense', 'Expenses'], ['ledger', 'AP & AR']].map(([val, label]) => (
             <button key={val} onClick={() => setSource(val)}
-              className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === val ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              className={`seg-btn ${source === val ? 'active' : ''}`}>
               {label}
             </button>
           ))}

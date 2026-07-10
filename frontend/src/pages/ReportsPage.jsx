@@ -131,13 +131,13 @@ export default function ReportsPage() {
       <div className="mb-6">
         <h1 className="text-xl font-medium text-gray-900">Reports</h1>
         <p className="text-sm text-gray-500 mt-0.5">Summaries and exports</p>
-        <div className="flex gap-1 mt-3 bg-gray-100 rounded-lg p-1 w-fit">
+        <div className="seg-group mt-3">
           <button onClick={() => setSource('expense')}
-            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'expense' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`seg-btn ${source === 'expense' ? 'active' : ''}`}>
             Expenses
           </button>
           <button onClick={() => setSource('ledger')}
-            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'ledger' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`seg-btn ${source === 'ledger' ? 'active' : ''}`}>
             AP &amp; AR
           </button>
         </div>

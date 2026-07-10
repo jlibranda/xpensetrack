@@ -347,13 +347,13 @@ export default function TransactionsPage() {
       </div>
 
       {/* Source toggle: Expenses vs AP & AR invoices */}
-      <div className="flex mb-4 bg-gray-100 rounded-lg p-1 w-fit divide-x divide-gray-300">
+      <div className="seg-group mb-4">
         <button onClick={() => { setSource('expense'); setSelected([]); }}
-          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'expense' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`seg-btn ${source === 'expense' ? 'active' : ''}`}>
           Expenses
         </button>
         <button onClick={() => { setSource('ledger'); setSelected([]); }}
-          className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'ledger' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`seg-btn ${source === 'ledger' ? 'active' : ''}`}>
           AP &amp; AR
         </button>
       </div>

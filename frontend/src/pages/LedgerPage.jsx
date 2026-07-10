@@ -388,11 +388,10 @@ export default function LedgerPage({ mode = 'manage' }) {
 
       {/* Scope toggle: Self / Team / All (mirrors My Expenses) */}
       {scopeTabs.length > 0 && (
-        <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+        <div className="seg-group mb-3">
           {scopeTabs.map(([val, label]) => (
             <button key={val} onClick={() => { setScope(val); setViewing(null); }}
-              className={`px-3 py-1.5 rounded-md text-xs transition-colors ${scope === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-              style={scope === val ? { backgroundColor: BRAND } : {}}>
+              className={`seg-btn ${scope === val ? 'active' : ''}`}>
               {label}
             </button>
           ))}
@@ -400,21 +399,20 @@ export default function LedgerPage({ mode = 'manage' }) {
       )}
 
       {/* Type toggle (AP / AR) */}
-      <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="seg-group mb-3">
         {typeTabs.map(([val, label]) => (
           <button key={val} onClick={() => { setTab(val); setViewing(null); }}
-            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${tab === val ? 'text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-            style={tab === val ? { backgroundColor: BRAND } : {}}>
+            className={`seg-btn ${tab === val ? 'active' : ''}`}>
             {label}
           </button>
         ))}
       </div>
 
       {/* Status filter tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">
+      <div className="seg-group mb-4 flex-wrap">
         {statusTabs.map(([val, label]) => (
           <button key={label} onClick={() => setStatusFilter(val)}
-            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${statusFilter === val ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`seg-btn ${statusFilter === val ? 'active' : ''}`}>
             {label}
           </button>
         ))}

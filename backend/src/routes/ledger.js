@@ -448,11 +448,12 @@ async function fill2307Pdf(d) {
   const putDesc = (cx, vc, text) => {
     if (!text) return;
     const maxW = COORD.col.atc - COORD.col.desc - 6;
+    // Shrink a little for longer text, then draw ALL wrapped lines downward
+    // (never truncated). Overflowing below is acceptable; overflowing right is not.
     let size = 6;
     let lines = wrapText(text, maxW, size);
-    if (lines.length > 2) { size = 5; lines = wrapText(text, maxW, size); } // shrink to fit 2 lines
-    if (lines.length > 2) { lines = lines.slice(0, 2); lines[1] = lines[1].replace(/.{1}$/, '…'); }
-    const lh = size + 1;
+    if (lines.length > 2) { size = 5; lines = wrapText(text, maxW, size); }
+    const lh = size + 0.8;
     lines.forEach((ln, li) => put(cx, vc + li * lh, ln, size, 'left'));
   };
 
