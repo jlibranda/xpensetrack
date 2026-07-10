@@ -142,7 +142,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
           <button onClick={resetPerms} className="px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg text-xs hover:bg-gray-50">Reset</button>
           <button onClick={savePerms}
             className={`px-3 py-1.5 text-white rounded-lg text-xs font-medium transition-colors ${saved2 ? 'bg-green-500' : 'hover:opacity-90'}`}
-            style={saved2 ? {} : {backgroundColor: settings?.primaryColor||'#1D9E75'}}>
+            style={saved2 ? {} : {backgroundColor: settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
             {saving2 ? 'Saving…' : saved2 ? '✓ Saved!' : 'Save'}
           </button>
         </div>
@@ -180,7 +180,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
             }
           }}
           className="px-3 py-1.5 text-white rounded-lg text-xs font-medium hover:opacity-90"
-          style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>
+          style={{backgroundColor: settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
           + Add role
         </button>
       </div>
@@ -251,7 +251,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
         <p className="text-xs text-blue-100 mb-3">To block or restore a user's login, go to Users and click their <strong>Active/Inactive</strong> badge. Use <strong>Reset pwd</strong> to change their password.</p>
         <button onClick={() => navigate('/users')}
           className="px-4 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90"
-          style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>
+          style={{backgroundColor: settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
           → Manage users & access
         </button>
       </div>
@@ -421,7 +421,7 @@ export default function SettingsPage() {
         <p className="text-sm text-gray-500 mt-0.5">Organization configuration</p>
       </div>
 
-      <div className="seg-group mb-5">
+      <div className="seg-group wrap mb-5">
         {TABS.filter(t => {
           if (t === 'Branding') return canSeeBranding;
           if (t === 'Expense Types') return canExpenseTypes;
@@ -821,7 +821,7 @@ export default function SettingsPage() {
         {tab !== 'Access Control' && tab !== 'Email Templates' && (
           <button onClick={save} disabled={saving}
             className="mt-5 w-full py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
-            style={{backgroundColor:settings?.primaryColor||'#1D9E75'}}>
+            style={{backgroundColor:settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
             {saving ? 'Saving...' : 'Save settings'}
           </button>
         )}

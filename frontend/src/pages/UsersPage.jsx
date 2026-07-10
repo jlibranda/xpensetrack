@@ -362,7 +362,7 @@ export default function UsersPage() {
             className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">📤 Bulk</button>
           <button onClick={openAdd}
             className="px-3 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90"
-            style={{background: settings?.primaryColor||'#1D9E75'}}>+ Add user</button>
+            style={{background: settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>+ Add user</button>
         </div>
       </div>
 
@@ -479,7 +479,7 @@ export default function UsersPage() {
               <button type="button"
                 onClick={()=>setF('approvalFlow',[...(form.approvalFlow||[]), { approvers:[''], rule:'ANY' }])}
                 className="text-xs px-3 py-1.5 rounded-lg mb-3 text-white font-medium"
-                style={{backgroundColor: settings?.primaryColor||'#1D9E75'}}>
+                style={{backgroundColor: settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
                 + Add step
               </button>
 
@@ -504,7 +504,7 @@ export default function UsersPage() {
           <div className="flex gap-3 mt-4 flex-wrap">
             <button onClick={save} disabled={saving}
               className="px-4 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
-              style={{background:settings?.primaryColor||'#1D9E75'}}>
+              style={{background:settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
               {saving ? 'Saving...' : editUser ? 'Save changes' : 'Create user'}
             </button>
             <button onClick={() => setTab('list')} className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
@@ -548,7 +548,7 @@ export default function UsersPage() {
           )}
           <button onClick={handleBulk} disabled={bulkLoading||!bulkText.trim()}
             className="px-4 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
-            style={{background:settings?.primaryColor||'#1D9E75'}}>
+            style={{background:settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
             {bulkLoading ? 'Uploading...' : `Upload ${parseBulk(bulkText).length||0} users`}
           </button>
 
@@ -564,7 +564,7 @@ export default function UsersPage() {
               <button onClick={downloadApprTemplate} className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-xs hover:bg-gray-50">⬇ Template</button>
               <button onClick={()=>apprFileRef.current.click()} disabled={apprLoading}
                 className="px-3 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-60"
-                style={{background:settings?.primaryColor||'#1D9E75'}}>
+                style={{background:settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)'}}>
                 {apprLoading ? 'Uploading…' : '📂 Upload CSV / Excel'}
               </button>
               <input ref={apprFileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"

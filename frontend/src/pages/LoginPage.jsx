@@ -111,7 +111,7 @@ export default function LoginPage() {
             <img src={branding.logoUrl} alt="Logo" className="w-16 h-16 rounded-2xl object-cover mx-auto mb-3 shadow-lg" />
           ) : (
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3 shadow-lg"
-              style={{ backgroundColor: bg }}>
+              style={{ backgroundColor: bg, color: 'var(--brand-contrast,#fff)' }}>
               {branding.companyName?.[0] || 'X'}
             </div>
           )}
@@ -160,7 +160,7 @@ export default function LoginPage() {
           </div>
           <button type="submit" disabled={loading}
             className="w-full py-2.5 text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-all hover:opacity-90 shadow-sm"
-            style={{ backgroundColor: bg }}>
+            style={{ backgroundColor: bg, color: 'var(--brand-contrast,#fff)' }}>
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>

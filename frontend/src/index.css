@@ -8,39 +8,47 @@
 }
 
 /* ── Segmented toggle (source/scope/view switches) ───────────────────
-   Matches the reference: a DARK rounded track, muted gray labels, and the
-   selected option filled with the PRIMARY/brand color (contrast-aware text —
-   white on a dark brand, black on a light one). Compact pills with a small gap. */
+   A rounded track that adapts to light/dark mode (light gray track in light
+   mode, dark track in dark mode). The selected option is filled with the
+   PRIMARY/brand color with contrast-aware text. Each toggle is block-level so
+   stacked toggles sit on their own line; long rows scroll horizontally unless
+   the `.wrap` variant is used (then they wrap to the next line). */
 .seg-group {
-  display: inline-flex;
+  display: flex;               /* block-level: stacks vertically, own line */
   flex-wrap: nowrap;
   gap: 0.25rem;
   width: fit-content;
   max-width: 100%;
   overflow-x: auto;
-  background-color: #1b2039;
+  background-color: #e4e8f0;   /* light-mode track */
   border-radius: 0.5rem;
   padding: 0.25rem;
 }
+.seg-group.wrap { flex-wrap: wrap; overflow-x: visible; }  /* wrap instead of scroll */
 .seg-group::-webkit-scrollbar { height: 6px; }
-.seg-group::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); border-radius: 3px; }
+.seg-group::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.35); border-radius: 3px; }
 .seg-btn {
   padding: 0.375rem 1rem;
   border-radius: 0.375rem;
   font-size: 0.875rem;
   line-height: 1.25rem;
-  color: #9aa3c2;
+  color: #64748b;              /* light-mode muted label */
   background: transparent;
   transition: background-color .15s, color .15s;
   cursor: pointer;
   white-space: nowrap;
 }
-.seg-btn:hover { color: #d7dcec; }
+.seg-btn:hover { color: #334155; }
 .seg-btn.active {
   background-color: var(--brand-color);
   color: var(--brand-contrast, #fff) !important;
   font-weight: 600;
 }
+/* Dark mode: dark track + light muted labels (selected stays brand color) */
+html.dark .seg-group { background-color: #1b2039; }
+html.dark .seg-group::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); }
+html.dark .seg-btn { color: #9aa3c2; }
+html.dark .seg-btn:hover { color: #d7dcec; }
 /* Any element filled with the raw brand color keeps readable text (black on a
    light brand like yellow, white on a dark brand). Covers brand-colored buttons,
    chips and badges so their labels never disappear. */

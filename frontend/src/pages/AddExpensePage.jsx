@@ -172,7 +172,7 @@ export default function AddExpensePage() {
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-sm font-medium text-gray-700">Receipt</h2>
-          <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{backgroundColor:brandColor}}>✨ AI auto-fill</span>
+          <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{backgroundColor:brandColor, color:'var(--brand-contrast,#fff)'}}>✨ AI auto-fill</span>
         </div>
         <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={handleScan} />
         {receiptPreview ? (
@@ -291,7 +291,7 @@ export default function AddExpensePage() {
       <div className="flex gap-3">
         <button onClick={() => handleSubmit("submit")} disabled={submitting || scanning}
           className="flex-1 py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
-          style={{backgroundColor:brandColor}}>
+          style={{backgroundColor:brandColor, color:'var(--brand-contrast,#fff)'}}>
           {submitting ? 'Submitting...' : '📤 Submit for approval'}
         </button>
         <button onClick={() => handleSubmit("draft")} disabled={submitting || scanning}
