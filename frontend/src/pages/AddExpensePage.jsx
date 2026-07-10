@@ -13,8 +13,10 @@ export default function AddExpensePage() {
   const { settings } = useOrg();
   const _catTypes = settings?.categoryTypes || {};
   const categories = (settings?.categories || ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COMMUNICATIONS','OTHER'])
-    .filter(c => ['EXPENSE','BOTH'].includes(_catTypes[c] || 'BOTH'));
-  const expenseTypes = settings?.expenseTypes || ['REIMBURSEMENT','CASH_ADVANCE'];
+    .filter(c => ['EXPENSE','BOTH'].includes(_catTypes[c] || 'BOTH'))
+    .slice().sort((a, b) => String(a).localeCompare(String(b)));
+  const expenseTypes = (settings?.expenseTypes || ['REIMBURSEMENT','CASH_ADVANCE'])
+    .slice().sort((a, b) => String(a).localeCompare(String(b)));
   const { id } = useParams();
   const fileRef = useRef();
   const [scanning, setScanning] = useState(false);
@@ -33,7 +35,7 @@ export default function AddExpensePage() {
   const [form, setForm] = useState({
     title:'', orNumber:'', merchant:'', amount:'', currency:'PHP',
     category: '',
-    expenseType: expenseTypes[0] || 'REIMBURSEMENT',
+    expenseType: expenseTypes.includes('REIMBURSEMENT') ? 'REIMBURSEMENT' : (expenseTypes[0] || 'REIMBURSEMENT'),
     expenseDate: new Date().toISOString().split('T')[0],
   });
 

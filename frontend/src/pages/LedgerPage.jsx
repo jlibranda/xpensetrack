@@ -63,8 +63,10 @@ export default function LedgerPage({ mode = 'manage' }) {
   const docApproved = (d) => !!d && (['APPROVED', 'PROCESSED', 'PAID'].includes(d.status) || (d.approvals || []).some(a => a.status === 'APPROVED'));
   const canEditDoc = (d) => canManageApAr && (isAdminFinance || !docApproved(d));
   const _catTypes = settings?.categoryTypes || {};
-  const categories = (settings?.categories || []).filter(c => ['AP_AR','BOTH'].includes(_catTypes[c] || 'BOTH'));
-  const vendors = Array.isArray(settings?.vendors) ? settings.vendors : [];
+  const categories = (settings?.categories || []).filter(c => ['AP_AR','BOTH'].includes(_catTypes[c] || 'BOTH'))
+    .slice().sort((a, b) => String(a).localeCompare(String(b)));
+  const vendors = (Array.isArray(settings?.vendors) ? settings.vendors : [])
+    .slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   const vendorNames = vendors.map(v => v.name);
 
   const [tab, setTab] = useState('ALL'); // ALL | AP_INVOICE | AP_RECEIPT | AR_INVOICE | ARCHIVED | CLIENTS
@@ -256,6 +258,11 @@ export default function LedgerPage({ mode = 'manage' }) {
     if (!editing) return null;
     const _vSel = vendors.find(v => v.name === editing.vendorName);
     const isGovt = (editing._vendorType || (_vSel && _vSel.type)) === 'GOVERNMENT';
+    // If the entered TIN already belongs to a different vendor, prompt to pick them.
+    const _tinDigits = String(editing.vendorTin || '').replace(/\D/g, '');
+    const tinOwner = _tinDigits
+      ? vendors.find(v => String(v.tin || '').replace(/\D/g, '') === _tinDigits && v.name !== editing.vendorName)
+      : null;
     return (
       <>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -283,7 +290,16 @@ export default function LedgerPage({ mode = 'manage' }) {
                 onChange={(e) => setEditing({ ...editing, _vendorOther: true, vendorName: e.target.value })} />
             )}
           </Field></div>
-          {!isGovt && <Field label="Vendor TIN"><input className="inp" value={editing.vendorTin} onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value })} /></Field>}
+          {!isGovt && <Field label="Vendor TIN">
+            <input className="inp" inputMode="numeric" value={editing.vendorTin}
+              onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value.replace(/\D/g, '') })}
+              placeholder="Numbers only" />
+            {tinOwner && (
+              <p className="text-[11px] mt-1" style={{ color: '#b45309' }}>
+                ⚠ This TIN is already registered to "{tinOwner.name}". Please choose them from the Payee dropdown.
+              </p>
+            )}
+          </Field>}
           <Field label="Account number"><input className="inp" value={editing.vendorAccount || ''} onChange={(e) => setEditing({ ...editing, vendorAccount: e.target.value })} placeholder="Bank / payee account no." /></Field>
           {!isGovt && <Field label="Doc/Invoice number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>}
           {!isGovt && <Field label="PO number"><input className="inp" value={editing.poNumber} onChange={(e) => setEditing({ ...editing, poNumber: e.target.value })} /></Field>}
