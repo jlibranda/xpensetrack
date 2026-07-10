@@ -195,9 +195,9 @@ export default function AddExpensePage() {
             )}
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-green-700">{scanning ? '✨ AI reading receipt...' : '✓ Receipt attached'}</p>
-              <div className="flex gap-3">
-                <button onClick={() => fileRef.current.click()} disabled={scanning} className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Replace</button>
-                <button onClick={removeReceipt} disabled={scanning} className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed">Remove</button>
+              <div className="flex items-center gap-3">
+                <button onClick={() => fileRef.current.click()} disabled={scanning} className="text-xs hover:underline disabled:opacity-40 disabled:cursor-not-allowed" style={{ color: brandColor }}>Replace</button>
+                <button onClick={removeReceipt} disabled={scanning} className="text-xs hover:underline disabled:opacity-40 disabled:cursor-not-allowed" style={{ color: brandColor }}>Remove</button>
               </div>
             </div>
             {scanning && <p className="text-xs text-gray-400 animate-pulse">Extracting details...</p>}
