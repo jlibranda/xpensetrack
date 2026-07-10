@@ -396,7 +396,8 @@ export default function SettingsPage() {
   const saveCat = (oldName) => async (v) => {
     const name = String(v.name).trim().toUpperCase();
     if (!name) throw new Error('Category name is required.');
-    if (name !== oldName && liveCats.some(c => String(c).toUpperCase() === name)) throw new Error('That category already exists.');
+    const others = oldName ? liveCats.filter(c => c !== oldName) : liveCats;
+    if (others.some(c => String(c).toUpperCase() === name)) throw new Error('That category already exists.');
     const categories = oldName ? liveCats.map(c => c === oldName ? name : c) : [...liveCats, name];
     const categoryGlCodes = { ...liveGl }; if (oldName) delete categoryGlCodes[oldName]; categoryGlCodes[name] = v.glCode || '';
     const categoryTypes = { ...liveCatTypes }; if (oldName) delete categoryTypes[oldName]; categoryTypes[name] = v.type || 'BOTH';
@@ -416,7 +417,8 @@ export default function SettingsPage() {
   const saveType = (oldName) => async (v) => {
     const name = String(v.name).trim().toUpperCase();
     if (!name) throw new Error('Type name is required.');
-    if (name !== oldName && liveTypes.some(t => String(t).toUpperCase() === name)) throw new Error('That type already exists.');
+    const others = oldName ? liveTypes.filter(t => t !== oldName) : liveTypes;
+    if (others.some(t => String(t).toUpperCase() === name)) throw new Error('That type already exists.');
     const expenseTypes = oldName ? liveTypes.map(t => t === oldName ? name : t) : [...liveTypes, name];
     await persistPartial({ expenseTypes });
     toast.success(oldName ? 'Type updated' : 'Type added'); setRec(null);
@@ -766,11 +768,6 @@ export default function SettingsPage() {
               <h2 className="text-sm font-medium text-gray-700">Expense categories & GL codes</h2>
               {canEditCategories && (
               <div className="flex gap-2">
-                <button onClick={async () => {
-                  await api.post('/settings/reset-categories');
-                  refresh();
-                  window.location.reload();
-                }} className="px-3 py-1.5 text-xs border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-50">↺ Reset to defaults</button>
                 <button onClick={() => setRec({ title:'Add category', fields:catFields, initial:{ type:'BOTH' }, onSave: saveCat(null) })}
                   className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add</button>
               </div>
@@ -828,13 +825,18 @@ export default function SettingsPage() {
             {liveVendors.length === 0 && <p className="text-xs text-gray-400 mb-2">No vendors yet. Add vendors here so they appear in the Add Document dropdown.</p>}
             <div className="space-y-2">
               {liveVendors.map((v, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-2 border border-gray-100 rounded-lg px-3 py-2">
+                <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 border border-gray-100 rounded-lg px-3 py-2">
                   <span className="flex-1 min-w-[140px] text-sm font-medium text-gray-800">{v.name || '(unnamed)'}</span>
                   <span className="text-xs text-gray-400">{ {COMPANY:'Company',GOVERNMENT:'Government',LGU:'LGU'}[v.type||'COMPANY'] }</span>
                   {v.tin ? <span className="text-xs font-mono text-gray-500">{v.tin}</span> : null}
                   <button onClick={() => setRec({ title:'Edit vendor / payee', fields:vendorFields, initial:v, onSave: saveVendor(i) })}
                     className="text-xs hover:underline" style={{ color: brandColor }}>Edit</button>
                   <button onClick={() => deleteVendor(i)} className="px-2 py-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                  {(v.address || v.zip) && (
+                    <div className="w-full text-xs text-gray-400 mt-0.5">
+                      {v.address || '—'}{v.zip ? ` · ZIP ${v.zip}` : ''}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
