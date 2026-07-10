@@ -8,14 +8,14 @@
 }
 
 /* ── Segmented toggle (source/scope/view switches) ───────────────────
-   Original layout: subtle gray track with a small gap between options
-   (no separator bars). The selected option is filled with the primary/brand
-   color, with contrast-aware text (black on a light brand, white on a dark one). */
+   Matches the reference: a DARK rounded track, muted gray labels, and the
+   selected option filled with the PRIMARY/brand color (contrast-aware text —
+   white on a dark brand, black on a light one). Compact pills with a small gap. */
 .seg-group {
   display: inline-flex;
   gap: 0.25rem;
   width: fit-content;
-  background-color: rgba(226,232,240,0.93);
+  background-color: #1b2039;
   border-radius: 0.5rem;
   padding: 0.25rem;
 }
@@ -24,18 +24,17 @@
   border-radius: 0.375rem;
   font-size: 0.875rem;
   line-height: 1.25rem;
-  color: #64748b;
+  color: #9aa3c2;
   background: transparent;
   transition: background-color .15s, color .15s;
   cursor: pointer;
   white-space: nowrap;
 }
-.seg-btn:hover { color: #334155; }
+.seg-btn:hover { color: #d7dcec; }
 .seg-btn.active {
   background-color: var(--brand-color);
   color: var(--brand-contrast, #fff) !important;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
 }
 /* Any element filled with the raw brand color keeps readable text (black on a
    light brand like yellow, white on a dark brand). Covers brand-colored buttons,
