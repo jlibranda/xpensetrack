@@ -2,9 +2,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
+import { contrastText } from '../lib/contrast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
-const readDark = () => { try { return localStorage.getItem('personal_dark') === 'true'; } catch { return false; } };
+const readDark = () => { try { const v = localStorage.getItem('personal_dark'); return v === null ? true : v === 'true'; } catch { return true; } };
 const DEFAULT_BRANDING = { companyName:'Cashalo', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null };
 const readCachedBranding = () => {
   try { const v = localStorage.getItem('cached_branding'); return v ? JSON.parse(v) : DEFAULT_BRANDING; } catch { return DEFAULT_BRANDING; }
@@ -29,6 +30,11 @@ export default function ForgotPasswordPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (dark) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [dark]);
 
   const toggleDark = () => {
     const next = !dark;
@@ -77,7 +83,7 @@ export default function ForgotPasswordPage() {
           {branding.logoUrl ? (
             <img src={branding.logoUrl} alt="Logo" className="w-16 h-16 rounded-2xl object-cover mx-auto mb-3 shadow-lg" />
           ) : (
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3" style={{ backgroundColor: bg }}>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold mx-auto mb-3" style={{ backgroundColor: bg, color: contrastText(bg) }}>
               {branding.companyName?.[0] || 'C'}
             </div>
           )}
@@ -125,8 +131,8 @@ export default function ForgotPasswordPage() {
                 style={{ backgroundColor: inputBg, border: `1px solid ${inputBorder}`, color: textMain }} />
             </div>
             <button type="submit" disabled={loading}
-              className="w-full py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
-              style={{ backgroundColor: bg }}>
+              className="w-full py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
+              style={{ backgroundColor: bg, color: contrastText(bg) }}>
               {loading ? 'Sending...' : 'Send reset link'}
             </button>
             <Link to="/login" className="block text-center text-xs hover:underline" style={{ color: textSub }}>← Back to sign in</Link>
