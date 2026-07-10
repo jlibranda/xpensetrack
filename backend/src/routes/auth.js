@@ -14,7 +14,8 @@ const safeUser = (u) => {
 };
 
 router.post('/register', authenticate, requirePermission('manage_users'), async (req, res) => {
-  const { email, name, firstName, lastName, password, department, role, employeeNumber } = req.body;
+  const { email, name, firstName, lastName, password, department, role, employeeNumber,
+    costCenter, position, payrollAccount, managerId } = req.body;
   if (!email || !password || password.length < 6) return res.status(400).json({ error: 'Email and password (min 6) required' });
 
   let fName = firstName || name?.split(' ')[0] || '';
@@ -32,9 +33,21 @@ router.post('/register', authenticate, requirePermission('manage_users'), async 
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
       data: { firstName: fName, lastName: lName, email: email.toLowerCase(),
-        passwordHash, department, employeeNumber: employeeNumber||null,
+        passwordHash,
+        department: department || null,
+        costCenter: costCenter || null,
+        position: position || null,
+        payrollAccount: payrollAccount || null,
+        employeeNumber: employeeNumber || null,
+        managerId: managerId || null,
         role: wantedRole },
     });
+    // Welcome email (transactional — sent even if notifications are off). Fire-and-forget
+    // so a mail hiccup never blocks account creation.
+    try {
+      const { sendWelcomeEmail } = require('../lib/email');
+      await sendWelcomeEmail(user.email, `${user.firstName} ${user.lastName}`.trim(), password, user);
+    } catch (e) { console.error('welcome email (register) failed:', e.message); }
     res.status(201).json({ user: safeUser(user) });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });

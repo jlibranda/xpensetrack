@@ -117,16 +117,23 @@ export default function UsersPage() {
     if (!editUser && !form.password) { setMsg({text:'Password required.',ok:false}); return; }
     setSaving(true); setMsg({text:'',ok:true});
     try {
+      // Clean the step flow: drop empty approver slots and empty steps.
+      const cleanFlow = (form.approvalFlow||[])
+        .map(s => ({ approvers: (s.approvers||[]).filter(Boolean), rule: s.rule==='ALL'?'ALL':'ANY' }))
+        .filter(s => s.approvers.length > 0);
       if (editUser) {
-        // Clean the step flow: drop empty approver slots and empty steps.
-        const cleanFlow = (form.approvalFlow||[])
-          .map(s => ({ approvers: (s.approvers||[]).filter(Boolean), rule: s.rule==='ALL'?'ALL':'ANY' }))
-          .filter(s => s.approvers.length > 0);
         await api.patch(`/users/${editUser.id}`, { ...form, approvalFlow: cleanFlow, managerId: form.managerId||null, hireDate: form.hireDate||null });
         setMsg({text:'Updated!',ok:true});
       } else {
-        await api.post('/auth/register', { ...form });
-        setMsg({text:'User created!',ok:true});
+        // Create the account (saves core fields + sends the welcome email)...
+        const res = await api.post('/auth/register', { ...form });
+        const newId = res?.user?.id;
+        // ...then persist the rest (cost center, position, payroll account, manager,
+        // approval flow) via the same endpoint the Edit form uses.
+        if (newId) {
+          await api.patch(`/users/${newId}`, { ...form, approvalFlow: cleanFlow, managerId: form.managerId||null, hireDate: form.hireDate||null });
+        }
+        setMsg({text:'User created — welcome email sent.',ok:true});
       }
       await load();
       setTimeout(() => { setTab('list'); setMsg({text:'',ok:true}); }, 1500);
