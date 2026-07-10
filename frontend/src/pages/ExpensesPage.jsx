@@ -105,7 +105,7 @@ export default function ExpensesPage() {
 
       {/* Scope toggle */}
       {scopeTabs.length > 0 && (
-        <div className="seg-group brand mb-3">
+        <div className="seg-group mb-3">
           {scopeTabs.map(([val, label]) => (
             <button key={val} onClick={() => { setScope(val); setSelected(null); }}
               className={`seg-btn ${scope === val ? 'active' : ''}`}>

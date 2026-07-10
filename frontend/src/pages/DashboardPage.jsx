@@ -110,7 +110,7 @@ export default function DashboardPage() {
           <p className="text-sm text-gray-500 mt-0.5">This month's overview</p>
         </div>
         {scopeTabs.length > 0 && (
-          <div className="seg-group brand text-sm">
+          <div className="seg-group text-sm">
             {scopeTabs.map(([val, label]) => (
               <button key={val} onClick={() => setScope(val)}
                 className={`seg-btn ${scope === val ? 'active' : ''}`}>
