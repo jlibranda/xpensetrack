@@ -45,6 +45,13 @@ export default function TransactionsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState({ text: '', ok: true });
+  // Auto-dismiss success (green) messages so they don't linger on screen.
+  useEffect(() => {
+    if (msg.text && msg.ok) {
+      const t = setTimeout(() => setMsg({ text: '', ok: true }), 3500);
+      return () => clearTimeout(t);
+    }
+  }, [msg]);
 
   // filters
   const [status, setStatus] = useState('');
@@ -378,7 +385,10 @@ export default function TransactionsPage() {
       </div>
 
       {msg.text && (
-        <div className={`mb-4 px-3 py-2 rounded-lg text-sm border ${msg.ok ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{msg.text}</div>
+        <div className={`mb-4 px-3 py-2 rounded-lg text-sm border flex items-start justify-between gap-3 ${msg.ok ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+          <span>{msg.text}</span>
+          <button onClick={() => setMsg({ text: '', ok: true })} className="opacity-60 hover:opacity-100 leading-none">✕</button>
+        </div>
       )}
 
       {/* Filters */}
