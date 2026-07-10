@@ -226,7 +226,6 @@ router.get('/export', authenticate, requirePermission(PERM, FALLBACK), async (re
       'Type': typeLabel(d.docType),
       'Vendor / Payee': d.vendorName || '',
       'Vendor TIN': d.vendorTin || '',
-      'Account Number': d.vendorAccount || '',
       'Doc/Invoice No.': d.docNumber || '',
       'PO No.': d.poNumber || '',
       'Category': d.category || '',

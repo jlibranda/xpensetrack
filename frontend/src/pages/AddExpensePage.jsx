@@ -178,28 +178,28 @@ export default function AddExpensePage() {
         </div>
         <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={handleScan} />
         {receiptPreview ? (
-          <div className="flex items-start gap-3">
+          <div className="space-y-2">
             {receiptIsPdf ? (
               <div onClick={() => setPdfOpen(true)}
-                className="w-24 h-24 rounded-lg border border-gray-200 shrink-0 cursor-pointer flex flex-col items-center justify-center bg-gray-50 text-gray-500">
-                <span className="text-2xl">📄</span>
-                <span className="text-[10px] mt-1 font-medium">PDF receipt</span>
+                className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer flex flex-col items-center justify-center bg-gray-50 text-gray-500">
+                <span className="text-3xl">📄</span>
+                <span className="text-xs mt-1 font-medium">PDF receipt — tap to view</span>
               </div>
             ) : (
               <img src={receiptPreview} alt="Receipt"
-                className="w-24 h-24 object-cover rounded-lg border border-gray-200 shrink-0 cursor-zoom-in"
+                className="w-full max-h-56 object-contain rounded-lg border border-gray-200 bg-gray-50 cursor-zoom-in"
                 onClick={() => { setZoomScale(1); setZoomOpen(true); }}
                 onError={e => { e.target.style.display='none'; }} />
             )}
-            <div className="flex-1">
+            <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-green-700">{scanning ? '✨ AI reading receipt...' : '✓ Receipt attached'}</p>
-              {scanning && <p className="text-xs text-gray-400 mt-0.5 animate-pulse">Extracting details...</p>}
-              {!scanning && !receiptIsPdf && <p className="text-[11px] text-gray-400 mt-0.5">Tap the image to zoom in</p>}
-              <div className="flex gap-3 mt-2">
+              <div className="flex gap-3">
                 <button onClick={() => fileRef.current.click()} disabled={scanning} className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Replace</button>
                 <button onClick={removeReceipt} disabled={scanning} className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed">Remove</button>
               </div>
             </div>
+            {scanning && <p className="text-xs text-gray-400 animate-pulse">Extracting details...</p>}
+            {!scanning && !receiptIsPdf && <p className="text-[11px] text-gray-400">Tap the image to zoom in</p>}
           </div>
         ) : (
           <button onClick={() => fileRef.current.click()}

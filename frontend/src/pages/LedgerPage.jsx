@@ -82,6 +82,7 @@ export default function LedgerPage({ mode = 'manage' }) {
 
   const [sel, setSel] = useState(new Set());
   const [editing, setEditing] = useState(null);
+  const [docError, setDocError] = useState('');
   const [viewing, setViewing] = useState(null);
   const [bulk, setBulk] = useState(null);
   const [clientModal, setClientModal] = useState(null);
@@ -131,6 +132,19 @@ export default function LedgerPage({ mode = 'manage' }) {
   const cancelForm = () => { if (isAddMode) initAddForm(); else setEditing(null); };
 
   // ---- single doc ----
+  // Validate the AP/AR form before saving/submitting (mirrors the expense form).
+  const validateDoc = (f) => {
+    if (!f || !String(f.vendorName || '').trim()) return 'Please select or enter a vendor / payee.';
+    const amt = parseFloat(f.amount);
+    if (!f.amount || isNaN(amt) || amt <= 0) return 'Please enter a valid amount.';
+    if (!f.category) return 'Please select a category.';
+    const tinDigits = String(f.vendorTin || '').replace(/\D/g, '');
+    if (tinDigits) {
+      const owner = vendors.find(v => String(v.tin || '').replace(/\D/g, '') === tinDigits && v.name !== f.vendorName);
+      if (owner) return `This TIN already belongs to "${owner.name}". Please choose them from the Payee dropdown instead.`;
+    }
+    return '';
+  };
   const saveDoc = async () => {
     const f = editing;
     try {
@@ -140,6 +154,9 @@ export default function LedgerPage({ mode = 'manage' }) {
   };
   const saveAndSubmitDoc = async () => {
     const f = editing;
+    const err = validateDoc(f);
+    if (err) { setDocError(err); return; }
+    setDocError('');
     try {
       let id = f.id;
       if (id) await api.patch(`/ledger/${id}`, f);
@@ -295,12 +312,11 @@ export default function LedgerPage({ mode = 'manage' }) {
               onChange={(e) => setEditing({ ...editing, vendorTin: e.target.value.replace(/\D/g, '') })}
               placeholder="Numbers only" />
             {tinOwner && (
-              <p className="text-[11px] mt-1" style={{ color: '#b45309' }}>
-                ⚠ This TIN is already registered to "{tinOwner.name}". Please choose them from the Payee dropdown.
-              </p>
+              <div className="mt-2 px-3 py-2 rounded-lg text-xs font-semibold" style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #f59e0b' }}>
+                ⚠ This TIN is already registered to "{tinOwner.name}". Please choose them from the Payee dropdown — you can't submit with a duplicate TIN.
+              </div>
             )}
           </Field>}
-          <Field label="Account number"><input className="inp" value={editing.vendorAccount || ''} onChange={(e) => setEditing({ ...editing, vendorAccount: e.target.value })} placeholder="Bank / payee account no." /></Field>
           {!isGovt && <Field label="Doc/Invoice number"><input className="inp" value={editing.docNumber} onChange={(e) => setEditing({ ...editing, docNumber: e.target.value })} /></Field>}
           {!isGovt && <Field label="PO number"><input className="inp" value={editing.poNumber} onChange={(e) => setEditing({ ...editing, poNumber: e.target.value })} /></Field>}
           <Field label="Category"><select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} className="inp">
@@ -372,9 +388,15 @@ export default function LedgerPage({ mode = 'manage' }) {
           </fieldset>
         </div>
 
+        {docError && (
+          <div className="mb-3 px-4 py-2.5 rounded-lg text-sm font-medium" style={{ backgroundColor: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}>
+            {docError}
+          </div>
+        )}
         <div className="flex gap-3">
           <button onClick={saveAndSubmitDoc}
-            className="flex-1 py-2.5 text-white rounded-lg text-sm font-medium hover:opacity-90"
+            disabled={!String(editing?.vendorName || '').trim() || !(parseFloat(editing?.amount) > 0)}
+            className="flex-1 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ backgroundColor: BRAND, color: 'var(--brand-contrast,#fff)' }}>📤 Submit for approval</button>
           <button onClick={saveDoc}
             className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">💾 Draft</button>
