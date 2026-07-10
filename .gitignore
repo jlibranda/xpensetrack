@@ -1,0 +1,43 @@
+# ============================================================
+#  XpenseTrack / Cashalo — .gitignore
+# ============================================================
+
+# --- Secrets: NEVER commit real env files -------------------
+.env
+.env.*
+# keep the annotated templates (root and nested backend/ frontend/)
+!.env.example
+!**/.env.example
+
+# --- Dependencies -------------------------------------------
+node_modules/
+**/node_modules/
+
+# --- Build output -------------------------------------------
+dist/
+build/
+frontend/dist/
+.vite/
+
+# --- Logs & runtime -----------------------------------------
+*.log
+npm-debug.log*
+logs/
+pids/
+*.pid
+
+# --- Prisma local artifacts (schema itself IS tracked) ------
+prisma/*.db
+prisma/*.sqlite
+
+# --- Editor / OS junk ---------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- IMPORTANT: keep the BIR 2307 template tracked ----------
+# Do NOT ignore PDFs globally. The blank template below is REQUIRED
+# for 2307 generation and must stay in the repo.
+!backend/src/templates/2307_template.pdf

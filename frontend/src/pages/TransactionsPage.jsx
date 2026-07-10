@@ -216,15 +216,16 @@ export default function TransactionsPage() {
   };
 
   const [uploadingProof, setUploadingProof] = useState(false);
-  const uploadProof = async (expenseId, file) => {
+  const uploadProof = async (id, file) => {
     if (!file) return;
     setUploadingProof(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const r = await api.post(`/ocr/proof-of-payment/${expenseId}`, fd);
+      const endpoint = source === 'ledger' ? `/ocr/ledger-proof-of-payment/${id}` : `/ocr/proof-of-payment/${id}`;
+      const r = await api.post(endpoint, fd);
       toast.success('Proof of payment uploaded');
-      setDetail(d => (d && d.id === expenseId) ? { ...d, proofOfPayment: { id: r.id, mimeType: r.mimeType } } : d);
+      setDetail(d => (d && d.id === id) ? { ...d, proofOfPayment: { id: r.id, mimeType: r.mimeType } } : d);
       await load();
     } catch (e) {
       setMsg({ text: e.error || e.message || 'Upload failed', ok: false });
@@ -346,7 +347,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Source toggle: Expenses vs AP & AR invoices */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex mb-4 bg-gray-100 rounded-lg p-1 w-fit divide-x divide-gray-300">
         <button onClick={() => { setSource('expense'); setSelected([]); }}
           className={`px-4 py-1.5 rounded-md text-sm transition-colors ${source === 'expense' ? 'bg-white font-medium shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           Expenses
@@ -555,8 +556,8 @@ export default function TransactionsPage() {
                 {e.description && e.description !== e.title ? row('Notes', e.description) : null}
               </div>
 
-              {/* Proof of payment (expenses only) */}
-              {source === 'expense' && (
+              {/* Proof of payment (expenses and AP/AR) */}
+              {(source === 'expense' || source === 'ledger') && (
               <div className="mt-4 pt-3 border-t border-gray-100">
                 <p className="text-xs font-medium text-gray-700 mb-2">Proof of payment</p>
                 {e.proofOfPayment?.id ? (
