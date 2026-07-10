@@ -116,7 +116,7 @@ export default function ExpensesPage() {
       )}
 
       {/* Filter tabs */}
-      <div className="seg-group mb-4 flex-wrap">
+      <div className="seg-group mb-4">
         {[['','All'],['DRAFT','Drafts'],['PENDING','Pending'],['APPROVED','Approved'],['RETURNED','Returned'],['REJECTED','Rejected'],['PROCESSED','Processed'],['CANCELLED','Cancelled']].map(([val, label]) => (
           <button key={val} onClick={() => setFilter(val)}
             className={`seg-btn ${filter === val ? 'active' : ''}`}>

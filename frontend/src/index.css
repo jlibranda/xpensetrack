@@ -13,12 +13,17 @@
    white on a dark brand, black on a light one). Compact pills with a small gap. */
 .seg-group {
   display: inline-flex;
+  flex-wrap: nowrap;
   gap: 0.25rem;
   width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
   background-color: #1b2039;
   border-radius: 0.5rem;
   padding: 0.25rem;
 }
+.seg-group::-webkit-scrollbar { height: 6px; }
+.seg-group::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); border-radius: 3px; }
 .seg-btn {
   padding: 0.375rem 1rem;
   border-radius: 0.375rem;

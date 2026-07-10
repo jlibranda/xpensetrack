@@ -409,7 +409,7 @@ export default function LedgerPage({ mode = 'manage' }) {
       </div>
 
       {/* Status filter tabs */}
-      <div className="seg-group mb-4 flex-wrap">
+      <div className="seg-group mb-4">
         {statusTabs.map(([val, label]) => (
           <button key={label} onClick={() => setStatusFilter(val)}
             className={`seg-btn ${statusFilter === val ? 'active' : ''}`}>

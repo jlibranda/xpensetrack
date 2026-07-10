@@ -421,7 +421,7 @@ export default function SettingsPage() {
         <p className="text-sm text-gray-500 mt-0.5">Organization configuration</p>
       </div>
 
-      <div className="seg-group mb-5 flex-wrap">
+      <div className="seg-group mb-5">
         {TABS.filter(t => {
           if (t === 'Branding') return canSeeBranding;
           if (t === 'Expense Types') return canExpenseTypes;
