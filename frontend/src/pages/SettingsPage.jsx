@@ -1093,6 +1093,9 @@ const EMAIL_TEMPLATE_DEFS = [
   { key: 'password_reset', label: 'Password reset', desc: 'Sent when a user requests a password reset.',
     subject: 'Reset your {appName} password', message: 'Click below to reset your password. This link expires in 1 hour.',
     vars: ['{name}','{appName}', ...EMP_VARS] },
+  { key: 'payment_notification', label: 'Payment notification', desc: 'Sent manually from the Proof of Payment panel to tell the filer their expense has been paid/reimbursed.',
+    subject: '💰 Payment sent — {title}', message: 'Good news! Your filed expense "{title}" ({amount}) has been paid/reimbursed. Proof of payment is on file.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
 ];
 
 // AP/AR (payables & receivables) workflow templates — edited via the toggle.
@@ -1114,6 +1117,9 @@ const AP_AR_TEMPLATE_DEFS = [
     vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
   { key: 'apar_status_REPROCESSING', label: 'Status: Reprocessing', desc: 'Sent when a processed AP/AR invoice is undone and goes back for reprocessing.',
     subject: '↻ AP/AR invoice back for reprocessing — {title}', message: 'A previously processed AP/AR invoice has been reverted and is now back for reprocessing.',
+    vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'apar_payment_notification', label: 'Payment notification', desc: 'Sent manually from the Proof of Payment panel to confirm an AP/AR invoice has been paid/credited.',
+    subject: '💰 Payment posted — {title}', message: 'This is to confirm that "{title}" ({amount}) has been paid/credited. Proof of payment is on file.',
     vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
 ];
 

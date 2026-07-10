@@ -69,8 +69,8 @@ export default function EmployeePage() {
       <div className="mb-5">
         <button onClick={() => navigate('/users')} className="inline-flex items-center gap-1 text-sm font-medium px-3 py-1.5 mb-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 shadow-sm">← Back to users</button>
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-bold shrink-0"
-            style={{background:'linear-gradient(135deg,#1D9E75,#0F6E56)'}}>
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0"
+            style={{background:'var(--brand-color,#1D9E75)', color:'var(--brand-contrast,#fff)'}}>
             {initials}
           </div>
           <div className="flex-1">

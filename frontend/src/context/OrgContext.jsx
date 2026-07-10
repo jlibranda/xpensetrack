@@ -74,7 +74,9 @@ export function applyThemeToDOM(s) {
   const personal = (() => {
     try { const v = localStorage.getItem('personal_dark'); return v === null ? null : v === 'true'; } catch { return null; }
   })();
-  const useDark = personal !== null ? personal : !!s.darkMode;
+  // Default to DARK mode everywhere (page + login). Only a personal per-device
+  // choice to use light mode overrides this.
+  const useDark = personal !== null ? personal : true;
   if (useDark) {
     document.documentElement.classList.add('dark');
   } else {

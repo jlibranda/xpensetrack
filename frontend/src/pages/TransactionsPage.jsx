@@ -216,6 +216,23 @@ export default function TransactionsPage() {
   };
 
   const [uploadingProof, setUploadingProof] = useState(false);
+  const [notifying, setNotifying] = useState(false);
+  const notifyPayment = async (id) => {
+    setNotifying(true);
+    try {
+      const endpoint = source === 'ledger' ? `/ledger/${id}/notify-payment` : `/expenses/${id}/notify-payment`;
+      const r = await api.post(endpoint, {});
+      toast.success('Payment notification email sent');
+      setDetail(d => (d && d.id === id) ? { ...d, paymentNotifiedAt: r.paymentNotifiedAt || new Date().toISOString() } : d);
+      await load();
+    } catch (e) {
+      const msg = e.error || e.message || 'Failed to send notification';
+      toast.error(msg);
+      if (/already sent/i.test(msg)) {
+        setDetail(d => (d && d.id === id) ? { ...d, paymentNotifiedAt: e.paymentNotifiedAt || new Date().toISOString() } : d);
+      }
+    } finally { setNotifying(false); }
+  };
   const uploadProof = async (id, file) => {
     if (!file) return;
     setUploadingProof(true);
@@ -582,42 +599,26 @@ export default function TransactionsPage() {
                 ) : (
                   <p className="text-xs text-gray-400">No proof of payment uploaded</p>
                 )}
+                {e.proofOfPayment?.id && canProcess && (
+                  <div className="mt-3">
+                    {e.paymentNotifiedAt ? (
+                      <p className="text-xs font-medium flex items-center gap-1" style={{ color: '#16a34a' }}>
+                        ✓ Payment notification sent · {new Date(e.paymentNotifiedAt).toLocaleDateString()}
+                      </p>
+                    ) : (
+                      <button onClick={() => notifyPayment(e.id)} disabled={notifying}
+                        className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-60"
+                        style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-contrast,#fff)' }}>
+                        {notifying ? 'Sending…' : '✉️ Send payment notification'}
+                      </button>
+                    )}
+                    <p className="text-[10px] text-gray-400 mt-1">Emails the filer that this {source === 'ledger' ? 'AP/AR invoice' : 'expense'} has been paid/credited. Sent once only.</p>
+                  </div>
+                )}
               </div>
               )}
-              {source === 'ledger' && canProcess && ewtDraft && (() => {
-                const netDefault = (() => { const a = Number(e.amountPhp) || 0; return a ? +(a / 1.12).toFixed(2) : 0; })();
-                return (
-                  <div className="pt-3 mt-1 border-t border-gray-100">
-                    <p className="text-xs font-semibold text-gray-700 mb-2">Expanded Withholding Tax <span className="font-normal text-gray-400">(for BIR 2307)</span></p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="col-span-2">
-                        <label className="block text-[11px] text-gray-500 mb-1">ATC code</label>
-                        <select className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white" value={ewtDraft.atcCode || ''}
-                          onChange={ev => { const code = ev.target.value; const atc = atcList.find(a => a.code === code); const base = (ewtDraft.ewtBase === '' || ewtDraft.ewtBase == null) ? netDefault : ewtDraft.ewtBase; setEwtField({ atcCode: code, ewtRate: atc ? atc.rate : (ewtDraft.ewtRate ?? ''), ewtBase: base }); }}>
-                          <option value="">— none / not subject to EWT —</option>
-                          {atcList.map(a => <option key={a.code} value={a.code}>{a.code}{a.description ? ` — ${a.description}` : ''} ({a.rate}%)</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-gray-500 mb-1">Rate (%)</label>
-                        <input type="number" step="0.01" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" value={ewtDraft.ewtRate ?? ''} onChange={ev => setEwtField({ ewtRate: ev.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-gray-500 mb-1">Income payment (base)</label>
-                        <input type="number" step="0.01" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" value={ewtDraft.ewtBase ?? ''} placeholder={netDefault ? `default ${netDefault}` : ''} onChange={ev => setEwtField({ ewtBase: ev.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-gray-500 mb-1">Tax withheld</label>
-                        <input type="number" step="0.01" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" value={ewtDraft.ewtAmount ?? ''} onChange={ev => setEwtField({ ewtAmount: ev.target.value })} />
-                      </div>
-                      <div className="flex items-end">
-                        <button onClick={() => saveEwt(e.id)} className="w-full py-1.5 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#1D9E75' }}>Save EWT</button>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-2">Auto-computes withheld = base × rate; override any field. Base defaults to amount net of 12% VAT.</p>
-                  </div>
-                );
-              })()}
+              {/* (Expanded Withholding Tax editor removed per request) */}
+
             </div>
           </div>
         );

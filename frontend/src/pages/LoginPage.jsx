@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
 
 const readDark = () => {
-  try { const v = localStorage.getItem('personal_dark'); return v === 'true'; } catch { return false; }
+  try { const v = localStorage.getItem('personal_dark'); return v === null ? true : v === 'true'; } catch { return true; }
 };
 
 const DEFAULT_BRANDING = { companyName:'Cashalo', primaryColor:'#1D9E75', logoUrl:null, wallpaperUrl:null };

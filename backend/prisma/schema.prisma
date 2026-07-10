@@ -62,6 +62,7 @@ model Expense {
   receipt       Receipt?      @relation("ExpenseReceipt", fields: [receiptId], references: [id])
   proofOfPaymentId String?
   proofOfPayment   Receipt?   @relation("ExpenseProofOfPayment", fields: [proofOfPaymentId], references: [id])
+  paymentNotifiedAt DateTime?
   costCenter    String?
   expenseDate   DateTime
   submittedById String
@@ -153,6 +154,7 @@ model LedgerDoc {
   receipt       Receipt?  @relation(fields: [receiptId], references: [id])
   proofOfPaymentId String?
   proofOfPayment   Receipt? @relation("LedgerProofOfPayment", fields: [proofOfPaymentId], references: [id])
+  paymentNotifiedAt DateTime?
   assignedToId  String?
   assignedTo    User?     @relation("LedgerAssignedTo", fields: [assignedToId], references: [id])
   lastEditedById String?

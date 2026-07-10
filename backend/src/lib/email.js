@@ -66,6 +66,9 @@ const DEFAULT_TEMPLATES = {
   apar_status_REPROCESSING:{ subject: '↻ AP/AR invoice back for reprocessing — {title}', message: 'A previously processed AP/AR invoice has been reverted and is now back for reprocessing.' },
   welcome:                 { subject: 'Welcome to {appName}!',               message: 'Your {appName} account has been created. Here are your login details:' },
   password_reset:          { subject: 'Reset your {appName} password',       message: 'Click below to reset your password. This link expires in 1 hour.' },
+  // Payment / credit notification (sent manually from the Proof of Payment panel).
+  payment_notification:      { subject: '💰 Payment sent — {title}',          message: 'Good news! Your filed expense "{title}" ({amount}) has been paid/reimbursed. Proof of payment is on file.' },
+  apar_payment_notification: { subject: '💰 Payment posted — {title}',        message: 'This is to confirm that "{title}" ({amount}) has been paid/credited. Proof of payment is on file.' },
 };
 
 async function getTemplates() {
@@ -416,4 +419,34 @@ async function sendApprovalReminderEmail(toEmail, toName, expense, employee, day
   , brand), appName);
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert, sendPasswordChangedEmail, sendApprovalReminderEmail };
+async function sendPaymentNotificationEmail(toEmail, toName, doc, employee, kind = 'expense') {
+  if (!(await notificationsEnabled())) return { skipped: true, reason: 'notifications_disabled' };
+  const isApar = kind === 'apar';
+  const sym = doc.currency === 'PHP' ? '₱' : '$';
+  const amt = `${sym}${Number(doc.amount ?? doc.amountPhp ?? 0).toLocaleString()}`;
+  const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
+  const brand = await getBranding();
+  const appName = brand.appName;
+  const custom = await getTemplates();
+  const emp = await employeeVars(employee || doc.submittedBy || doc.submittedById);
+  const vars = { name: toName, title: doc.title, amount: amt, appName, ...emp };
+  const key = isApar ? 'apar_payment_notification' : 'payment_notification';
+  const subject = tpl(custom, key, 'subject', vars);
+  const message = tpl(custom, key, 'message', vars);
+  const title = isApar ? 'Payment / credit posted' : 'Payment sent';
+  const color = brand.brandColor;
+  const btnLink = isApar ? `${frontendUrl}/ap-ar` : `${frontendUrl}/expenses`;
+  const btnLabel = isApar ? 'View AP &amp; AR invoices →' : 'View my expenses →';
+  return sendMail(toEmail, subject, html(
+    title,
+    `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName},</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
+     <div style="background:#f9fafb;border-left:4px solid ${color};border-radius:4px;padding:16px;margin:0 0 20px">
+       <p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#111">${doc.title}</p>
+       <p style="margin:0;font-size:14px;color:#6b7280">${amt}</p>
+     </div>
+     ${btn(btnLink, btnLabel, brand)}`
+  , brand), appName);
+}
+
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert, sendPasswordChangedEmail, sendApprovalReminderEmail, sendPaymentNotificationEmail };

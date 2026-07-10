@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
-const { sendApprovalRequestEmail } = require('../lib/email');
+const { sendApprovalRequestEmail, sendPaymentNotificationEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
 const { getUsdPhpRate } = require('../lib/fxrate');
@@ -512,6 +512,24 @@ router.patch('/:id/remarks', authenticate, requireRole('FINANCE', 'ADMIN'), asyn
     await prisma.expense.update({ where: { id: req.params.id }, data: { remarks: remarks ?? null } });
     res.json({ message: 'Remarks saved' });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Send a "payment sent / reimbursed" email to the filer. Marked once sent so it
+// can't be sent twice. FINANCE/ADMIN only.
+router.post('/:id/notify-payment', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
+  try {
+    const e = await prisma.expense.findUnique({ where: { id: req.params.id }, include: { submittedBy: true } });
+    if (!e) return res.status(404).json({ error: 'Not found' });
+    if (e.paymentNotifiedAt) return res.status(409).json({ error: 'Payment notification already sent', paymentNotifiedAt: e.paymentNotifiedAt });
+    const to = e.submittedBy?.email;
+    if (!to) return res.status(400).json({ error: 'No recipient email on file' });
+    const toName = `${e.submittedBy.firstName || ''} ${e.submittedBy.lastName || ''}`.trim() || 'there';
+    const doc = { title: e.title, amount: e.amount, amountPhp: e.amountPhp, currency: e.currency, submittedBy: e.submittedBy };
+    const r = await sendPaymentNotificationEmail(to, toName, doc, e.submittedBy, 'expense');
+    if (r && r.skipped) return res.status(400).json({ error: 'Email notifications are turned off in Settings.' });
+    const updated = await prisma.expense.update({ where: { id: e.id }, data: { paymentNotifiedAt: new Date() } });
+    res.json({ ok: true, paymentNotifiedAt: updated.paymentNotifiedAt });
+  } catch (err) { console.error('notify-payment (expense)', err); res.status(500).json({ error: 'Failed to send notification' }); }
 });
 
 module.exports = router;

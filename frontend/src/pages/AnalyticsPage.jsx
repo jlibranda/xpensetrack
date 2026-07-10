@@ -5,7 +5,15 @@ import api from '../lib/api';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
 
-const COLORS = ['#1D9E75','#3B82F6','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316'];
+const COLORS = ['#3B82F6','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#0EA5E9'];
+// Fixed chart accent (never the brand/primary color) so graphs stay neutral.
+const CHART = '#3B82F6';
+// High-contrast tooltip that stays readable in both light and dark mode.
+const TT = {
+  contentStyle: { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 },
+  labelStyle: { color: '#f8fafc', fontWeight: 600 },
+  itemStyle: { color: '#f8fafc' },
+};
 
 export default function AnalyticsPage() {
   const [data, setData] = useState(null);
@@ -175,8 +183,8 @@ export default function AnalyticsPage() {
               <LineChart data={ledgerMonthly}>
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={v => format(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                <Line type="monotone" dataKey="value" stroke={brandColor} strokeWidth={2} dot={{ fill: brandColor }} />
+                <Tooltip formatter={v => format(v)} {...TT} />
+                <Line type="monotone" dataKey="value" stroke={CHART} strokeWidth={2} dot={{ fill: CHART }} />
               </LineChart>
             </ResponsiveContainer>
           ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
@@ -190,7 +198,7 @@ export default function AnalyticsPage() {
                 <Pie data={apArSplit} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
                   {apArSplit.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={v => format(v)} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Tooltip formatter={v => format(v)} {...TT} />
               </PieChart>
             </ResponsiveContainer>
           ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
@@ -205,8 +213,8 @@ export default function AnalyticsPage() {
               <BarChart data={ledgerVendors} layout="vertical" margin={{ left: 20 }}>
                 <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
-                <Tooltip formatter={v => format(v)} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="value" fill={brandColor} radius={[0, 4, 4, 0]} />
+                <Tooltip formatter={v => format(v)} {...TT} />
+                <Bar dataKey="value" fill={CHART} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
@@ -220,7 +228,7 @@ export default function AnalyticsPage() {
                 <Pie data={ledgerCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
                   {ledgerCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={v => format(v)} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Tooltip formatter={v => format(v)} {...TT} />
               </PieChart>
             </ResponsiveContainer>
           ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
@@ -302,8 +310,8 @@ export default function AnalyticsPage() {
               <LineChart data={monthlyData}>
                 <XAxis dataKey="month" tick={{fontSize:11}} axisLine={false} tickLine={false} />
                 <YAxis tick={{fontSize:11}} axisLine={false} tickLine={false} />
-                <Tooltip formatter={v => format(v)} contentStyle={{fontSize:12,borderRadius:8,border:'1px solid #e5e7eb'}} />
-                <Line type="monotone" dataKey="value" stroke={brandColor} strokeWidth={2} dot={{fill:brandColor}} />
+                <Tooltip formatter={v => format(v)} {...TT} />
+                <Line type="monotone" dataKey="value" stroke={CHART} strokeWidth={2} dot={{fill:CHART}} />
               </LineChart>
             </ResponsiveContainer>
           ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
@@ -318,7 +326,7 @@ export default function AnalyticsPage() {
                 <Pie data={categoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({name,percent}) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false} fontSize={10}>
                   {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={v => format(v)} contentStyle={{fontSize:12,borderRadius:8}} />
+                <Tooltip formatter={v => format(v)} {...TT} />
               </PieChart>
             </ResponsiveContainer>
           ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
@@ -334,8 +342,8 @@ export default function AnalyticsPage() {
               <BarChart data={employeeData} layout="vertical" margin={{left:20}}>
                 <XAxis type="number" tick={{fontSize:10}} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="name" tick={{fontSize:11}} axisLine={false} tickLine={false} width={60} />
-                <Tooltip formatter={v => format(v)} contentStyle={{fontSize:12,borderRadius:8}} />
-                <Bar dataKey="value" fill={brandColor} radius={[0,4,4,0]} />
+                <Tooltip formatter={v => format(v)} {...TT} />
+                <Bar dataKey="value" fill={CHART} radius={[0,4,4,0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}

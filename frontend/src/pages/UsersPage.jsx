@@ -646,7 +646,7 @@ export default function UsersPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0"
-                              style={{background: u.isActive ? (settings?.primaryColor||'#1D9E75') : '#9ca3af'}}>
+                              style={{background: u.isActive ? (settings?.primaryColor||'#1D9E75') : '#9ca3af', color: u.isActive ? 'var(--brand-contrast,#fff)' : '#fff'}}>
                               {initials(u)}
                             </div>
                             <div>

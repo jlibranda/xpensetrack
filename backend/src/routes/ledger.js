@@ -8,7 +8,7 @@ const { getUsdPhpRate } = require('../lib/fxrate');
 const { getFlowSteps, buildRowsFromSteps } = require('../lib/approvalChain');
 const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
-const { sendApprovalRequestEmail, sendStatusUpdateEmail } = require('../lib/email');
+const { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPaymentNotificationEmail } = require('../lib/email');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
@@ -823,6 +823,24 @@ router.post('/delete-selected', authenticate, requireRole('ADMIN'), async (req, 
     await logAudit(req.user, 'LEDGER_BULK_DELETED', { targetType: 'LEDGER_DOC', details: `Deleted ${r.count} AP/AR invoice(s)` });
     res.json({ message: `Deleted ${r.count} invoice(s)`, deleted: r.count });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Send a "payment / credit posted" email to the AP/AR filer. Marked once sent so
+// it can't be sent twice. FINANCE/ADMIN only.
+router.post('/:id/notify-payment', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
+  try {
+    const d = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id } });
+    if (!d) return res.status(404).json({ error: 'Not found' });
+    if (d.paymentNotifiedAt) return res.status(409).json({ error: 'Payment notification already sent', paymentNotifiedAt: d.paymentNotifiedAt });
+    const creator = d.createdById ? await prisma.user.findUnique({ where: { id: d.createdById } }).catch(() => null) : null;
+    const to = creator?.email;
+    if (!to) return res.status(400).json({ error: 'No recipient email on file' });
+    const r = await sendPaymentNotificationEmail(to, nm(creator) || 'there', ledgerAsExpense(d, creator), creator, 'apar');
+    if (r && r.skipped) return res.status(400).json({ error: 'Email notifications are turned off in Settings.' });
+    const updated = await prisma.ledgerDoc.update({ where: { id: d.id }, data: { paymentNotifiedAt: new Date() } });
+    await logAudit(req.user, 'LEDGER_PAYMENT_NOTIFIED', { targetType: 'LEDGER_DOC', targetId: d.id, details: `Sent payment notification for "${d.vendorName || 'AP/AR document'}"` });
+    res.json({ ok: true, paymentNotifiedAt: updated.paymentNotifiedAt });
+  } catch (err) { console.error('notify-payment (ledger)', err); res.status(500).json({ error: 'Failed to send notification' }); }
 });
 
 module.exports = router;
