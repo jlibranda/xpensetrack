@@ -353,6 +353,7 @@ export default function SettingsPage() {
         primaryColor: s.primaryColor,
         darkMode: s.darkMode ?? settings?.darkMode,
         defaultPassword: s.defaultPassword,
+        emailNotificationsEnabled: s.emailNotificationsEnabled ?? settings?.emailNotificationsEnabled,
         wallpaperStyle: s.wallpaperStyle ?? settings?.wallpaperStyle,
         autoReapplyApprovalFlow: s.autoReapplyApprovalFlow ?? settings?.autoReapplyApprovalFlow,
         loginMaxAttempts: s.loginMaxAttempts ?? settings?.loginMaxAttempts,
@@ -678,7 +679,7 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-          {canSettingsManage && <EmailNotificationsCard settings={settings} />}
+          {canSettingsManage && <EmailNotificationsCard value={s?.emailNotificationsEnabled} onChange={(v) => set('emailNotificationsEnabled', v)} />}
           {canSettingsManage && <ReminderSettingsCard settings={settings} />}
           {canSecurity && <PayoutReversalCard settings={settings} />}
           {canReceiptStorage && <ReceiptStorageCard />}
@@ -923,27 +924,16 @@ export default function SettingsPage() {
   );
 }
 
-function EmailNotificationsCard({ settings }) {
-  const [on, setOn] = useState(settings?.emailNotificationsEnabled !== false);
-  const [saving, setSaving] = useState(false);
-
-  const apply = async (next) => {
-    setOn(next); setSaving(true);
-    try {
-      await api.patch('/settings', { emailNotificationsEnabled: next });
-      toast.success(next ? 'Email notifications ON' : 'Email notifications OFF');
-    } catch (e) { setOn(!next); toast.error(e.error || 'Failed to update'); }
-    finally { setSaving(false); }
-  };
-
+function EmailNotificationsCard({ value, onChange }) {
+  const on = value !== false;
   return (
     <div className="mt-6 p-4 rounded-xl border border-gray-100 bg-gray-50">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-sm font-medium text-gray-700 mb-1">Email notifications</h2>
-          <p className="text-xs text-gray-500">Master switch for all automated emails (approval requests, status updates, welcome, password resets, and credentials). Turn OFF during testing so no emails go out. This toggle saves automatically — no need to press “Save settings.”</p>
+          <p className="text-xs text-gray-500">Master switch for all automated emails (approval requests, status updates, welcome, password resets, and credentials). Turn OFF during testing so no emails go out. Click “Save settings” below to apply the change.</p>
         </div>
-        <button onClick={() => apply(!on)} disabled={saving} role="switch" aria-checked={on}
+        <button onClick={() => onChange(!on)} role="switch" aria-checked={on}
           className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors ${on ? '' : 'bg-gray-300'}`}
           style={on ? { backgroundColor: 'var(--brand-color,#1D9E75)', color: 'var(--brand-contrast,#fff)' } : {}}>
           <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform mt-0.5 ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />

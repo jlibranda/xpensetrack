@@ -207,8 +207,13 @@ router.post('/:id/reset-password', authenticate, requirePermission('reset_passwo
     }
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null } });
+    const { sendCredentialsEmail } = require('../lib/email');
+    const ok = await sendCredentialsEmail(target.email, `${target.firstName||''} ${target.lastName||''}`.trim(), newPassword, target);
     await logAudit(req.user, 'USER_PASSWORD_RESET', { targetType: 'USER', targetId: req.params.id, details: `Reset password for ${target.firstName||''} ${target.lastName||''}`.trim() });
-    res.json({ message: 'Password reset successfully' });
+    if (ok === false) {
+      return res.status(400).json({ error: 'Password was reset, but the email could not be sent. Check email settings (RESEND_API_KEY / RESEND_FROM).' });
+    }
+    res.json({ message: `Password reset — the new password was emailed to ${target.email}.` });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
