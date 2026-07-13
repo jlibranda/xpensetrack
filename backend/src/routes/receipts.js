@@ -92,26 +92,13 @@ router.post('/purge', authenticate, requirePermission('manage_receipt_storage'),
     if (confirm !== 'PURGE') return res.status(400).json({ error: "Type PURGE to confirm." });
     const storage = require('../lib/storage');
     const metas = await prisma.receipt.findMany({
-      select: {
-        id: true, storageKey: true, data: false,
-        expenses: { select: { status: true, createdAt: true } },
-        ledgerDocs: { select: { id: true } },
-      },
+      select: { id: true, storageKey: true, data: false, expenses: { select: { status: true, createdAt: true } } },
     });
     let count = 0;
     for (const m of metas) {
-      if (status || olderThan) {
-        // Filtered purge: EVERY linked expense must satisfy the filter
-        // (previously only the first link was checked, so a receipt shared with
-        // a still-PENDING expense could lose its image). Receipts attached to
-        // AP/AR ledger docs are skipped in filtered mode, since the filters
-        // describe expense statuses, not ledger statuses.
-        if ((m.ledgerDocs?.length || 0) > 0) continue;
-        const exps = m.expenses || [];
-        if (exps.length === 0) continue;
-        if (status && !exps.every(e => e.status === status)) continue;
-        if (olderThan && !exps.every(e => new Date(e.createdAt) < new Date(olderThan))) continue;
-      }
+      const exp = (m.expenses && m.expenses[0]) || null;
+      if (status && (!exp || exp.status !== status)) continue;
+      if (olderThan && (!exp || new Date(exp.createdAt) >= new Date(olderThan))) continue;
       if (m.storageKey) { await storage.deleteObject(m.storageKey).catch(() => {}); }
       try {
         await prisma.receipt.update({ where: { id: m.id }, data: { data: null, storageKey: null } });

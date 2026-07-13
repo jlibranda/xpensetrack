@@ -41,19 +41,6 @@ export default function AddExpensePage() {
     expenseDate: new Date().toISOString().split('T')[0],
   });
 
-  // Load an existing receipt via the Authorization header — never put the
-  // login token in a URL (it leaks into browser history and server logs).
-  const loadReceiptPreview = async (rid, mimeType) => {
-    try {
-      const tok = localStorage.getItem('token');
-      const resp = await fetch(`${API_BASE}/ocr/receipt/${rid}`, { headers: { Authorization: `Bearer ${tok}` } });
-      if (!resp.ok) return;
-      const blob = await resp.blob();
-      setReceiptIsPdf(String(mimeType || blob.type || '').includes('pdf'));
-      setReceiptPreview(URL.createObjectURL(blob));
-    } catch (e) { /* preview is best-effort */ }
-  };
-
   useEffect(() => {
     if (id) {
       api.get(`/expenses/${id}`).then(e => {
@@ -67,7 +54,8 @@ export default function AddExpensePage() {
         setForm(loaded);
         if (e.receipt?.id) {
           setReceiptId(e.receipt.id);
-          loadReceiptPreview(e.receipt.id, e.receipt.mimeType);
+          const tok = localStorage.getItem('token');
+          setReceiptPreview(`${API_BASE}/ocr/receipt/${e.receipt.id}?token=${encodeURIComponent(tok)}`);
         }
         initialRef.current = JSON.stringify({ form: loaded, receiptId: e.receipt?.id || '' });
       }).catch(() => navigate('/expenses'));
@@ -112,8 +100,8 @@ export default function AddExpensePage() {
       const res = await api.post('/ocr/scan', fd, { headers:{'Content-Type':'multipart/form-data'} });
       if (res.receiptId) {
         setReceiptId(res.receiptId);
-        // Keep the local object-URL preview set above — no need to reload the
-        // image from the server, and it avoids putting the auth token in a URL.
+        const token = localStorage.getItem('token');
+        setReceiptPreview(`${API_BASE}/ocr/receipt/${res.receiptId}?token=${encodeURIComponent(token)}`);
       }
       if (res.parsed) {
         setForm(f => ({

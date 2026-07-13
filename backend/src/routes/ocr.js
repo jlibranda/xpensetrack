@@ -593,19 +593,10 @@ router.get('/receipt/:id', async (req, res) => {
     const jwt = require('jsonwebtoken');
     const token = (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null) || req.query.token;
     if (!token) return res.status(401).send('Unauthorized');
-    let decoded;
-    try { decoded = jwt.verify(token, process.env.JWT_SECRET); }
-    catch (e) { return res.status(401).send('Unauthorized'); }
-    if (decoded && decoded.purpose === 'receipt-view') {
-      // Receipt-scoped share tokens (used by exported Excel links) may only open their own receipt.
-      if (decoded.rid !== req.params.id) return res.status(403).send('Forbidden');
-    } else {
-      // Normal user token — must belong to an existing, ACTIVE account.
-      // (Previously a deactivated user's token kept working until expiry.)
-      const viewer = decoded && decoded.userId
-        ? await prisma.user.findUnique({ where: { id: decoded.userId } })
-        : null;
-      if (!viewer || !viewer.isActive) return res.status(401).send('Unauthorized');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Receipt-scoped share tokens (used by exported Excel links) may only open their own receipt.
+    if (decoded && decoded.purpose === 'receipt-view' && decoded.rid !== req.params.id) {
+      return res.status(403).send('Forbidden');
     }
     const receipt = await prisma.receipt.findUnique({ where: { id: req.params.id } });
     if (!receipt) return res.status(404).send('Not found');

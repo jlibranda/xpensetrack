@@ -20,9 +20,8 @@ export default function ReceiptImage({ receiptId, className = '', onClick }) {
     if (!receiptId) return;
     let revoked = '';
     const token = localStorage.getItem('token');
-    // Auth via header — never put the login token in a URL (it leaks into
-    // browser history and server logs).
-    fetch(`${API_BASE}/ocr/receipt/${receiptId}`, { headers: { Authorization: `Bearer ${token}` } })
+    const url = `${API_BASE}/ocr/receipt/${receiptId}?token=${encodeURIComponent(token)}`;
+    fetch(url)
       .then(r => { if (!r.ok) throw new Error('load failed'); return r.blob(); })
       .then(blob => {
         setIsPdf(blob.type === 'application/pdf');

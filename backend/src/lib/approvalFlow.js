@@ -9,8 +9,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { getFlowSteps, buildRowsFromSteps } = require('./approvalChain');
-const { createNotification } = require('./notifications');
-const { logAudit } = require('./audit');
 
 // Re-apply the current approval flow to all PENDING expenses of one user.
 // Preserves prior APPROVED decisions for approvers who remain in the new chain.
@@ -34,12 +32,6 @@ async function reapplyApprovalFlowForUser(userId) {
         prisma.approval.deleteMany({ where: { expenseId: exp.id } }),
         prisma.expense.update({ where: { id: exp.id }, data: { status: 'APPROVED' } }),
       ]);
-      // Auto-approvals must be visible: tell the submitter, leave an audit trail.
-      await createNotification(user.id, 'EXPENSE_APPROVED',
-        'Expense auto-approved',
-        `Your expense "${exp.title}" was approved automatically (no approver in your updated flow).`,
-        '/expenses').catch(() => {});
-      await Promise.resolve(logAudit(user, 'EXPENSE_AUTO_APPROVED', { targetType: 'EXPENSE', targetId: exp.id, details: `Auto-approved "${exp.title}" during approval-flow re-apply (empty flow)` })).catch(() => {});
       autoApproved++;
       continue;
     }
@@ -79,16 +71,7 @@ async function reapplyApprovalFlowForUser(userId) {
       prisma.expense.update({ where: { id: exp.id }, data: { status: allSatisfied ? 'APPROVED' : 'PENDING' } }),
     ]);
 
-    if (allSatisfied) {
-      await createNotification(user.id, 'EXPENSE_APPROVED',
-        'Expense fully approved!',
-        `"${exp.title}" became fully approved when your approval flow was updated.`,
-        '/expenses').catch(() => {});
-      await Promise.resolve(logAudit(user, 'EXPENSE_APPROVED', { targetType: 'EXPENSE', targetId: exp.id, details: `"${exp.title}" auto-satisfied during approval-flow re-apply` })).catch(() => {});
-      autoApproved++;
-    } else {
-      updated++;
-    }
+    if (allSatisfied) autoApproved++; else updated++;
   }
 
   return { updated, autoApproved, total: pending.length };

@@ -15,7 +15,7 @@ const safeUser = (u) => {
 
 router.post('/register', authenticate, requirePermission('manage_users'), async (req, res) => {
   const { email, name, firstName, lastName, password, department, role, employeeNumber,
-    costCenter, position, payrollAccount, managerId, approvalFlow, approvalMode } = req.body;
+    costCenter, position, payrollAccount, managerId } = req.body;
   if (!email || !password || password.length < 6) return res.status(400).json({ error: 'Email and password (min 6) required' });
 
   let fName = firstName || name?.split(' ')[0] || '';
@@ -31,26 +31,6 @@ router.post('/register', authenticate, requirePermission('manage_users'), async 
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (existing) return res.status(400).json({ error: 'Email already registered' });
     const passwordHash = await bcrypt.hash(password, 12);
-
-    // Step-based approval flow (cleaned the same way the users PATCH does) so a
-    // new account is fully configured in ONE call. Previously the flow was set
-    // by a follow-up PATCH; if that failed, the user had no approvers and
-    // everything they submitted auto-approved.
-    let approvalFlowJson = null;
-    let approverIdsFlat = null;
-    if (Array.isArray(approvalFlow)) {
-      const steps = approvalFlow
-        .map(s => ({
-          approvers: [...new Set((s.approvers || []).filter(Boolean))],
-          rule: s.rule === 'ALL' ? 'ALL' : 'ANY',
-        }))
-        .filter(s => s.approvers.length > 0);
-      if (steps.length) {
-        approvalFlowJson = JSON.stringify(steps);
-        approverIdsFlat = [...new Set(steps.flatMap(s => s.approvers))].join(',');
-      }
-    }
-
     const user = await prisma.user.create({
       data: { firstName: fName, lastName: lName, email: email.toLowerCase(),
         passwordHash,
@@ -60,9 +40,6 @@ router.post('/register', authenticate, requirePermission('manage_users'), async 
         payrollAccount: payrollAccount || null,
         employeeNumber: employeeNumber || null,
         managerId: managerId || null,
-        approvalFlowJson,
-        approverIds: approverIdsFlat,
-        approvalMode: approvalMode === 'ANY_ORDER' ? 'ANY_ORDER' : 'SEQUENTIAL',
         role: wantedRole },
     });
     // Welcome email (respects the master toggle). Fire-and-forget so a mail hiccup
@@ -149,10 +126,8 @@ router.post('/forgot-password', async (req, res) => {
   try {
     if (!email || !email.trim()) return res.status(400).json({ error: 'Email is required', exists: false });
     const target = email.trim().toLowerCase();
-    // Emails are stored lowercased on create/update, so an indexed unique lookup
-    // replaces the previous full-table scan (which pulled every password hash
-    // into memory on each request).
-    const user = await prisma.user.findUnique({ where: { email: target } });
+    const users = await prisma.user.findMany();
+    const user = users.find(u => (u.email || '').toLowerCase() === target);
     // NOTE: this intentionally reveals whether an account exists (per product
     // requirement) so users with no account are directed to Finance. This enables
     // email enumeration — acceptable for an internal app, but worth knowing.
