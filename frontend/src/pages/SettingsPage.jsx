@@ -878,7 +878,7 @@ export default function SettingsPage() {
               {canEditCategories && (
               <div className="flex gap-2">
                 <button onClick={exportCategories} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Excel</button>
-                <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer btn-like">
                   ⬆ Bulk upload
                   <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
                     onChange={ev => { const f = ev.target.files?.[0]; ev.target.value=''; if (f) importCategories(f); }} />
@@ -936,7 +936,7 @@ export default function SettingsPage() {
               <h2 className="text-sm font-medium text-gray-700">Vendors / Payees</h2>
               <div className="flex gap-2">
                 <button onClick={exportVendors} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Excel</button>
-                <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer btn-like">
                   ⬆ Bulk upload
                   <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
                     onChange={ev => { const f = ev.target.files?.[0]; ev.target.value=''; if (f) importVendors(f); }} />

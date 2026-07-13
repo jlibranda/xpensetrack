@@ -154,6 +154,17 @@ html.dark .ac-freeze { border-right-color: #334155; }
 html.dark .ac-freeze-head { background-color: #1e293b; }
 html.dark .ac-freeze-even { background-color: #1e293b; }
 html.dark .ac-freeze-odd { background-color: #0f172a; }
+
+/* ── Global button feedback: every enabled button gets hover + click (active) ── */
+button:not(:disabled) {
+  transition: transform .08s ease, filter .12s ease, background-color .12s ease, opacity .12s ease, box-shadow .12s ease;
+}
+button:not(:disabled):hover { filter: brightness(0.95); }
+button:not(:disabled):active { transform: scale(0.96); filter: brightness(0.9); }
+/* Label-based controls used as buttons (file uploads) get the same click feel */
+label.btn-like { transition: transform .08s ease, filter .12s ease, background-color .12s ease; }
+label.btn-like:hover { filter: brightness(0.95); }
+label.btn-like:active { transform: scale(0.96); filter: brightness(0.9); }
 html.dark .bg-amber-50 { background-color: #451a03 !important; }
 html.dark .text-amber-700 { color: #fcd34d !important; }
 html.dark .bg-blue-50 { background-color: #172554 !important; }

@@ -223,10 +223,17 @@ export default function UsersPage() {
 
   const handleBulk = async () => {
     const users = parseBulk(bulkText);
-    if (!users.length) { setMsg({text:'No valid users found.',ok:false}); return; }
+    if (!users.length) { setMsg({text:'No valid users found.',ok:false}); toast.error('No valid users found.'); return; }
     setBulkLoading(true); setBulkResult(null);
-    try { const r = await api.post('/users/bulk', { users }); setBulkResult(r); await load(); }
-    catch(err) { setMsg({text:err.error||'Failed.',ok:false}); }
+    try {
+      const r = await api.post('/users/bulk', { users });
+      setBulkResult(r); await load();
+      const created = r.created?.length || 0, skipped = r.skipped?.length || 0, errors = r.errors?.length || 0;
+      if (created > 0) toast.success(`Created ${created} user(s)${skipped?`, ${skipped} skipped`:''}${errors?`, ${errors} error(s)`:''}`);
+      else if (errors > 0) toast.error(`Upload finished with ${errors} error(s)${skipped?`, ${skipped} skipped`:''}`);
+      else toast.info(`No new users created${skipped?` — ${skipped} skipped`:''}`);
+    }
+    catch(err) { setMsg({text:err.error||'Failed.',ok:false}); toast.error(err.error||'Bulk upload failed'); }
     finally { setBulkLoading(false); }
   };
 
@@ -267,8 +274,13 @@ export default function UsersPage() {
       const r = await api.post('/users/bulk-approvers', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setApprResult(r);
       await load();
+      const okCount = r.updated?.length ?? r.updated ?? r.applied ?? 0;
+      const errCount = r.errors?.length || 0;
+      if (errCount > 0 && !okCount) toast.error(`Upload failed — ${errCount} error(s)`);
+      else toast.success(`Approver flows updated${typeof okCount === 'number' && okCount ? ` for ${okCount}` : ''}${errCount ? `, ${errCount} error(s)` : ''}`);
     } catch (e) {
       setMsg({ text: e.error || 'Upload failed', ok: false });
+      toast.error(e.error || 'Approver upload failed');
     } finally { setApprLoading(false); if (apprFileRef.current) apprFileRef.current.value=''; }
   };
 

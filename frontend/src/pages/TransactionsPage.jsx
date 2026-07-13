@@ -601,7 +601,7 @@ export default function TransactionsPage() {
                   <div className="space-y-2">
                     <ReceiptImage receiptId={e.proofOfPayment.id} className="w-full max-h-56 object-contain rounded-lg border border-gray-100" />
                     {canUploadProof && (
-                      <label className={`inline-block text-xs px-3 py-1.5 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 ${uploadingProof ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <label className={`inline-block text-xs px-3 py-1.5 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 btn-like ${uploadingProof ? 'opacity-50 pointer-events-none' : ''}`}>
                         {uploadingProof ? 'Uploading…' : 'Replace proof of payment'}
                         <input type="file" accept="image/*,application/pdf" className="hidden"
                           onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; uploadProof(e.id, f); }} />

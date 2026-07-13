@@ -615,7 +615,7 @@ export default function LedgerPage({ mode = 'manage' }) {
       {editing && (
         <Modal title={editing.id ? 'Edit invoice' : 'Add invoice'} onClose={() => setEditing(null)}>
           {!editing.id && (
-            <label className="block mb-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-center cursor-pointer hover:bg-gray-50 text-gray-600">
+            <label className="block mb-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-center cursor-pointer hover:bg-gray-50 text-gray-600 btn-like">
               {scanning ? '✨ Reading…' : '📷 Scan a receipt/invoice to auto-fill'}
               <input type="file" accept="image/*,application/pdf" className="hidden" disabled={scanning}
                 onChange={(e) => { scanInto(e.target.files?.[0]); e.target.value = ''; }} />
