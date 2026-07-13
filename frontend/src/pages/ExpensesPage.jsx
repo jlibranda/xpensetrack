@@ -6,6 +6,7 @@ import ReceiptImage from '../components/ReceiptImage';
 import { useCurrency } from '../context/CurrencyContext';
 import { useAuth } from '../context/AuthContext';
 import { useOrg } from '../context/OrgContext';
+import toast from '../lib/toast';
 import { scopeTabsFor } from '../lib/scope';
 
 const STATUS_BADGE = {
@@ -77,7 +78,7 @@ export default function ExpensesPage() {
     try {
       await api.delete(`/expenses/${id}`);
       setSelected(null); load();
-    } catch (err) { alert(err.error || 'Cannot delete this expense.'); }
+    } catch (err) { toast.error(err.error || 'Cannot delete this expense.'); }
   };
 
   const getApprovalNote = (expense) => {

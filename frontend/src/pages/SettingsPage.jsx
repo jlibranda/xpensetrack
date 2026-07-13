@@ -124,7 +124,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
       setSaved2(true);
       setTimeout(() => setSaved2(false), 2000);
     } catch(e) {
-      alert('Failed to save permissions. Please try again.');
+      toast.error('Failed to save permissions. Please try again.');
     } finally {
       setSaving2(false);
     }

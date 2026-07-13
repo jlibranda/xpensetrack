@@ -88,10 +88,10 @@ export default function ApprovalsPage() {
 
   const action = async (id, type) => {
     if (type === 'return' && !notes[id]?.trim()) {
-      alert('Please add a comment before returning to submitter.'); return;
+      toast.error('Please add a comment before returning to submitter.'); return;
     }
     if (type === 'reject' && !notes[id]?.trim()) {
-      alert('Please add a reason before rejecting.'); return;
+      toast.error('Please add a reason before rejecting.'); return;
     }
     setActioning(id + type);
     try {
@@ -104,7 +104,7 @@ export default function ApprovalsPage() {
       refreshNotif();
       toast.success(type === 'approve' ? 'Approved' : type === 'reject' ? 'Rejected' : 'Returned to submitter');
     } catch(err) {
-      alert(err.error || 'Action failed. Please try again.');
+      toast.error(err.error || 'Action failed. Please try again.');
     } finally { setActioning(null); }
   };
 
@@ -112,7 +112,7 @@ export default function ApprovalsPage() {
     try {
       await api.post(`/approvals/${expenseId}/reimburse`);
       await load();
-    } catch(err) { alert(err.error || 'Failed'); }
+    } catch(err) { toast.error(err.error || 'Failed'); }
   };
 
   const hasReceipt = (expense) => expense?.receipt?.id;

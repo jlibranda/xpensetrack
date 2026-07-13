@@ -1,13 +1,18 @@
 // src/pages/ProfilePage.jsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const [info, setInfo] = useState(null);      // /auth/my-info (with manager + approver names)
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState({ text: '', ok: true });
+
+  useEffect(() => {
+    api.get('/auth/my-info').then(setInfo).catch(() => setInfo(null));
+  }, []);
 
   const changePassword = async (e) => {
     e.preventDefault();
@@ -23,27 +28,76 @@ export default function ProfilePage() {
     } finally { setLoading(false); }
   };
 
-  const initials = user?.name?.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+  const u = info || user || {};
+  const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || '';
+  const initials = fullName.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase() || 'U';
+  const memberSince = u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' }) : null;
+
+  // Label/value rows for "My information". Rows with no value are hidden.
+  const rows = [
+    ['Employee number', u.employeeNumber],
+    ['Email', u.email],
+    ['Position', u.position],
+    ['Department', u.department],
+    ['Cost center', u.costCenter],
+    ['Payroll account', u.payrollAccount],
+    ['Role', u.role],
+    ['Manager / Approver', info?.managerName],
+    ['Account status', u.isActive === false ? 'Deactivated' : 'Active'],
+    ['Member since', memberSince],
+  ].filter(([, v]) => v);
 
   return (
     <div className="max-w-lg mx-auto">
       <h1 className="text-xl font-medium text-gray-900 mb-6">My profile</h1>
 
-      {/* Profile card */}
+      {/* Identity card */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 mb-4">
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 text-xl font-medium">
             {initials}
           </div>
           <div>
-            <p className="text-base font-medium text-gray-900">{user?.name}</p>
-            <p className="text-sm text-gray-500">{user?.email}</p>
+            <p className="text-base font-medium text-gray-900">{fullName}</p>
+            <p className="text-sm text-gray-500">{u.email}</p>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs bg-brand-50 text-brand-600 px-2 py-0.5 rounded-full">{user?.role}</span>
-              {user?.department && <span className="text-xs text-gray-400">{user?.department}</span>}
+              <span className="text-xs bg-brand-50 text-brand-600 px-2 py-0.5 rounded-full">{u.role}</span>
+              {u.department && <span className="text-xs text-gray-400">{u.department}</span>}
             </div>
           </div>
         </div>
+      </div>
+
+      {/* My information */}
+      <div className="bg-white rounded-xl border border-gray-100 p-5 mb-4">
+        <h2 className="text-sm font-medium text-gray-700 mb-3">My information</h2>
+        <div className="divide-y divide-gray-50">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex items-start justify-between gap-4 py-2">
+              <span className="text-xs text-gray-500 shrink-0">{label}</span>
+              <span className="text-sm text-gray-800 text-right break-words">{String(value)}</span>
+            </div>
+          ))}
+        </div>
+        {info?.approvalFlow?.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs text-gray-500 mb-2">My approval flow ({(u.approvalMode || 'SEQUENTIAL') === 'SEQUENTIAL' ? 'steps run in order' : 'any order'})</p>
+            <div className="space-y-1.5">
+              {info.approvalFlow.map(s => (
+                <div key={s.step} className="flex items-start gap-2 text-sm">
+                  <span className="text-xs bg-gray-100 text-gray-500 rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">{s.step}</span>
+                  <span className="text-gray-800">
+                    {s.approvers.join(s.rule === 'ANY' ? ' or ' : ' and ')}
+                    {s.approvers.length > 1 && (
+                      <span className="text-xs text-gray-400"> ({s.rule === 'ANY' ? 'any one approves' : 'all must approve'})</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <p className="text-[11px] text-gray-400 mt-4">Need something corrected? Contact your Finance Department or admin — these details are managed in the Users module.</p>
       </div>
 
       {/* Change password */}

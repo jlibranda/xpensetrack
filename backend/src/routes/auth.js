@@ -106,6 +106,40 @@ router.get('/me', authenticate, (req, res) => {
   res.json(safeUser(req.user));
 });
 
+// GET /auth/my-info — the user's own record with manager + approver NAMES
+// resolved (the base /me only carries IDs). Read-only; safe for every role.
+router.get('/my-info', authenticate, async (req, res) => {
+  try {
+    const u = req.user;
+    const nameOf = (p) => p ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : null;
+
+    // Collect every user id referenced by the manager field and the approval flow.
+    const ids = new Set();
+    if (u.managerId) ids.add(u.managerId);
+    let steps = [];
+    try { steps = u.approvalFlowJson ? JSON.parse(u.approvalFlowJson) : []; } catch { steps = []; }
+    if (!steps.length && u.approverIds) {
+      steps = u.approverIds.split(',').map(s => s.trim()).filter(Boolean).map(id => ({ approvers: [id], rule: 'ALL' }));
+    }
+    steps.forEach(s => (s.approvers || []).forEach(id => ids.add(id)));
+
+    const people = ids.size
+      ? await prisma.user.findMany({ where: { id: { in: [...ids] } }, select: { id: true, firstName: true, lastName: true, position: true } })
+      : [];
+    const byId = Object.fromEntries(people.map(p => [p.id, p]));
+
+    res.json({
+      ...safeUser(u),
+      managerName: nameOf(byId[u.managerId]),
+      approvalFlow: steps.map((s, i) => ({
+        step: i + 1,
+        rule: s.rule || 'ALL',
+        approvers: (s.approvers || []).map(id => nameOf(byId[id]) || 'Unknown user'),
+      })),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.patch('/change-password', authenticate, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Both passwords required, min 6 chars' });
@@ -121,13 +155,22 @@ router.patch('/change-password', authenticate, async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// Lightweight anti-spam: one reset email per address per 60s (in-memory; resets on redeploy).
+const forgotCooldown = new Map();
+
 router.post('/forgot-password', async (req, res) => {
   const { email } = req.body || {};
   try {
     if (!email || !email.trim()) return res.status(400).json({ error: 'Email is required', exists: false });
     const target = email.trim().toLowerCase();
-    const users = await prisma.user.findMany();
-    const user = users.find(u => (u.email || '').toLowerCase() === target);
+
+    // Cooldown check (prevents spamming a mailbox with reset links).
+    const last = forgotCooldown.get(target);
+    if (last && Date.now() - last < 60_000) {
+      return res.json({ exists: true, message: 'A password reset link was already sent recently. Please check your email (including spam) or try again in a minute.' });
+    }
+
+    const user = await prisma.user.findFirst({ where: { email: { equals: target, mode: 'insensitive' } } });
     // NOTE: this intentionally reveals whether an account exists (per product
     // requirement) so users with no account are directed to Finance. This enables
     // email enumeration — acceptable for an internal app, but worth knowing.
@@ -145,6 +188,7 @@ router.post('/forgot-password', async (req, res) => {
       const { sendPasswordResetEmail } = require('../lib/email');
       await sendPasswordResetEmail(user.email, `${user.firstName} ${user.lastName}`.trim(), resetUrl, user);
     } catch (e) { console.error('Password reset email failed:', e.message); }
+    forgotCooldown.set(target, Date.now());
     return res.json({ exists: true, message: 'A password reset link has been sent to your email.' });
   } catch (err) {
     console.error('forgot-password error:', err.message);

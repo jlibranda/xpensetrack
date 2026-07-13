@@ -5,6 +5,7 @@ import ReceiptImage from '../components/ReceiptImage';
 import useUnsavedChanges from '../hooks/useUnsavedChanges';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
+import toast from '../lib/toast';
 import { scopeTabsFor } from '../lib/scope';
 import { useAuth } from '../context/AuthContext';
 
@@ -162,7 +163,7 @@ export default function LedgerPage({ mode = 'manage' }) {
     try {
       if (f.id) await api.patch(`/ledger/${f.id}`, f); else await api.post('/ledger', f);
       afterSave();
-    } catch (err) { alert(err.error || 'Save failed'); }
+    } catch (err) { toast.error(err.error || 'Save failed'); }
   };
   const saveAndSubmitDoc = async () => {
     const f = editing;
@@ -173,26 +174,26 @@ export default function LedgerPage({ mode = 'manage' }) {
       let id = f.id;
       if (id) await api.patch(`/ledger/${id}`, f);
       else { const created = await api.post('/ledger', f); id = created?.id; }
-      if (!id) { afterSave(); alert('Saved, but could not submit automatically.'); return; }
+      if (!id) { afterSave(); toast.info('Saved, but could not submit automatically.'); return; }
       const r = await api.post(`/ledger/${id}/submit`);
       afterSave();
-      alert(r?.doc?.status === 'APPROVED' ? 'Saved \u2014 auto-approved (no approver in the creator\u2019s flow).' : 'Saved & submitted for approval.');
-    } catch (err) { alert(err.error || 'Failed'); }
+      toast.success(r?.doc?.status === 'APPROVED' ? 'Saved \u2014 auto-approved (no approver in the creator\u2019s flow).' : 'Saved & submitted for approval.');
+    } catch (err) { toast.error(err.error || 'Failed'); }
   };
   const markPaid = async (doc) => {
     try { await api.post(`/ledger/${doc.id}/${doc.status === 'PAID' ? 'mark-unpaid' : 'mark-paid'}`); load(); }
-    catch (err) { alert(err.error || 'Failed'); }
+    catch (err) { toast.error(err.error || 'Failed'); }
   };
   const submitDoc = async (doc) => {
-    try { const r = await api.post(`/ledger/${doc.id}/submit`); setViewing(null); load(); alert(r?.doc?.status === 'APPROVED' ? 'Submitted — auto-approved (no approver in the creator\u2019s flow).' : 'Submitted for approval.'); }
-    catch (err) { alert(err.error || 'Submit failed'); }
+    try { const r = await api.post(`/ledger/${doc.id}/submit`); setViewing(null); load(); toast.success(r?.doc?.status === 'APPROVED' ? 'Submitted — auto-approved (no approver in the creator\u2019s flow).' : 'Submitted for approval.'); }
+    catch (err) { toast.error(err.error || 'Submit failed'); }
   };
   const archiveDoc = async (doc, archived) => {
-    try { await api.patch(`/ledger/${doc.id}`, { archived }); load(); } catch (err) { alert(err.error || 'Failed'); }
+    try { await api.patch(`/ledger/${doc.id}`, { archived }); load(); } catch (err) { toast.error(err.error || 'Failed'); }
   };
   const removeDoc = async (doc) => {
     if (!confirm('Delete this document permanently?')) return;
-    try { await api.delete(`/ledger/${doc.id}`); load(); } catch (err) { alert(err.error || 'Failed'); }
+    try { await api.delete(`/ledger/${doc.id}`); load(); } catch (err) { toast.error(err.error || 'Failed'); }
   };
 
   // ---- OCR autofill (single) ----
@@ -212,7 +213,7 @@ export default function LedgerPage({ mode = 'manage' }) {
         category: p.category || e.category,
         receiptId: res.receiptId || e.receiptId,
       }));
-    } catch (err) { alert(err.error || err.message || 'Scan failed'); }
+    } catch (err) { toast.error(err.error || err.message || 'Scan failed'); }
     finally { setScanning(false); }
   };
 
@@ -251,9 +252,9 @@ export default function LedgerPage({ mode = 'manage' }) {
   };
   const saveBulk = async () => {
     const valid = bulk.rows.filter(r => r.amount && Number(r.amount) > 0);
-    if (!valid.length) { alert('Add an amount to at least one row.'); return; }
+    if (!valid.length) { toast.error('Add an amount to at least one row.'); return; }
     try { await api.post('/ledger/bulk', { docs: valid }); setBulk(null); load(); }
-    catch (err) { alert(err.error || 'Bulk save failed'); }
+    catch (err) { toast.error(err.error || 'Bulk save failed'); }
   };
 
   // ---- multi-select bulk actions ----
@@ -266,18 +267,18 @@ export default function LedgerPage({ mode = 'manage' }) {
     if (!ids.length) return;
     if (action === 'delete' && !confirm(`Delete ${ids.length} document(s)?`)) return;
     try { await api.post('/ledger/bulk-action', { ids, action, assignedToId, status }); setAssignModal(null); setStatusModal(null); load(); }
-    catch (err) { alert(err.error || 'Failed'); }
+    catch (err) { toast.error(err.error || 'Failed'); }
   };
 
   // ---- clients ----
   const saveClient = async () => {
-    const c = clientModal; if (!c.name?.trim()) { alert('Name required'); return; }
+    const c = clientModal; if (!c.name?.trim()) { toast.error('Name required'); return; }
     try { if (c.id) await api.patch(`/clients/${c.id}`, { name: c.name, isDefault: c.isDefault }); else await api.post('/clients', { name: c.name, isDefault: c.isDefault }); setClientModal(null); loadClients(); }
-    catch (err) { alert(err.error || 'Failed'); }
+    catch (err) { toast.error(err.error || 'Failed'); }
   };
   const removeClient = async (c) => {
     if (!confirm(`Delete client "${c.name}"? Its documents are kept but un-linked.`)) return;
-    try { await api.delete(`/clients/${c.id}`); loadClients(); load(); } catch (err) { alert(err.error || 'Failed'); }
+    try { await api.delete(`/clients/${c.id}`); loadClients(); load(); } catch (err) { toast.error(err.error || 'Failed'); }
   };
 
   const tabs = [['ALL', 'All'], ['AP_INVOICE', 'AP Invoices'], ['AR_INVOICE', 'AR Invoices'], ['ARCHIVED', 'Archived'], ['CLIENTS', 'Clients']];

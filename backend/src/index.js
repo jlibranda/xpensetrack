@@ -80,7 +80,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
         const all = await prisma.user.findMany({ select: { id: true, email: true, role: true } });
         const matches = all.filter(u => (u.email || '').toLowerCase() === email.toLowerCase());
         if (matches.length === 0) {
-          console.log(`Bootstrap admin: NO user found for "${email}". Existing emails: ${all.map(u => u.email).join(', ')}`);
+          console.log(`Bootstrap admin: no user found for the configured email (${all.length} users checked)`);
           continue;
         }
         for (const m of matches) {

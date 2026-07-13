@@ -146,7 +146,7 @@ export default function UsersPage() {
     try {
       await api.post(`/users/${u.id}/toggle-active`);
       await load();
-    } catch(err) { alert(err.error||'Failed'); }
+    } catch(err) { toast.error(err.error||'Failed'); }
   };
 
   const resetPassword = async (u) => {
@@ -164,8 +164,8 @@ export default function UsersPage() {
     setSendingCredsId(u.id);
     try {
       const res = await api.post(`/users/${u.id}/send-credentials`);
-      alert(res.message || `Credentials sent to ${u.email}.`);
-    } catch(err) { alert(err.error||'Failed to send credentials.'); }
+      toast.success(res.message || `Credentials sent to ${u.email}.`);
+    } catch(err) { toast.error(err.error||'Failed to send credentials.'); }
     finally { setSendingCredsId(null); }
   };
 
@@ -179,7 +179,7 @@ export default function UsersPage() {
       // Switch to impersonated user
       localStorage.setItem('token', res.token);
       window.location.href = '/';
-    } catch(err) { alert(err.error || 'Failed to access user account'); }
+    } catch(err) { toast.error(err.error || 'Failed to access user account'); }
   };
 
   // Parse a single CSV line into fields, respecting double-quoted values that
