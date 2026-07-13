@@ -123,17 +123,18 @@ export default function UsersPage() {
         .map(s => ({ approvers: (s.approvers||[]).filter(Boolean), rule: s.rule==='ALL'?'ALL':'ANY' }))
         .filter(s => s.approvers.length > 0);
       if (editUser) {
-        await api.patch(`/users/${editUser.id}`, { ...form, approvalFlow: cleanFlow, managerId: form.managerId||null, hireDate: form.hireDate||null });
+        await api.patch(`/users/${editUser.id}`, { ...form, approvalFlow: cleanFlow, managerId: form.managerId||null });
         setMsg({text:'Updated!',ok:true});
       } else {
-        // Create the account (saves core fields + sends the welcome email if email is ON)...
-        const res = await api.post('/auth/register', { ...form });
-        const newId = res?.user?.id;
-        // ...then persist the rest (cost center, position, payroll account, manager,
-        // approval flow) via the same endpoint the Edit form uses.
-        if (newId) {
-          await api.patch(`/users/${newId}`, { ...form, approvalFlow: cleanFlow, managerId: form.managerId||null, hireDate: form.hireDate||null });
-        }
+        // Create the account in ONE call — register now accepts the approval
+        // flow too, so a failed follow-up can no longer leave a half-configured
+        // user whose expenses auto-approve.
+        const res = await api.post('/auth/register', {
+          ...form,
+          approvalFlow: cleanFlow,
+          approvalMode: form.approvalMode || 'SEQUENTIAL',
+          managerId: form.managerId || null,
+        });
         setMsg({ text: res?.welcomeSent ? 'User created — welcome email sent.' : 'User created. (Email notifications are OFF, so no welcome email was sent.)', ok:true });
       }
       await load();

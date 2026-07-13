@@ -195,6 +195,18 @@ export default function LedgerPage({ mode = 'manage' }) {
     try { await api.delete(`/ledger/${doc.id}`); load(); } catch (err) { alert(err.error || 'Failed'); }
   };
 
+  // Open an attached file in a new tab using header auth — never put the login
+  // token in a URL (it leaks into browser history and server logs).
+  const openReceipt = async (rid) => {
+    try {
+      const tok = localStorage.getItem('token');
+      const resp = await fetch(`${API_BASE}/ocr/receipt/${rid}`, { headers: { Authorization: `Bearer ${tok}` } });
+      if (!resp.ok) { alert('Could not load the attached file.'); return; }
+      const blob = await resp.blob();
+      window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+    } catch (e) { alert('Could not load the attached file.'); }
+  };
+
   // ---- OCR autofill (single) ----
   const scanInto = async (file) => {
     if (!file) return;
@@ -345,7 +357,7 @@ export default function LedgerPage({ mode = 'manage' }) {
         </div>
         <p className="text-xs text-gray-400 mt-2">VAT (12% inclusive) is computed automatically from the amount. Expanded Withholding Tax (for BIR 2307) is entered by Finance in the Transactions module once the invoice is processed.</p>
         {editing.receiptId && (
-          <a href={`${API_BASE}/ocr/receipt/${editing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline mt-1 inline-block" style={{ color: BRAND }}>📎 View attached file</a>
+          <button type="button" onClick={() => openReceipt(editing.receiptId)} className="text-xs hover:underline mt-1 inline-block" style={{ color: BRAND }}>📎 View attached file</button>
         )}
       </>
     );
@@ -373,7 +385,7 @@ export default function LedgerPage({ mode = 'manage' }) {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-green-700">{scanning ? '✨ Reading…' : '✓ File attached'}</p>
                 <div className="flex items-center gap-3">
-                  <a href={`${API_BASE}/ocr/receipt/${editing.receiptId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`} target="_blank" rel="noreferrer" className="text-xs hover:underline" style={{ color: BRAND }}>Open</a>
+                  <button type="button" onClick={() => openReceipt(editing.receiptId)} className="text-xs hover:underline" style={{ color: BRAND }}>Open</button>
                   <label className="text-xs hover:underline cursor-pointer" style={{ color: BRAND }}>
                     Replace
                     <input type="file" accept="image/*,application/pdf" className="hidden" disabled={scanning}

@@ -252,16 +252,31 @@ router.patch('/:id', authenticate, async (req, res) => {
     if (approvedByAny) {
       if (!isAdminFinance) return res.status(403).json({ error: 'This expense is locked after approval — only Finance or Admin can edit it.' });
     } else {
-      if(e.submittedById!==req.user.id && req.user.role==='EMPLOYEE') return res.status(403).json({error:'Forbidden'});
+      // Pre-approval edits: the owner, Finance/Admin, or the submitter's own
+      // manager. Other managers may NOT edit expenses that aren't theirs.
+      if (e.submittedById !== req.user.id && !isAdminFinance) {
+        let allowedMgr = false;
+        if (req.user.role === 'MANAGER') {
+          const team = await teamMemberIds(req.user.id);
+          allowedMgr = team.includes(e.submittedById);
+        }
+        if (!allowedMgr) return res.status(403).json({ error: 'Forbidden' });
+      }
       if(!['DRAFT','RETURNED','CANCELLED'].includes(e.status)) return res.status(400).json({error:'Cannot edit in current status'});
     }
     const { title, orNumber, merchant, description, amount, currency, category, expenseType, receiptId, costCenter, expenseDate } = req.body;
-    const amountPhp = amount ? await toPhp(Number(amount), currency||e.currency) : undefined;
+    // Recompute amountPhp whenever amount OR currency changes (a currency-only
+    // change previously left a stale PHP amount in every report).
+    const amountProvided = amount !== undefined && amount !== null && amount !== '';
+    const currencyChanged = currency !== undefined && currency !== null && currency !== e.currency;
+    const amountPhp = (amountProvided || currencyChanged)
+      ? await toPhp(amountProvided ? Number(amount) : e.amount, currency || e.currency)
+      : undefined;
     const updated = await prisma.expense.update({
       where:{id:req.params.id},
       data:{
         title: title||(merchant?merchant:undefined), orNumber: orNumber!==undefined?orNumber||null:undefined, merchant: merchant!==undefined?merchant||null:undefined, description,
-        amount: amount ? Number(amount) : undefined,
+        amount: amountProvided ? Number(amount) : undefined,
         currency, category, expenseType,
         receiptId: receiptId !== undefined ? (receiptId||null) : undefined,
         costCenter, amountPhp,
@@ -298,6 +313,8 @@ router.post('/:id/submit', authenticate, async (req, res) => {
         prisma.expense.update({ where: { id: expense.id }, data: { status: 'APPROVED' } }),
         prisma.approval.deleteMany({ where: { expenseId: expense.id } }),
       ]);
+      // Auto-approvals of real money must be visible in the audit trail.
+      await logAudit(req.user, 'EXPENSE_AUTO_APPROVED', { targetType: 'EXPENSE', targetId: expense.id, details: `Auto-approved "${expense.title}" — submitter has no approvers in their flow` });
       await createNotification(req.user.id, 'EXPENSE_APPROVED',
         'Expense auto-approved',
         `Your expense "${expense.title}" was approved automatically (no approver assigned).`,

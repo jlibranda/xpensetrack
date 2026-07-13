@@ -709,7 +709,9 @@ router.post('/:id/mark-paid', authenticate, requireRole('FINANCE', 'ADMIN'), asy
 
 router.post('/:id/mark-unpaid', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
-    const doc = await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'FOR_APPROVAL', paidAt: null, lastEditedById: req.user.id }, include });
+    // Revert to APPROVED (Phase-2 status) — FOR_APPROVAL is a legacy stage the
+    // dashboard, bulk-mark-processed, and approvals flow no longer recognise.
+    const doc = await prisma.ledgerDoc.update({ where: { id: req.params.id }, data: { status: 'APPROVED', paidAt: null, lastEditedById: req.user.id }, include });
     res.json(doc);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

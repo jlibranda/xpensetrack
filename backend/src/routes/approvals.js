@@ -228,13 +228,24 @@ router.post('/:id/return', authenticate, requirePermission('view_approvals', ['M
   try {
     const onBehalf = await canApproveOnBehalf(req.user);
     const { notes } = req.body;
-    if (!notes) return res.status(400).json({ error: 'Comment required when returning' });
+    if (!notes || !notes.trim()) return res.status(400).json({ error: 'Comment required when returning' });
     const approval = await prisma.approval.findUnique({
       where: { id: req.params.id },
       include: { expense: { include: { submittedBy: true } } },
     });
     if (!approval) return res.status(404).json({ error: 'Not found' });
     if (approval.approverId !== req.user.id && !onBehalf) return res.status(403).json({ error: 'Not your approval' });
+    if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
+
+    // A return may only happen while this approval is actually actionable —
+    // same rule as /approve, so a later-step approver can't return early and a
+    // fully-approved expense can't be flipped back to RETURNED.
+    const allRows = await loadApprovals(approval.expenseId);
+    const chainMode = await chainModeForExpense(approval.expense);
+    if (!onBehalf && !isActionable(approval, allRows, chainMode)) {
+      return res.status(400).json({ error: 'An earlier approval step is still pending.' });
+    }
+
     await prisma.$transaction([
       // Mark this approver's decision as returned, and clear all OTHER pending
       // approvals on the expense so it leaves everyone's approval queue.
@@ -433,6 +444,7 @@ router.post('/ledger/:id/return', authenticate, requirePermission('view_approval
     const approval = await prisma.approval.findUnique({ where: { id: req.params.id }, include: { ledgerDoc: true } });
     if (!approval || !approval.ledgerDocId) return res.status(404).json({ error: 'Not found' });
     if (approval.approverId !== req.user.id && !onBehalf) return res.status(403).json({ error: 'Not your approval' });
+    if (approval.status !== 'PENDING') return res.status(400).json({ error: 'Already actioned' });
     const creator = approval.ledgerDoc.createdById ? await prisma.user.findUnique({ where: { id: approval.ledgerDoc.createdById } }) : null;
     await prisma.$transaction([
       prisma.approval.update({ where: { id: approval.id }, data: { status: 'REJECTED', notes: `[RETURNED] ${notes}` } }),
@@ -452,10 +464,17 @@ router.post('/:id/reimburse', authenticate, requireRole('FINANCE', 'ADMIN'), asy
     const expense = await prisma.expense.findUnique({ where: { id: req.params.id }, include: { submittedBy: true } });
     if (!expense) return res.status(404).json({ error: 'Not found' });
     if (expense.status !== 'APPROVED') return res.status(400).json({ error: 'Must be approved first' });
-    await prisma.expense.update({ where: { id: req.params.id }, data: { status: 'REIMBURSED' } });
-    await sendStatusUpdateEmail(expense.submittedBy.email, `${expense.submittedBy.firstName} ${expense.submittedBy.lastName}`, expense, 'REIMBURSED', expense.submittedBy).catch(() => {});
+    // Reimbursement IS the payout — use the same PROCESSED status the rest of
+    // the app understands (reports, dashboard, mark/unmark-processed, undo).
+    const when = new Date();
+    const updated = await prisma.expense.update({
+      where: { id: req.params.id },
+      data: { status: 'PROCESSED', processedAt: when, payoutDate: when },
+    });
+    await sendStatusUpdateEmail(expense.submittedBy.email, `${expense.submittedBy.firstName} ${expense.submittedBy.lastName}`, { ...updated, submittedBy: expense.submittedBy }, 'PROCESSED', expense.submittedBy).catch(() => {});
     await createNotification(expense.submittedById, 'EXPENSE_REIMBURSED',
       '\u{1F4B0} Expense reimbursed!', `"${expense.title}" has been reimbursed`, '/expenses');
+    await logAudit(req.user, 'EXPENSE_MARKED_PROCESSED', { targetType: 'EXPENSE', targetId: req.params.id, details: `Reimbursed (processed) "${expense.title}"` });
     res.json({ message: 'Reimbursed' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
