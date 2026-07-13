@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import toast from '../lib/toast';
 import RecordModal from '../components/RecordModal';
+import * as XLSX from 'xlsx';
 
 const TABS = ['General','Branding','Categories','Expense Types','Vendors/Payees','Password','Email Templates','Access Control'];
 
@@ -434,13 +435,16 @@ export default function SettingsPage() {
   const vendorFields = [
     { key:'name', label:'Vendor / payee name', type:'text', required:true },
     { key:'type', label:'Type', type:'select', default:'COMPANY', options:[{value:'COMPANY',label:'Company/Payee'},{value:'GOVERNMENT',label:'Government'},{value:'LGU',label:'LGU'}] },
+    { key:'contactPerson', label:'Contact person', type:'text' },
+    { key:'email', label:'Email', type:'text', placeholder:'name@company.com' },
     { key:'tin', label:'TIN (optional)', type:'text', mono:true, numericOnly:true },
     { key:'address', label:'Registered address (for BIR 2307)', type:'text' },
     { key:'zip', label:'ZIP', type:'text', numericOnly:true, maxLen:4 },
   ];
   const saveVendor = (idx) => async (v) => {
     if (!String(v.name).trim()) throw new Error('Vendor / payee name is required.');
-    const rec = { name: v.name.trim(), type: v.type || 'COMPANY', tin: v.tin || '', address: v.address || '', zip: v.zip || '' };
+    if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v.email).trim())) throw new Error('Please enter a valid email address.');
+    const rec = { name: v.name.trim(), type: v.type || 'COMPANY', contactPerson: v.contactPerson || '', email: (v.email || '').trim(), tin: v.tin || '', address: v.address || '', zip: v.zip || '' };
     const vendors = idx == null ? [...liveVendors, rec] : liveVendors.map((x, i) => i === idx ? rec : x);
     await persistPartial({ vendors });
     toast.success(idx == null ? 'Vendor added' : 'Vendor updated'); setRec(null);
@@ -469,6 +473,108 @@ export default function SettingsPage() {
     if (!window.confirm('Delete this ATC code?')) return;
     try { await persistPartial({ atcCodes: liveAtc.filter((_, i) => i !== idx) }); toast.success('ATC deleted'); }
     catch (e) { toast.error(e.error || 'Delete failed'); }
+  };
+
+  // ---- Excel download / bulk upload (Vendors + Categories) ----
+  const downloadXlsx = (rows, sheetName, fileName) => {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, fileName);
+  };
+  const readXlsx = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }));
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+  // pick a value from a row by any of several possible header spellings
+  const pick = (row, ...keys) => {
+    for (const k of keys) {
+      const hit = Object.keys(row).find(h => h.trim().toLowerCase() === k.toLowerCase());
+      if (hit && String(row[hit]).trim() !== '') return String(row[hit]).trim();
+    }
+    return '';
+  };
+  const normVendorType = (t) => {
+    const u = String(t).toUpperCase();
+    if (u.startsWith('GOV')) return 'GOVERNMENT';
+    if (u.startsWith('LGU')) return 'LGU';
+    return 'COMPANY';
+  };
+  const normCatType = (t) => {
+    const u = String(t).toUpperCase().replace(/[\s/]/g, '');
+    if (u.startsWith('EXPENSE')) return 'EXPENSE';
+    if (u.startsWith('AP')) return 'AP_AR';
+    return 'BOTH';
+  };
+
+  const exportVendors = () => downloadXlsx(
+    liveVendors.map(v => ({
+      Name: v.name || '', Type: { COMPANY:'Company', GOVERNMENT:'Government', LGU:'LGU' }[v.type||'COMPANY'],
+      'Contact Person': v.contactPerson || '', Email: v.email || '',
+      TIN: v.tin || '', 'Registered Address': v.address || '', ZIP: v.zip || '',
+    })),
+    'Vendors', 'vendors.xlsx'
+  );
+  const importVendors = async (file) => {
+    try {
+      const rows = await readXlsx(file);
+      if (!rows.length) { toast.error('No rows found in the file.'); return; }
+      const byName = new Map(liveVendors.map(v => [String(v.name).toLowerCase(), { ...v }]));
+      let added = 0, updated = 0, skipped = 0;
+      for (const r of rows) {
+        const name = pick(r, 'Name', 'Vendor', 'Payee', 'Vendor / payee name');
+        if (!name) { skipped++; continue; }
+        const email = pick(r, 'Email', 'Email Address');
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { skipped++; continue; }
+        const rec = {
+          name, type: normVendorType(pick(r, 'Type')),
+          contactPerson: pick(r, 'Contact Person', 'Contact', 'Contact Name'),
+          email,
+          tin: pick(r, 'TIN').replace(/\D/g, ''),
+          address: pick(r, 'Registered Address', 'Address'),
+          zip: pick(r, 'ZIP', 'Zip Code').replace(/\D/g, '').slice(0, 4),
+        };
+        const key = name.toLowerCase();
+        if (byName.has(key)) updated++; else added++;
+        byName.set(key, rec);
+      }
+      await persistPartial({ vendors: Array.from(byName.values()) });
+      toast.success(`Vendors imported — ${added} added, ${updated} updated${skipped ? `, ${skipped} skipped` : ''}.`);
+    } catch (e) { toast.error('Could not read the file. Use the downloaded template format.'); }
+  };
+
+  const exportCategories = () => downloadXlsx(
+    liveCats.map(c => ({
+      Category: c, 'GL Code': liveGl[c] || '', 'Applies To': CAT_TYPE_LABEL[liveCatTypes[c] || 'BOTH'],
+    })),
+    'Categories', 'categories.xlsx'
+  );
+  const importCategories = async (file) => {
+    try {
+      const rows = await readXlsx(file);
+      if (!rows.length) { toast.error('No rows found in the file.'); return; }
+      const cats = [...liveCats];
+      const gl = { ...liveGl };
+      const types = { ...liveCatTypes };
+      let added = 0, updated = 0, skipped = 0;
+      for (const r of rows) {
+        const name = pick(r, 'Category', 'Name').toUpperCase();
+        if (!name) { skipped++; continue; }
+        const exists = cats.some(c => String(c).toUpperCase() === name);
+        if (exists) updated++; else { cats.push(name); added++; }
+        gl[name] = pick(r, 'GL Code', 'GL', 'GLCode');
+        types[name] = normCatType(pick(r, 'Applies To', 'Type') || 'BOTH');
+      }
+      await persistPartial({ categories: cats, categoryGlCodes: gl, categoryTypes: types });
+      toast.success(`Categories imported — ${added} added, ${updated} updated${skipped ? `, ${skipped} skipped` : ''}.`);
+    } catch (e) { toast.error('Could not read the file. Use the downloaded template format.'); }
   };
 
   const uploadLogo = async (e) => {
@@ -769,6 +875,12 @@ export default function SettingsPage() {
               <h2 className="text-sm font-medium text-gray-700">Expense categories & GL codes</h2>
               {canEditCategories && (
               <div className="flex gap-2">
+                <button onClick={exportCategories} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Excel</button>
+                <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  ⬆ Bulk upload
+                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                    onChange={ev => { const f = ev.target.files?.[0]; ev.target.value=''; if (f) importCategories(f); }} />
+                </label>
                 <button onClick={() => setRec({ title:'Add category', fields:catFields, initial:{ type:'BOTH' }, onSave: saveCat(null) })}
                   className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add</button>
               </div>
@@ -820,8 +932,16 @@ export default function SettingsPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium text-gray-700">Vendors / Payees</h2>
-              <button onClick={() => setRec({ title:'Add vendor / payee', fields:vendorFields, initial:{ type:'COMPANY' }, onSave: saveVendor(null) })}
-                className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add vendor</button>
+              <div className="flex gap-2">
+                <button onClick={exportVendors} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Excel</button>
+                <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  ⬆ Bulk upload
+                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                    onChange={ev => { const f = ev.target.files?.[0]; ev.target.value=''; if (f) importVendors(f); }} />
+                </label>
+                <button onClick={() => setRec({ title:'Add vendor / payee', fields:vendorFields, initial:{ type:'COMPANY' }, onSave: saveVendor(null) })}
+                  className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add vendor</button>
+              </div>
             </div>
             {liveVendors.length === 0 && <p className="text-xs text-gray-400 mb-2">No vendors yet. Add vendors here so they appear in the Add Document dropdown.</p>}
             <div className="space-y-2">
@@ -833,6 +953,11 @@ export default function SettingsPage() {
                   <button onClick={() => setRec({ title:'Edit vendor / payee', fields:vendorFields, initial:v, onSave: saveVendor(i) })}
                     className="text-xs hover:underline" style={{ color: brandColor }}>Edit</button>
                   <button onClick={() => deleteVendor(i)} className="px-2 py-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                  {(v.contactPerson || v.email) && (
+                    <div className="w-full text-xs text-gray-500 mt-0.5">
+                      {v.contactPerson || ''}{v.contactPerson && v.email ? ' · ' : ''}{v.email || ''}
+                    </div>
+                  )}
                   {(v.address || v.zip) && (
                     <div className="w-full text-xs text-gray-400 mt-0.5">
                       {v.address || '—'}{v.zip ? ` · ZIP ${v.zip}` : ''}
