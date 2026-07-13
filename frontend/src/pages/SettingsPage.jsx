@@ -567,12 +567,17 @@ export default function SettingsPage() {
       const types = { ...liveCatTypes };
       let added = 0, updated = 0, skipped = 0;
       for (const r of rows) {
-        const name = pick(r, 'Category', 'Name').toUpperCase();
-        if (!name) { skipped++; continue; }
-        const exists = cats.some(c => String(c).toUpperCase() === name);
-        if (exists) updated++; else { cats.push(name); added++; }
-        gl[name] = pick(r, 'GL Code', 'GL', 'GLCode');
-        types[name] = normCatType(pick(r, 'Applies To', 'Type') || 'BOTH');
+        const rawName = pick(r, 'Category', 'Name');
+        if (!rawName) { skipped++; continue; }
+        // Match case-insensitively, but keep the org's existing casing when found
+        // (GL codes and types are keyed by the exact category name).
+        const existing = cats.find(c => String(c).toLowerCase() === rawName.toLowerCase());
+        const name = existing || rawName;
+        if (existing) updated++; else { cats.push(name); added++; }
+        const glVal = pick(r, 'GL Code', 'GL', 'GLCode');
+        if (glVal) gl[name] = glVal;
+        const typeVal = pick(r, 'Applies To', 'Type');
+        if (typeVal || !existing) types[name] = normCatType(typeVal || 'BOTH');
       }
       await persistPartial({ categories: cats, categoryGlCodes: gl, categoryTypes: types });
       toast.success(`Categories imported — ${added} added, ${updated} updated${skipped ? `, ${skipped} skipped` : ''}.`);
