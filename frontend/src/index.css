@@ -143,6 +143,17 @@ html.dark .bg-green-50 { background-color: #052e16 !important; }
 html.dark .text-green-700 { color: #86efac !important; }
 html.dark .bg-red-50 { background-color: #450a0a !important; }
 html.dark .text-red-700 { color: #fca5a5 !important; }
+
+/* Access Control: frozen first (Permission) column — matches table surfaces in both modes */
+.ac-freeze { position: sticky; left: 0; border-right: 1px solid #cbd5e1; }
+.ac-freeze-head { z-index: 20; background-color: #e2e8f0; }
+.ac-freeze-cell { z-index: 10; }
+.ac-freeze-even { background-color: #ffffff; }
+.ac-freeze-odd { background-color: #f9fafb; }
+html.dark .ac-freeze { border-right-color: #334155; }
+html.dark .ac-freeze-head { background-color: #1e293b; }
+html.dark .ac-freeze-even { background-color: #1e293b; }
+html.dark .ac-freeze-odd { background-color: #0f172a; }
 html.dark .bg-amber-50 { background-color: #451a03 !important; }
 html.dark .text-amber-700 { color: #fcd34d !important; }
 html.dark .bg-blue-50 { background-color: #172554 !important; }

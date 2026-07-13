@@ -194,7 +194,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b" style={{backgroundColor:'#1e293b'}}>
-              <th className="text-left py-3 px-4 font-bold text-white sticky left-0 z-20" style={{ backgroundColor: '#1e293b', borderRight: '1px solid #334155' }}>Permission</th>
+              <th className="text-left py-3 px-4 font-bold ac-freeze ac-freeze-head">Permission</th>
               {visibleRoles.map(r => {
                 const isDefault = ['EMPLOYEE','MANAGER','FINANCE','ADMIN'].includes(r);
                 return (
@@ -222,8 +222,8 @@ function AccessControlTab({ settings, navigate, refresh }) {
           </thead>
           <tbody>
             {Object.keys(DEFAULT_PERMS).filter(key => acIsAdmin || !SENSITIVE_PERMS.includes(key)).map((key, i) => (
-              <tr key={key} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                <td className="py-2.5 px-4 font-semibold sticky left-0 z-10" style={{ color:'#111827', backgroundColor: i % 2 === 0 ? '#ffffff' : '#f5f7fa', borderRight: '1px solid #e5e7eb' }}>{PERM_LABELS[key]}</td>
+              <tr key={key} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                <td className={`py-2.5 px-4 font-semibold ac-freeze ac-freeze-cell ${i % 2 === 0 ? 'ac-freeze-even' : 'ac-freeze-odd'}`}>{PERM_LABELS[key]}</td>
                 {visibleRoles.map(role => {
                   const hasAccess = (perms[key] || []).includes(role);
                   const isAdmin = role === 'ADMIN';
