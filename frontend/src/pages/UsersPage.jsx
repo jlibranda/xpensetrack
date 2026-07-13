@@ -310,14 +310,36 @@ export default function UsersPage() {
     return uniq.map(id => ({ approvers: [id], rule: 'ALL' }));
   };
 
+  // Multi-term search: split on commas, semicolons, newlines, or tabs so a
+  // column/row copied from Excel matches MANY employees at once (OR match).
+  const searchTerms = search.split(/[,;\n\t]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  const searchHaystack = (u) => `${u.firstName} ${u.lastName} ${u.email} ${u.employeeNumber||''}`.toLowerCase();
   const filtered = users.filter(u => {
-    const q = search.toLowerCase();
-    if (q && !`${u.firstName} ${u.lastName} ${u.email} ${u.employeeNumber||''}`.toLowerCase().includes(q)) return false;
+    if (searchTerms.length > 0 && !searchTerms.some(t => searchHaystack(u).includes(t))) return false;
     if (filterRole && u.role !== filterRole) return false;
     if (filterActive === 'active' && !u.isActive) return false;
     if (filterActive === 'inactive' && u.isActive) return false;
     return true;
   });
+
+  // Which pasted terms matched NO employee at all? Handy when reconciling a
+  // list from Excel — shows exactly which rows to double-check.
+  const unmatchedTerms = searchTerms.length > 1
+    ? searchTerms.filter(t => !users.some(u => searchHaystack(u).includes(t)))
+    : [];
+
+  // Pasting a multi-line / tab-separated block (an Excel column or row) turns
+  // it into a comma-separated term list instead of a garbled single string.
+  const handleSearchPaste = (e) => {
+    const text = e.clipboardData?.getData('text') || '';
+    if (!/[\n\t]/.test(text)) return; // ordinary paste — let the browser handle it
+    e.preventDefault();
+    const pasted = text.split(/[\n\t;,]+/).map(s => s.trim()).filter(Boolean);
+    setSearch(prev => {
+      const existing = prev.split(/[,;\n\t]+/).map(s => s.trim()).filter(Boolean);
+      return [...new Set([...existing, ...pasted])].join(', ');
+    });
+  };
 
   // Selectable users for delete = everyone shown except admins and the current user.
   const deletableShown = () => filtered.filter(u => u.role !== 'ADMIN' && u.id !== currentUser?.id);
@@ -620,9 +642,16 @@ export default function UsersPage() {
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
           {/* Filters */}
           <div className="px-4 py-3 border-b border-gray-50 flex flex-wrap gap-3 items-center">
-            <input value={search} onChange={e=>setSearch(e.target.value)}
-              placeholder="Search name, email, employee #..."
+            <input value={search} onChange={e=>setSearch(e.target.value)} onPaste={handleSearchPaste}
+              placeholder="Search name, email, employee # — or paste a list from Excel"
               className="flex-1 min-w-48 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
+            {searchTerms.length > 1 && (
+              <button onClick={() => setSearch('')}
+                className="text-xs px-2 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50"
+                title="Clear all search terms">
+                ✕ {searchTerms.length} terms
+              </button>
+            )}
             <select value={filterRole} onChange={e=>setFilterRole(e.target.value)}
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none">
               <option value="">All roles</option>
@@ -655,6 +684,14 @@ export default function UsersPage() {
               </>
             )}
           </div>
+
+          {/* When a pasted list has entries that matched nobody, name them so the
+              admin knows exactly which Excel rows to double-check. */}
+          {unmatchedTerms.length > 0 && (
+            <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-700">
+              ⚠ No employee matched {unmatchedTerms.length} of your {searchTerms.length} search terms: <span className="font-medium">{unmatchedTerms.join(', ')}</span>
+            </div>
+          )}
 
           {loading ? <div className="py-12 text-center text-sm text-gray-400">Loading...</div> : (
             <div className="overflow-x-auto">
