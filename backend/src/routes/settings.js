@@ -9,23 +9,14 @@ const { logAudit } = require('../lib/audit');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const NEW_DEFAULT_CATEGORIES = "Cleaning,Education and Training,Entertainment/Meals,Equipment,Facility Maintenance and Repair,Furniture and Fixtures,General Office Expense,Hardware,Miscellaneous,Mobile Device,Non-Capital Small Tools Equipment and Furniture,Office Rent,Parking,Printing,Recruiting,Travel - Air Ticket (International),Travel - Air Ticket (Domestic),Travel - Others,Travel - Hotel (Domestic)";
-const OLD_DEFAULT_CATEGORIES = ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COMMUNICATIONS','OTHER'];
 
 async function getOrCreate() {
   let s = await prisma.orgSettings.findFirst();
   if (!s) {
+    // Brand-new install: seed the starter category list ONCE. After this point the
+    // org's list is never auto-modified — deleting some or even ALL categories is
+    // respected. Defaults can be restored intentionally via POST /settings/reset-categories.
     s = await prisma.orgSettings.create({ data: { categories: NEW_DEFAULT_CATEGORIES } });
-  } else {
-    // One-time migration ONLY: upgrade the legacy default list (or an empty list)
-    // to the new defaults. Never touch a list the org has customized — resetting on
-    // every read silently undid user deletes and bulk uploads.
-    const current = (s.categories || '').split(',').map(c => c.trim()).filter(Boolean);
-    const isLegacyDefaults = current.length > 0 &&
-      current.length === OLD_DEFAULT_CATEGORIES.length &&
-      current.every(c => OLD_DEFAULT_CATEGORIES.includes(c.toUpperCase()));
-    if (current.length === 0 || isLegacyDefaults) {
-      s = await prisma.orgSettings.update({ where: { id: s.id }, data: { categories: NEW_DEFAULT_CATEGORIES } });
-    }
   }
   return s;
 }
@@ -203,7 +194,7 @@ router.post('/reset-categories', authenticate, requirePermission('edit_categorie
     const s = await getOrCreate();
     const updated = await prisma.orgSettings.update({
       where: { id: s.id },
-      data: { categories: "Cleaning,Education and Training,Entertainment/Meals,Equipment,Facility Maintenance and Repair,Furniture and Fixtures,General Office Expense,Hardware,Miscellaneous,Mobile Device,Non-Capital Small Tools Equipment and Furniture,Office Rent,Parking,Printing,Recruiting,Travel - Air Ticket (International),Travel - Air Ticket (Domestic),Travel - Others,Travel - Hotel (Domestic)" }
+      data: { categories: NEW_DEFAULT_CATEGORIES }
     });
     res.json({ message: 'Categories reset to defaults', categories: updated.categories.split(',') });
   } catch(err) { res.status(500).json({ error: err.message }); }
