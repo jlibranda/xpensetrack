@@ -5,6 +5,8 @@ import api from '../lib/api';
 import ReceiptImage from '../components/ReceiptImage';
 import { useCurrency } from '../context/CurrencyContext';
 import { useAuth } from '../context/AuthContext';
+import { useOrg } from '../context/OrgContext';
+import { scopeTabsFor } from '../lib/scope';
 
 const STATUS_BADGE = {
   DRAFT: 'bg-blue-50 text-blue-700',
@@ -33,11 +35,9 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const { user } = useAuth();
-  // Self / Team scope toggle. Admin has no toggle (My Expenses = their own);
-  // Finance also gets All.
-  const scopeTabs = user?.role === 'ADMIN' ? []
-    : user?.role === 'FINANCE' ? [['self','Self'],['team','Team'],['all','All']]
-    : [['self','Self'],['team','Team']];
+  const { settings } = useOrg();
+  // Self / Team / All scope toggle, driven by Access Control (view_team). Admin: no toggle.
+  const scopeTabs = scopeTabsFor(user?.role, settings?.accessControl);
   const [scope, setScope] = useState(user?.role === 'ADMIN' ? 'all' : 'self');
   const [selected, setSelected] = useState(null);
   const [cancelModal, setCancelModal] = useState(null);

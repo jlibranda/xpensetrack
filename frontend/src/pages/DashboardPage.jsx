@@ -5,6 +5,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import api from '../lib/api';
 import { useCurrency } from '../context/CurrencyContext';
 import { useAuth } from '../context/AuthContext';
+import { useOrg } from '../context/OrgContext';
+import { scopeTabsFor } from '../lib/scope';
 
 const STATUS_BADGE = {
   DRAFT: 'bg-gray-500 text-white',
@@ -33,15 +35,13 @@ export default function DashboardPage() {
   const { format } = useCurrency();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { settings } = useOrg();
   const canExport = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
   const canViewSpending = ['FINANCE','ADMIN'].includes(user?.role);
 
-  // Scope tabs for "This month's overview":
-  //  Employee/Manager: Self, Team   |   Finance: Self, Team, All   |   Admin: none (sees all)
+  // Scope tabs driven by Access Control (view_team). Admin sees all (no tabs).
   const role = user?.role;
-  const scopeTabs = role === 'ADMIN' ? []
-    : role === 'FINANCE' ? [['self','Self'],['team','Team'],['all','All']]
-    : [['self','Self'],['team','Team']];
+  const scopeTabs = scopeTabsFor(role, settings?.accessControl);
   const [scope, setScope] = useState(role === 'ADMIN' ? 'all' : 'self');
   // Detect dark mode (the app toggles a `dark` class on <html>) for chart text colors.
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');

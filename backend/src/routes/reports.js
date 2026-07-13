@@ -1,7 +1,7 @@
 // src/routes/reports.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, requireRole, requirePermission } = require('../middleware/auth');
+const { authenticate, requireRole, requirePermission, hasPermission } = require('../middleware/auth');
 const XLSX = require('xlsx');
 const { signReceiptToken } = require('../lib/receipt-token');
 const prisma = new PrismaClient();
@@ -65,6 +65,7 @@ router.get('/summary', authenticate, async (req, res) => {
 
     // Enforce permissions: only FINANCE/ADMIN may use 'all'.
     if (requested === 'all' && !['FINANCE', 'ADMIN'].includes(role)) requested = 'team';
+    if (requested === 'team' && !(await hasPermission(req.user, 'view_team', ['MANAGER','FINANCE','ADMIN']))) requested = 'self';
 
     if (requested === 'self') {
       where.submittedById = req.user.id;

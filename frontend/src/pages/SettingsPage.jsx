@@ -19,6 +19,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   // A non-admin managing access control must never see/grant these.
   const SENSITIVE_PERMS = ['manage_password', 'reset_passwords', 'send_credentials', 'manage_receipt_storage', 'upload_branding', 'change_branding', 'impersonate_user'];
   const DEFAULT_PERMS = {
+    view_team: ['MANAGER','FINANCE','ADMIN'],
     view_approvals: ['MANAGER','FINANCE','ADMIN'],
     approve_on_behalf: ['ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],
@@ -43,6 +44,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   };
 
   const PERM_LABELS = {
+    view_team: 'View team data (Team scope toggle on Dashboard/Expenses/etc.)',
     view_approvals: 'Access My Approvals',
     approve_on_behalf: 'Approve on behalf of approvers (unblock stuck approvals)',
     view_reports: 'View reports',

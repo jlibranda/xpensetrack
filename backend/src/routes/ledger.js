@@ -120,6 +120,7 @@ router.get('/', authenticate, canViewLedger, async (req, res) => {
     if (scope) {
       let requested = scope;
       if (requested === 'all' && !['FINANCE', 'ADMIN'].includes(req.user.role)) requested = 'team';
+      if (requested === 'team' && !(await hasPermission(req.user, 'view_team', ['MANAGER','FINANCE','ADMIN']))) requested = 'self';
       if (requested === 'self') {
         // Own OR assigned to me — so nothing you're responsible for disappears
         // (e.g. after an invoice is returned/rejected back to you).

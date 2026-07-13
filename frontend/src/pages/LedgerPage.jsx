@@ -5,6 +5,7 @@ import ReceiptImage from '../components/ReceiptImage';
 import useUnsavedChanges from '../hooks/useUnsavedChanges';
 import { useCurrency } from '../context/CurrencyContext';
 import { useOrg } from '../context/OrgContext';
+import { scopeTabsFor } from '../lib/scope';
 import { useAuth } from '../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production.up.railway.app/api';
@@ -50,9 +51,7 @@ export default function LedgerPage({ mode = 'manage' }) {
   const { settings } = useOrg();
   const { user } = useAuth();
   // Self / Team scope toggle (mirrors My Expenses). Admin sees all; Finance also gets All.
-  const scopeTabs = user?.role === 'ADMIN' ? []
-    : user?.role === 'FINANCE' ? [['self', 'Self'], ['team', 'Team'], ['all', 'All']]
-    : [['self', 'Self'], ['team', 'Team']];
+  const scopeTabs = scopeTabsFor(user?.role, settings?.accessControl);
   // FINANCE & ADMIN manage company-wide AP/AR, so default to All; others to Self.
   const [scope, setScope] = useState(['FINANCE', 'ADMIN'].includes(user?.role) ? 'all' : 'self');
   // Full manage rights (create/edit/delete/submit). Approvers with only

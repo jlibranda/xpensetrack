@@ -1,7 +1,7 @@
 // src/routes/expenses.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, hasPermission } = require('../middleware/auth');
 const { sendApprovalRequestEmail, sendPaymentNotificationEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
@@ -55,6 +55,7 @@ router.get('/', authenticate, async (req, res) => {
       // Dashboard scope toggle: self | team | all (all is Finance/Admin only).
       let requested = scope;
       if (requested === 'all' && !['FINANCE','ADMIN'].includes(role)) requested = 'team';
+      if (requested === 'team' && !(await hasPermission(req.user, 'view_team', ['MANAGER','FINANCE','ADMIN']))) requested = 'self';
       if (requested === 'self') {
         where.submittedById = req.user.id;
       } else if (requested === 'team') {
