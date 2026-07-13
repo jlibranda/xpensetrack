@@ -887,7 +887,7 @@ export default function SettingsPage() {
               )}
             </div>
             <div className="space-y-2">
-              {liveCats.map((cat) => (
+              {[...liveCats].sort((a, b) => String(a).toLowerCase().localeCompare(String(b).toLowerCase())).map((cat) => (
                 <div key={cat} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2">
                   <span className="flex-1 text-sm font-medium text-gray-800 uppercase">{cat}</span>
                   <span className="w-24 text-sm font-mono text-gray-500">{liveGl[cat] || '—'}</span>
@@ -945,7 +945,7 @@ export default function SettingsPage() {
             </div>
             {liveVendors.length === 0 && <p className="text-xs text-gray-400 mb-2">No vendors yet. Add vendors here so they appear in the Add Document dropdown.</p>}
             <div className="space-y-2">
-              {liveVendors.map((v, i) => (
+              {liveVendors.map((v, i) => ({ v, i })).sort((a, b) => String(a.v.name || '').toLowerCase().localeCompare(String(b.v.name || '').toLowerCase())).map(({ v, i }) => (
                 <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 border border-gray-100 rounded-lg px-3 py-2">
                   <span className="flex-1 min-w-[140px] text-sm font-medium text-gray-800">{v.name || '(unnamed)'}</span>
                   <span className="text-xs text-gray-400">{ {COMPANY:'Company',GOVERNMENT:'Government',LGU:'LGU'}[v.type||'COMPANY'] }</span>
