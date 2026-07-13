@@ -256,6 +256,44 @@ router.post('/:id/send-credentials', authenticate, requirePermission('send_crede
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST bulk send credentials — emails a fresh temporary password to each selected user.
+router.post('/bulk-credentials', authenticate, requirePermission('send_credentials'), async (req, res) => {
+  try {
+    const { userIds } = req.body;
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'No users selected' });
+    }
+    // Respect the master email switch (same rule as the single action).
+    const org = await prisma.orgSettings.findFirst();
+    if (org?.emailNotificationsEnabled === false) {
+      return res.status(400).json({ error: 'Email notifications are OFF in Settings, so no email can be sent — this action is paused. Turn email notifications ON first, then try again.' });
+    }
+    const { sendCredentialsEmail } = require('../lib/email');
+    const targets = await prisma.user.findMany({ where: { id: { in: userIds } } });
+
+    let sent = 0; const skippedNames = []; const failedNames = [];
+    for (const t of targets) {
+      const name = `${t.firstName||''} ${t.lastName||''}`.trim() || t.email;
+      // Skip deactivated accounts and admin accounts when the requester isn't an admin.
+      if (t.isActive === false) { skippedNames.push(`${name} (deactivated)`); continue; }
+      if (t.role === 'ADMIN' && req.user.role !== 'ADMIN') { skippedNames.push(`${name} (admin)`); continue; }
+      try {
+        const tempPassword = genTempPassword();
+        const passwordHash = await bcrypt.hash(tempPassword, 12);
+        await prisma.user.update({ where: { id: t.id }, data: { passwordHash, tempPasswordHash: passwordHash, failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: true } });
+        const ok = await sendCredentialsEmail(t.email, name, tempPassword, t);
+        if (ok === false) { failedNames.push(name); } else { sent++; }
+      } catch (e) { failedNames.push(name); }
+    }
+    await logAudit(req.user, 'USER_CREDENTIALS_SENT_BULK', { targetType: 'USER', details: `Bulk credentials: ${sent} sent, ${skippedNames.length} skipped, ${failedNames.length} failed` });
+
+    const parts = [`${sent} sent`];
+    if (skippedNames.length) parts.push(`${skippedNames.length} skipped`);
+    if (failedNames.length) parts.push(`${failedNames.length} failed`);
+    res.json({ sent, skipped: skippedNames, failed: failedNames, message: `Credentials: ${parts.join(', ')}.` });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // POST bulk create
 router.post('/bulk', authenticate, requirePermission('manage_users'), async (req, res) => {
   const { users } = req.body;

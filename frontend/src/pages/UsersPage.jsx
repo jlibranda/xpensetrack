@@ -33,6 +33,7 @@ export default function UsersPage() {
   const [apprResult, setApprResult] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [deletingUsers, setDeletingUsers] = useState(false);
+  const [sendingCreds, setSendingCreds] = useState(false);
   const [apprLoading, setApprLoading] = useState(false);
   const { settings } = useOrg();
   const ROLES = (() => {
@@ -313,6 +314,20 @@ export default function UsersPage() {
     const ids = deletableShown().map(u => u.id);
     const allSelected = ids.length > 0 && ids.every(id => selectedIds.includes(id));
     setSelectedIds(allSelected ? [] : ids);
+  };
+
+  const sendCredentialsSelected = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Send login credentials (a fresh temporary password) to ${selectedIds.length} selected user(s)? They'll be asked to change it on first login.`)) return;
+    setSendingCreds(true); setMsg({ text:'', ok:true });
+    try {
+      const r = await api.post('/users/bulk-credentials', { userIds: selectedIds });
+      toast.success(r.message || 'Credentials sent');
+      setMsg({ text: r.message || 'Credentials sent', ok: (r.failed?.length || 0) === 0 });
+      setSelectedIds([]);
+      await load();
+    } catch (e) { setMsg({ text: e.error || 'Failed to send credentials', ok: false }); }
+    finally { setSendingCreds(false); }
   };
 
   const deleteSelected = async () => {
@@ -613,11 +628,18 @@ export default function UsersPage() {
               ⬇ Download list
             </button>
             {currentUser?.role === 'ADMIN' && selectedIds.length > 0 && (
-              <button onClick={deleteSelected} disabled={deletingUsers}
-                className="text-xs px-3 py-1.5 rounded-lg text-white font-semibold disabled:opacity-60"
-                style={{ backgroundColor: '#dc2626' }}>
-                {deletingUsers ? 'Deleting…' : `🗑 Delete selected (${selectedIds.length})`}
-              </button>
+              <>
+                <button onClick={sendCredentialsSelected} disabled={sendingCreds}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold disabled:opacity-60"
+                  style={{ backgroundColor: settings?.primaryColor||'#1D9E75', color: 'var(--brand-contrast,#fff)' }}>
+                  {sendingCreds ? 'Sending…' : `✉️ Send credentials (${selectedIds.length})`}
+                </button>
+                <button onClick={deleteSelected} disabled={deletingUsers}
+                  className="text-xs px-3 py-1.5 rounded-lg text-white font-semibold disabled:opacity-60"
+                  style={{ backgroundColor: '#dc2626' }}>
+                  {deletingUsers ? 'Deleting…' : `🗑 Delete selected (${selectedIds.length})`}
+                </button>
+              </>
             )}
           </div>
 
