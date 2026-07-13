@@ -150,12 +150,12 @@ export default function UsersPage() {
   };
 
   const resetPassword = async (u) => {
-    const pwd = prompt(`New password for ${u.firstName} ${u.lastName}:`, settings?.defaultPassword || 'Welcome123');
+    const pwd = prompt(`New TEMPORARY password for ${u.firstName} ${u.lastName} (they'll be required to change it at next login):`, settings?.defaultPassword || 'Welcome123');
     if (!pwd) return;
     try {
-      await api.post(`/users/${u.id}/reset-password`, { newPassword: pwd });
-      alert('Password reset successfully!');
-    } catch(err) { alert(err.error||'Failed'); }
+      const r = await api.post(`/users/${u.id}/reset-password`, { newPassword: pwd });
+      toast.success(r.message || 'Password reset — emailed to the user.');
+    } catch(err) { toast.error(err.error||'Reset failed'); }
   };
 
   const [sendingCredsId, setSendingCredsId] = useState(null);
@@ -309,9 +309,15 @@ export default function UsersPage() {
     return uniq.map(id => ({ approvers: [id], rule: 'ALL' }));
   };
 
+  // Search supports MULTIPLE terms (e.g. pasted from Excel) separated by
+  // commas, semicolons, tabs, or newlines. A user is shown if ANY term matches
+  // (name, email, or employee number). A single term behaves exactly as before.
+  const searchTerms = search.split(/[,;\t\n\r]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
   const filtered = users.filter(u => {
-    const q = search.toLowerCase();
-    if (q && !`${u.firstName} ${u.lastName} ${u.email} ${u.employeeNumber||''}`.toLowerCase().includes(q)) return false;
+    if (searchTerms.length) {
+      const hay = `${u.firstName} ${u.lastName} ${u.email} ${u.employeeNumber||''}`.toLowerCase();
+      if (!searchTerms.some(t => hay.includes(t))) return false;
+    }
     if (filterRole && u.role !== filterRole) return false;
     if (filterActive === 'active' && !u.isActive) return false;
     if (filterActive === 'inactive' && u.isActive) return false;
@@ -620,7 +626,21 @@ export default function UsersPage() {
           {/* Filters */}
           <div className="px-4 py-3 border-b border-gray-50 flex flex-wrap gap-3 items-center">
             <input value={search} onChange={e=>setSearch(e.target.value)}
-              placeholder="Search name, email, employee #..."
+              onPaste={e => {
+                // Pasting a column from Excel arrives as newline-separated text,
+                // which a single-line input would mangle — convert to commas so
+                // every pasted employee becomes its own search term.
+                const text = e.clipboardData?.getData('text') || '';
+                if (/[\r\n\t]/.test(text)) {
+                  e.preventDefault();
+                  const terms = text.split(/[\r\n\t]+/).map(t => t.trim()).filter(Boolean);
+                  setSearch(prev => {
+                    const existing = prev.trim();
+                    return existing ? `${existing}, ${terms.join(', ')}` : terms.join(', ');
+                  });
+                }
+              }}
+              placeholder="Search name, email, employee #... (paste a list for multiple)"
               className="flex-1 min-w-48 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
             <select value={filterRole} onChange={e=>setFilterRole(e.target.value)}
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none">

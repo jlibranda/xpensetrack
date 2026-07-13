@@ -206,7 +206,9 @@ router.post('/:id/reset-password', authenticate, requirePermission('reset_passwo
       return res.status(400).json({ error: 'Email notifications are OFF in Settings, so no email can be sent — this action is paused. Turn email notifications ON first, then try again.' });
     }
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null } });
+    // Match the send-credentials behavior: treat the reset password as temporary —
+    // the user must change it at next login, and reusing it later gives a clear message.
+    await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash, tempPasswordHash: passwordHash, failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: true } });
     const { sendCredentialsEmail } = require('../lib/email');
     const ok = await sendCredentialsEmail(target.email, `${target.firstName||''} ${target.lastName||''}`.trim(), newPassword, target);
     await logAudit(req.user, 'USER_PASSWORD_RESET', { targetType: 'USER', targetId: req.params.id, details: `Reset password for ${target.firstName||''} ${target.lastName||''}`.trim() });
