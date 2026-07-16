@@ -581,16 +581,21 @@ export default function SettingsPage() {
         if (!name) { skipped++; continue; }
         const email = pick(r, 'Email', 'Email Address');
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { skipped++; continue; }
-        const rec = {
-          name, type: normVendorType(pick(r, 'Type')),
-          contactPerson: pick(r, 'Contact Person', 'Contact', 'Contact Name'),
-          email,
-          tin: pick(r, 'TIN').replace(/\D/g, ''),
-          address: pick(r, 'Registered Address', 'Address'),
-          zip: pick(r, 'ZIP', 'Zip Code').replace(/\D/g, '').slice(0, 4),
-        };
         const key = name.toLowerCase();
-        if (byName.has(key)) updated++; else added++;
+        const prev = byName.get(key);
+        // MERGE with the existing record: a blank cell in the file keeps the
+        // current value instead of wiping it. Only non-blank cells overwrite.
+        const typeRaw = pick(r, 'Type');
+        const rec = {
+          name: prev?.name || name,
+          type: typeRaw ? normVendorType(typeRaw) : (prev?.type || 'COMPANY'),
+          contactPerson: pick(r, 'Contact Person', 'Contact', 'Contact Name') || prev?.contactPerson || '',
+          email: email || prev?.email || '',
+          tin: (pick(r, 'TIN').replace(/\D/g, '')) || prev?.tin || '',
+          address: pick(r, 'Registered Address', 'Address') || prev?.address || '',
+          zip: (pick(r, 'ZIP', 'Zip Code').replace(/\D/g, '').slice(0, 4)) || prev?.zip || '',
+        };
+        if (prev) updated++; else added++;
         byName.set(key, rec);
       }
       await persistPartial({ vendors: Array.from(byName.values()) });
