@@ -85,6 +85,7 @@ const DEFAULT_TEMPLATES = {
   credentials_reset:       { subject: 'Your {appName} password has been reset', message: 'Your password was reset by an administrator. Here are your new login details — you will be asked to change this password when you sign in.' },
   // Vendor-facing: payment notice with POP + BIR 2307 attached (AP invoices).
   vendor_payment:          { subject: 'Payment processed — {vendorName}', message: 'Please be advised that payment for the below invoice(s) has been successfully processed. The funds should now be reflected in your account. 2307 to follow.' },
+  vendor_2307:             { subject: 'BIR Form 2307 — {vendorName}', message: 'Please find attached your BIR Form 2307 covering the invoice(s) below. If you have any questions, feel free to reach out.' },
   // Payment / credit notification (sent manually from the Proof of Payment panel).
   payment_notification:      { subject: '💰 Payment sent — {title}',          message: 'Good news! Your filed expense "{title}" ({amount}) has been paid/reimbursed. Proof of payment is on file.' },
   apar_payment_notification: { subject: '💰 Payment posted — {title}',        message: 'This is to confirm that "{title}" ({amount}) has been paid/credited. Proof of payment is on file.' },
@@ -487,13 +488,14 @@ async function sendPaymentNotificationEmail(toEmail, toName, doc, employee, kind
 // payment image(s) and a combined BIR 2307 PDF attached. `recipients` may contain
 // several addresses (vendor email supports ";"-separated lists). Returns the
 // number of recipients successfully emailed.
-async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, invoices, totalPhp, paymentDate, senderName, attachments, subjectOverride, messageOverride }) {
+async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, invoices, totalPhp, paymentDate, senderName, attachments, subjectOverride, messageOverride, templateKey = 'vendor_payment', includePaymentMeta = true }) {
   const brand = await getBranding();
   const appName = brand.appName;
   const custom = await getTemplates();
   const vars = { contactPerson: contactPerson || vendorName, vendorName, appName, senderName };
-  const subject = (subjectOverride && subjectOverride.trim()) ? subst(subjectOverride, vars) : tpl(custom, 'vendor_payment', 'subject', vars);
-  const message = (messageOverride && messageOverride.trim()) ? subst(messageOverride, vars) : tpl(custom, 'vendor_payment', 'message', vars);
+  const key = DEFAULT_TEMPLATES[templateKey] ? templateKey : 'vendor_payment';
+  const subject = (subjectOverride && subjectOverride.trim()) ? subst(subjectOverride, vars) : tpl(custom, key, 'subject', vars);
+  const message = (messageOverride && messageOverride.trim()) ? subst(messageOverride, vars) : tpl(custom, key, 'message', vars);
   const peso = (n) => `\u20b1${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const invoiceRows = (invoices || []).map(inv =>
@@ -509,8 +511,8 @@ async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, i
        <table style="width:100%;border-collapse:collapse">
          ${invoiceRows}
          ${row('<strong>Total Amount</strong>', `<strong>${peso(totalPhp)}</strong> <span style="color:#6b7280;font-weight:400">(net of wtax)</span>`)}
-         ${row('Payment Date', paymentDate)}
-         ${row('Method', 'Online Transfer')}
+         ${includePaymentMeta ? row('Payment Date', paymentDate) : ''}
+         ${includePaymentMeta ? row('Method', 'Online Transfer') : ''}
        </table>
      </div>
      <p style="color:#374151;font-size:14px;margin:0 0 16px">Please find attached for reference. If you have any questions regarding this payment, feel free to reach out.</p>

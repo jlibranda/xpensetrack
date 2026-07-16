@@ -582,11 +582,11 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
       } catch (e) { console.error('Vendor save-back failed:', e.message); }
     }
 
-    // What to attach: both by default, or POP-only / 2307-only (e.g. "2307 to
-    // follow" workflows where the POP is sent first and the 2307 later).
-    const attachPop = req.body?.attachPop !== false;
-    const attach2307 = req.body?.attach2307 !== false;
-    if (!attachPop && !attach2307) return res.status(400).json({ error: 'Select at least one attachment (POP and/or 2307).' });
+    // What to send: kind 'pop' (proof of payment) or '2307' — SEPARATE emails,
+    // each stamped on the docs so the table can show sent-status per invoice.
+    const kind = req.body?.kind === '2307' ? '2307' : 'pop';
+    const attachPop = kind === 'pop';
+    const attach2307 = kind === '2307';
 
     // Attachments 1: distinct proof-of-payment file(s) — several invoices may share ONE proof.
     const storage = require('../lib/storage');
@@ -607,7 +607,7 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
         attachments.push({ filename: p.filename || `proof-of-payment-${attachments.length + 1}.${ext}`, content: buffer.toString('base64'), contentType: p.mimeType || undefined });
       }
       if (!attachments.length) {
-        return res.status(400).json({ error: 'No proof of payment uploaded yet for the selected invoice(s). Upload the POP first in Transactions, or untick "Attach POP" to send the 2307 only.' });
+        return res.status(400).json({ error: 'No proof of payment uploaded yet for the selected invoice(s). Upload the POP first in Transactions.' });
       }
     }
 
@@ -647,11 +647,17 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
       attachments,
       subjectOverride: req.body?.subject,
       messageOverride: req.body?.message,
+      templateKey: kind === '2307' ? 'vendor_2307' : 'vendor_payment',
+      includePaymentMeta: kind === 'pop',
     });
     if (!sent) return res.status(500).json({ error: 'Email could not be sent — check the email configuration (RESEND_API_KEY / RESEND_FROM) on the server.' });
 
-    await logAudit(req.user, 'VENDOR_PAYMENT_EMAILED', { targetType: 'LEDGER', details: `Emailed ${vendorName} (${recipients.join(', ')}): ${docs.length} invoice(s), ${attachments.length} attachment(s)` });
-    res.json({ message: `Sent to ${recipients.join(', ')} — ${docs.length} invoice(s), ${attachments.length} attachment(s) (POP + 2307).`, sent, recipients });
+    // Stamp the docs so the table shows which invoices already got this email.
+    const stamp = kind === '2307' ? { form2307EmailedAt: new Date() } : { popEmailedAt: new Date() };
+    await prisma.ledgerDoc.updateMany({ where: { id: { in: docs.map(d => d.id) } }, data: stamp }).catch(() => {});
+
+    await logAudit(req.user, kind === '2307' ? 'VENDOR_2307_EMAILED' : 'VENDOR_POP_EMAILED', { targetType: 'LEDGER', details: `Emailed ${vendorName} (${recipients.join(', ')}): ${kind.toUpperCase()} for ${docs.length} invoice(s)` });
+    res.json({ message: `${kind === '2307' ? '2307' : 'Proof of payment'} sent to ${recipients.join(', ')} — ${docs.length} invoice(s).`, sent, recipients });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

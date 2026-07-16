@@ -156,6 +156,8 @@ model LedgerDoc {
   proofOfPaymentId String?
   proofOfPayment   Receipt? @relation("LedgerProofOfPayment", fields: [proofOfPaymentId], references: [id])
   paymentNotifiedAt DateTime?
+  popEmailedAt      DateTime?   // vendor was emailed the Proof of Payment
+  form2307EmailedAt DateTime?   // vendor was emailed the BIR 2307
   assignedToId  String?
   assignedTo    User?     @relation("LedgerAssignedTo", fields: [assignedToId], references: [id])
   lastEditedById String?

@@ -1502,8 +1502,11 @@ const AP_AR_TEMPLATE_DEFS = [
   { key: 'apar_payment_notification', label: 'Payment notification', desc: 'Sent manually from the Proof of Payment panel to confirm an AP/AR invoice has been paid/credited.',
     subject: '💰 Payment posted — {title}', message: 'This is to confirm that "{title}" ({amount}) has been paid/credited. Proof of payment is on file.',
     vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
-  { key: 'vendor_payment', label: 'Vendor payment notice (POP + 2307)', desc: 'Sent to the VENDOR\u2019s email (Settings \u2192 Vendors/Payees) with the proof of payment file(s) and one combined BIR 2307 attached. Supports multiple invoices in one email; the invoice list, totals, and sender block are added automatically below the message.',
+  { key: 'vendor_payment', label: 'Vendor POP notice (proof of payment)', desc: 'Sent to the VENDOR\u2019s email with the proof of payment file(s) for the selected invoice(s). Separate from the 2307 email; the invoice list, totals, payment date, and sender block are added automatically below the message.',
     subject: 'Payment processed — {vendorName}', message: 'Please be advised that payment for the below invoice(s) has been successfully processed. The funds should now be reflected in your account. 2307 to follow.',
+    vars: ['{contactPerson}','{vendorName}','{appName}','{senderName}'] },
+  { key: 'vendor_2307', label: 'Vendor 2307 notice', desc: 'Sent to the VENDOR\u2019s email with ONE combined BIR 2307 PDF covering the selected invoice(s). Separate from the POP email; the invoice list, total, and sender block are added automatically below the message.',
+    subject: 'BIR Form 2307 — {vendorName}', message: 'Please find attached your BIR Form 2307 covering the invoice(s) below. If you have any questions, feel free to reach out.',
     vars: ['{contactPerson}','{vendorName}','{appName}','{senderName}'] },
 ];
 
