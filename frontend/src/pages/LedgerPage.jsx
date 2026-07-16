@@ -556,22 +556,23 @@ export default function LedgerPage({ mode = 'manage' }) {
                     {[...viewing.approvals].sort((a, b) => (a.stepOrder || a.level || 0) - (b.stepOrder || b.level || 0)).map((a, i) => {
                       const isApproved = a.status === 'APPROVED';
                       const isReturned = a.status === 'REJECTED' && (a.notes || '').startsWith('[RETURNED]');
-                      const isRejected = a.status === 'REJECTED' && !isReturned;
-                      const accent = isApproved ? '#16a34a' : isReturned ? '#d97706' : '#dc2626';
+                      const isAuto = a.status === 'REJECTED' && (a.notes || '').startsWith('[auto]');
+                      const isRejected = a.status === 'REJECTED' && !isReturned && !isAuto;
+                      const accent = isApproved ? '#16a34a' : isReturned ? '#d97706' : isAuto ? '#94a3b8' : '#dc2626';
                       const cleanNote = (a.notes || '').startsWith('[auto]') ? '' : (a.notes || '').replace(/^\[RETURNED\]\s*/, '');
                       return (
                         <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg border"
                           style={{
-                            backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : isReturned ? 'rgba(217,119,6,0.12)' : 'rgba(220,38,38,0.12)',
-                            borderColor: isApproved ? 'rgba(22,163,74,0.35)' : isReturned ? 'rgba(217,119,6,0.35)' : 'rgba(220,38,38,0.35)',
+                            backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : isReturned ? 'rgba(217,119,6,0.12)' : isAuto ? 'rgba(148,163,184,0.12)' : 'rgba(220,38,38,0.12)',
+                            borderColor: isApproved ? 'rgba(22,163,74,0.35)' : isReturned ? 'rgba(217,119,6,0.35)' : isAuto ? 'rgba(148,163,184,0.35)' : 'rgba(220,38,38,0.35)',
                           }}>
                           <div className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold mt-0.5 shrink-0 text-white" style={{ backgroundColor: accent }}>
-                            {isApproved ? '✓' : isReturned ? '↩' : isRejected ? '✗' : '⌛'}
+                            {isApproved ? '✓' : isReturned ? '↩' : isAuto ? '⊘' : isRejected ? '✗' : '⌛'}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold">{fullName(a.approver) || '—'}</p>
                             <p className="text-xs font-semibold" style={{ color: accent }}>
-                              {isApproved ? 'Approved' : isReturned ? 'Returned' : isRejected ? 'Rejected' : 'Pending approval'}
+                              {isApproved ? 'Approved' : isReturned ? 'Returned' : isAuto ? 'Skipped — no action needed (decided at an earlier step)' : isRejected ? 'Rejected' : 'Pending approval'}
                             </p>
                             {cleanNote && <p className="text-sm mt-1 font-medium" style={{ color: accent }}>"{cleanNote}"</p>}
                           </div>
