@@ -499,7 +499,7 @@ async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, i
   const key = DEFAULT_TEMPLATES[templateKey] ? templateKey : 'vendor_payment';
   const subject = (subjectOverride && subjectOverride.trim()) ? subst(subjectOverride, vars) : tpl(custom, key, 'subject', vars);
   const message = (messageOverride && messageOverride.trim()) ? subst(messageOverride, vars) : tpl(custom, key, 'message', vars);
-  const peso = (n) => `\u20b1${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const peso = (n) => `\u20b1${(Number(String(n ?? '').replace(/,/g, '')) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const invoiceRows = (invoices || []).map(inv =>
     row(`Invoice ${inv.docNumber || '(no number)'}`, peso(inv.amountPhp))

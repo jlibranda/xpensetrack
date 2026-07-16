@@ -408,7 +408,7 @@ const COORD = {
   col: { desc: 21, atc:198, m1:256, m2:330, m3:404, tot:478, tax:555 },
   signC: 307, signVc: 745,
 };
-function money(n) { return (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function money(n) { const v = Number(String(n ?? '').replace(/,/g, '')) || 0; return v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
 async function fill2307Pdf(d) {
   const bytes = fs.readFileSync(TEMPLATE_2307);
@@ -471,17 +471,18 @@ async function fill2307Pdf(d) {
 
   const rows = (d.rows || []).slice(0, 10);
   let t1 = 0, t2 = 0, t3 = 0, tt = 0;
+  const num = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0; // comma-tolerant
   rows.forEach((r, i) => {
     const vc = COORD.rowVc[i];
     if (r.desc) putDesc(COORD.col.desc, vc - 2, String(r.desc));
     put(COORD.col.atc, vc, r.atc || '');
-    if (Number(r.m1)) put(COORD.col.m1, vc, money(r.m1));
-    if (Number(r.m2)) put(COORD.col.m2, vc, money(r.m2));
-    if (Number(r.m3)) put(COORD.col.m3, vc, money(r.m3));
-    const rowTotal = (Number(r.m1) || 0) + (Number(r.m2) || 0) + (Number(r.m3) || 0);
+    if (num(r.m1)) put(COORD.col.m1, vc, money(r.m1));
+    if (num(r.m2)) put(COORD.col.m2, vc, money(r.m2));
+    if (num(r.m3)) put(COORD.col.m3, vc, money(r.m3));
+    const rowTotal = num(r.m1) + num(r.m2) + num(r.m3);
     if (rowTotal) put(COORD.col.tot, vc, money(rowTotal));
-    if (Number(r.tax)) put(COORD.col.tax, vc, money(r.tax));
-    t1 += Number(r.m1) || 0; t2 += Number(r.m2) || 0; t3 += Number(r.m3) || 0; tt += Number(r.tax) || 0;
+    if (num(r.tax)) put(COORD.col.tax, vc, money(r.tax));
+    t1 += num(r.m1); t2 += num(r.m2); t3 += num(r.m3); tt += num(r.tax);
   });
   put(COORD.col.m1, COORD.totalVc, money(t1));
   put(COORD.col.m2, COORD.totalVc, money(t2));
@@ -501,8 +502,11 @@ router.get('/2307/prepare', authenticate, requirePermission(PERM, FALLBACK), asy
     if (!invoiceId && !ids && !(vendor && year && quarter)) return res.status(400).json({ error: 'Provide invoiceId, ids, or vendor+year+quarter' });
     const docs = await fetch2307Docs({ invoiceId, ids, vendor, year, quarter });
     if (!docs.length) return res.status(404).json({ error: 'No matching AP invoices found' });
-    const vendorNames = [...new Set(docs.map(d => d.vendorName || '').filter(Boolean))];
-    if (vendorNames.length > 1) return res.status(400).json({ error: `Selected invoices belong to different payees (${vendorNames.join(', ')}). A 2307 is per payee — please select invoices for one vendor only.` });
+    // Compare payees case/space-insensitively — "ABC Trading" and "abc trading "
+    // are the SAME vendor and must not be rejected as different payees.
+    const norm = (x) => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const vendorNames = [...new Set(docs.map(d => norm(d.vendorName)).filter(Boolean))];
+    if (vendorNames.length > 1) return res.status(400).json({ error: `Selected invoices belong to different payees (${[...new Set(docs.map(d => (d.vendorName||'').trim()).filter(Boolean))].join(', ')}). A 2307 is per payee — please select invoices for one vendor only.` });
     const data = await build2307(docs);
     res.json(prepare2307(data));
   } catch (err) { res.status(500).json({ error: err.message }); }
