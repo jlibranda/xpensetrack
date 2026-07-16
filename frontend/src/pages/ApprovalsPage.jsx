@@ -35,10 +35,21 @@ export default function ApprovalsPage() {
 
   // Normalize an AP/AR approval row into the same shape the expense UI expects,
   // so the existing list + detail modal render without a parallel layout.
+  // Who the form is CURRENTLY pending with (earliest step that still has a
+  // pending approval) — shown in History so approvers can follow the trail.
+  const pendingWith = (e) => {
+    if (e?.status !== 'PENDING') return '';
+    const pend = (e.approvals || []).filter(x => x.status === 'PENDING');
+    if (!pend.length) return '';
+    const cur = Math.min(...pend.map(x => x.stepOrder ?? 0));
+    return [...new Set(pend.filter(x => (x.stepOrder ?? 0) === cur).map(x => personName(x.approver)))].join(', ');
+  };
+
   const normLedger = (a) => ({
     ...a,
     expense: {
       _isLedger: true,
+      status: a.ledgerDoc?.status,
       title: `${a.ledgerDoc?.vendorName || 'AP/AR document'}${a.ledgerDoc?.docNumber ? ` \u2014 ${a.ledgerDoc.docNumber}` : ''}`,
       amount: a.ledgerDoc?.amount,
       amountPhp: a.ledgerDoc?.amountPhp,
@@ -352,6 +363,9 @@ export default function ApprovalsPage() {
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[decision] || 'bg-gray-100 text-gray-600'}`}>
                         {decision}
                       </span>
+                      {decision === 'PENDING' && pendingWith(a.expense) && (
+                        <p className="text-[11px] text-amber-600 mt-1">now with: {pendingWith(a.expense)}</p>
+                      )}
                     </td>
                   </tr>
                   );
@@ -398,6 +412,7 @@ export default function ApprovalsPage() {
 
               <div className="space-y-0.5 text-xs">
                 {row('Submitted by', personName(e.submittedBy))}
+                {decision === 'PENDING' ? row('Currently pending with', pendingWith(e)) : null}
                 {row('Merchant', e.merchant)}
                 {row('Description', e.title)}
                 {row('Amount', format(e.amountPhp))}
