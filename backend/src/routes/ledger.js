@@ -567,6 +567,9 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
     }
     const badEmail = recipients.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
     if (badEmail) return res.status(400).json({ error: `Invalid email: "${badEmail}"` });
+    const cc = String(req.body?.cc || '').split(';').map(x => x.trim()).filter(Boolean);
+    const badCc = cc.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+    if (badCc) return res.status(400).json({ error: `Invalid CC email: "${badCc}"` });
     const contactPerson = manualContact || vendor?.contactPerson || '';
 
     // Optionally persist the manual details so next time it's automatic.
@@ -635,13 +638,15 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
 
     // Send (one email per recipient address).
     const { sendVendorPaymentEmail } = require('../lib/email');
+    // Editable display amounts from the compose window: { [docId]: number }.
+    const amounts = (req.body?.amounts && typeof req.body.amounts === 'object') ? req.body.amounts : null;
     const latestPaid = docs.map(d => d.processedAt || d.paidAt || d.updatedAt).sort().pop();
     const sent = await sendVendorPaymentEmail({
       recipients,
       contactPerson,
       vendorName,
-      invoices: docs.map(d => ({ docNumber: d.docNumber, amountPhp: d.amountPhp ?? d.amount })),
-      totalPhp: docs.reduce((s, d) => s + Number(d.amountPhp ?? d.amount ?? 0), 0),
+      invoices: docs.map(d => ({ docNumber: d.docNumber, amountPhp: (amounts && amounts[d.id] != null) ? amounts[d.id] : (d.amountPhp ?? d.amount) })),
+      totalPhp: docs.reduce((s, d) => s + Number((amounts && amounts[d.id] != null) ? amounts[d.id] : (d.amountPhp ?? d.amount ?? 0)), 0),
       paymentDate: latestPaid ? new Date(latestPaid).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
       senderName: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim(),
       attachments,
@@ -649,6 +654,7 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
       messageOverride: req.body?.message,
       templateKey: kind === '2307' ? 'vendor_2307' : 'vendor_payment',
       includePaymentMeta: kind === 'pop',
+      cc,
     });
     if (!sent) return res.status(500).json({ error: 'Email could not be sent — check the email configuration (RESEND_API_KEY / RESEND_FROM) on the server.' });
 

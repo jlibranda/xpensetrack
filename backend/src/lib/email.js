@@ -174,8 +174,9 @@ function row(label, value) {
   return `<tr><td style="padding:8px 0;color:#6b7280;font-size:14px;width:40%">${label}</td><td style="padding:8px 0;color:#111;font-size:14px;font-weight:500">${value}</td></tr>`;
 }
 
-async function sendMail(to, subject, htmlBody, fromName, attachments) {
+async function sendMail(to, subject, htmlBody, fromName, attachments, cc) {
   // attachments: [{ filename, content (base64 string), contentType }] — optional.
+  // cc: array of addresses — optional.
   // Build the From header. RESEND_FROM may be either a bare address
   // ("noreply@yourdomain.com") or a full header ("Cashalo <noreply@yourdomain.com>").
   const name = fromName || FALLBACK_APP_NAME;
@@ -188,6 +189,7 @@ async function sendMail(to, subject, htmlBody, fromName, attachments) {
   if (resendKey && resendFrom) {
     try {
       const payload = { from: buildFrom(resendFrom), to: [to], subject, html: htmlBody };
+      if (Array.isArray(cc) && cc.length) payload.cc = cc;
       if (atts.length) payload.attachments = atts.map(a => ({ filename: a.filename, content: a.content, content_type: a.contentType || undefined }));
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -207,6 +209,7 @@ async function sendMail(to, subject, htmlBody, fromName, attachments) {
   if (apiKey && fromEmail) {
     try {
       const payload = { from: { email: fromEmail, name }, to: [{ email: to }], subject, html: htmlBody };
+      if (Array.isArray(cc) && cc.length) payload.cc = cc.map(em => ({ email: em }));
       if (atts.length) payload.attachments = atts.map(a => ({ filename: a.filename, content: a.content, disposition: 'attachment' }));
       const res = await fetch('https://api.mailersend.com/v1/email', {
         method: 'POST',
@@ -488,7 +491,7 @@ async function sendPaymentNotificationEmail(toEmail, toName, doc, employee, kind
 // payment image(s) and a combined BIR 2307 PDF attached. `recipients` may contain
 // several addresses (vendor email supports ";"-separated lists). Returns the
 // number of recipients successfully emailed.
-async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, invoices, totalPhp, paymentDate, senderName, attachments, subjectOverride, messageOverride, templateKey = 'vendor_payment', includePaymentMeta = true }) {
+async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, invoices, totalPhp, paymentDate, senderName, attachments, subjectOverride, messageOverride, templateKey = 'vendor_payment', includePaymentMeta = true, cc }) {
   const brand = await getBranding();
   const appName = brand.appName;
   const custom = await getTemplates();
@@ -522,8 +525,9 @@ async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, i
 
   const htmlBody = html(subject, body, brand);
   let sent = 0;
-  for (const to of recipients) {
-    const ok = await sendMail(to, subject, htmlBody, appName, attachments);
+  for (let i = 0; i < recipients.length; i++) {
+    // CC once (on the first email) para hindi maulit sa bawat recipient.
+    const ok = await sendMail(recipients[i], subject, htmlBody, appName, attachments, i === 0 ? cc : undefined);
     if (ok) sent++;
   }
   return sent;

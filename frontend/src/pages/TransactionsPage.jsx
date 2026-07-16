@@ -239,6 +239,31 @@ export default function TransactionsPage() {
   const [vendorMail, setVendorMail] = useState(null);
   const [vendorMailSending, setVendorMailSending] = useState(false);
   const vendorRec = (name) => (Array.isArray(settings?.vendors) ? settings.vendors : []).find(v => String(v.name||'').trim().toLowerCase() === String(name||'').trim().toLowerCase());
+
+  // Open the email compose window from the toolbar (checkbox selection).
+  // Validates same-vendor + processed, and builds EDITABLE invoice lines.
+  const openVendorMailSingle = (kind, e) => setVendorMail({
+    kind, vendorName: e.vendorName, ids: [e.id],
+    lines: [{ id: e.id, label: e.orNumber || e.title, amount: Number(e.amountPhp ?? e.amount ?? 0) }],
+    cc: user?.email || '',
+  });
+
+  const openVendorMailFromSelection = (kind) => {
+    const picked = rows.filter(r => selected.includes(r.id) && r._isLedger);
+    if (!picked.length) { toast.error('Tick the AP/AR row(s) you want to email first.'); return; }
+    const vendors = [...new Set(picked.map(r => String(r.vendorName||'').trim().toLowerCase()))];
+    if (vendors.length > 1) { toast.error('Please select invoices of ONE vendor only — one email per vendor.'); return; }
+    const notReady = picked.filter(r => !['PROCESSED','PAID'].includes(r.status));
+    if (notReady.length) { toast.error(`Not yet processed: ${notReady.map(r => r.orNumber || r.title).join(', ')}`); return; }
+    if (kind === 'pop' && !picked.some(r => r.proofOfPayment?.id)) { toast.error('No proof of payment uploaded yet for the selected invoice(s).'); return; }
+    setVendorMail({
+      kind,
+      vendorName: picked[0].vendorName,
+      ids: picked.map(r => r.id),
+      lines: picked.map(r => ({ id: r.id, label: r.orNumber || r.title, amount: Number(r.amountPhp ?? r.amount ?? 0) })),
+      cc: user?.email || '', // auto-populated: ang nagpo-process ng email
+    });
+  };
   const sendVendorMail = async () => {
     if (!vendorMail?.ids?.length) return;
     setVendorMailSending(true);
@@ -250,11 +275,13 @@ export default function TransactionsPage() {
         ids: vendorMail.ids,
         kind: vendorMail.kind === '2307' ? '2307' : 'pop',
         email,
+        cc: (vendorMail.cc || '').trim(),
         contactPerson,
         saveVendor: vendorMail.saveVendor !== false, // default: save manual email for next time
         subject: vendorMail.subject,       // undefined = use saved template
         message: vendorMail.message,       // undefined = use saved template
         data2307: vendorMail.data2307 || undefined, // edited via the 2307 editor
+        amounts: Object.fromEntries((vendorMail.lines || []).map(ln => [ln.id, Number(ln.amount) || 0])), // edited display amounts
       });
       toast.success(r.message || 'Sent to vendor');
       setVendorMail(null);
@@ -385,7 +412,21 @@ export default function TransactionsPage() {
           <h1 className="text-xl font-medium text-gray-900">All Transactions</h1>
           <p className="text-sm text-gray-500">{visibleRows.length} shown</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {source === 'ledger' && canProcess && (
+            <>
+              <button onClick={() => openVendorMailFromSelection('pop')} disabled={selected.length === 0}
+                className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: '#2563eb' }}>
+                ✉️ Email POP{selected.length ? ` (${selected.length})` : ''}
+              </button>
+              <button onClick={() => openVendorMailFromSelection('2307')} disabled={selected.length === 0}
+                className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: '#7c3aed' }}>
+                ✉️ Email 2307{selected.length ? ` (${selected.length})` : ''}
+              </button>
+            </>
+          )}
           {source === 'ledger' && (
             <button onClick={openGen2307Selected} disabled={selected.length === 0 || gen2307Loading}
               className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
@@ -691,10 +732,10 @@ export default function TransactionsPage() {
                         {e.popEmailedAt ? (
                           <span className="text-xs font-medium flex items-center gap-1" style={{ color: '#16a34a' }}>
                             ✓ POP emailed · {new Date(e.popEmailedAt).toLocaleDateString()}
-                            <button onClick={() => setVendorMail({ kind: 'pop', vendorName: e.vendorName, ids: [e.id] })} className="underline text-[11px] text-gray-500 font-normal">resend</button>
+                            <button onClick={() => openVendorMailSingle('pop', e)} className="underline text-[11px] text-gray-500 font-normal">resend</button>
                           </span>
                         ) : (
-                          <button onClick={() => setVendorMail({ kind: 'pop', vendorName: e.vendorName, ids: [e.id] })}
+                          <button onClick={() => openVendorMailSingle('pop', e)}
                             className="text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200 hover:bg-gray-50">
                             ✉️ Email POP to vendor
                           </button>
@@ -715,10 +756,10 @@ export default function TransactionsPage() {
                   {e.form2307EmailedAt ? (
                     <p className="text-xs font-medium flex items-center gap-2" style={{ color: '#16a34a' }}>
                       ✓ 2307 emailed to vendor · {new Date(e.form2307EmailedAt).toLocaleDateString()}
-                      <button onClick={() => setVendorMail({ kind: '2307', vendorName: e.vendorName, ids: [e.id] })} className="underline text-[11px] text-gray-500 font-normal">resend</button>
+                      <button onClick={() => openVendorMailSingle('2307', e)} className="underline text-[11px] text-gray-500 font-normal">resend</button>
                     </p>
                   ) : (
-                    <button onClick={() => setVendorMail({ kind: '2307', vendorName: e.vendorName, ids: [e.id] })}
+                    <button onClick={() => openVendorMailSingle('2307', e)}
                       className="text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200 hover:bg-gray-50">
                       ✉️ Email 2307 to vendor
                     </button>
@@ -859,9 +900,8 @@ export default function TransactionsPage() {
           same vendor to include; one email, POP file(s) + one combined 2307. */}
       {vendorMail && !gen2307Data && (() => {
         const v = vendorRec(vendorMail.vendorName);
-        const candidates = rows.filter(r => r._isLedger && ['PROCESSED','PAID'].includes(r.status) && String(r.vendorName||'').trim().toLowerCase() === String(vendorMail.vendorName||'').trim().toLowerCase());
-        const toggle = (id) => setVendorMail(m => ({ ...m, ids: m.ids.includes(id) ? m.ids.filter(x => x !== id) : [...m.ids, id], data2307: undefined, edited2307: false }));
-        const total = candidates.filter(c => vendorMail.ids.includes(c.id)).reduce((s, c) => s + Number(c.amountPhp ?? c.amount ?? 0), 0);
+        const lines = vendorMail.lines || [];
+        const total = lines.reduce((sum, ln) => sum + (Number(ln.amount) || 0), 0);
         const emailVal = vendorMail.email ?? (v?.email || '');
         const contactVal = vendorMail.contactPerson ?? (v?.contactPerson || '');
         // Pre-populated (editable) subject + message from the saved template.
@@ -902,6 +942,12 @@ export default function TransactionsPage() {
                     className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400" />
                 </div>
                 <div>
+                  <label className="block text-[11px] text-gray-500 mb-0.5">CC — auto-filled with your email; separate multiple with ";"</label>
+                  <input value={vendorMail.cc ?? ''} onChange={ev => setVendorMail(m => ({ ...m, cc: ev.target.value }))}
+                    placeholder="you@company.com"
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400" />
+                </div>
+                <div>
                   <label className="block text-[11px] text-gray-500 mb-0.5">Contact person (for the "Dear ..." greeting)</label>
                   <input value={contactVal} onChange={ev => setVendorMail(m => ({ ...m, contactPerson: ev.target.value }))}
                     placeholder={vendorMail.vendorName}
@@ -926,7 +972,7 @@ export default function TransactionsPage() {
                     className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400" />
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mb-2">Select the processed invoice(s) to include in this {vendorMail.kind === '2307' ? '2307' : 'POP'} email:</p>
+              <p className="text-xs text-gray-500 mb-2">Invoice(s) in this {vendorMail.kind === '2307' ? '2307' : 'POP'} email — amounts are editable (email display only):</p>
               {vendorMail.kind === '2307' && (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-xs">
                   {vendorMail.edited2307 ? (
@@ -945,17 +991,34 @@ export default function TransactionsPage() {
                   )}
                 </div>
               )}
-              <div className="border border-gray-100 rounded-lg divide-y divide-gray-50 mb-3 max-h-40 overflow-y-auto">
-                {candidates.map(c => (
-                  <label key={c.id} className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-gray-50">
-                    <input type="checkbox" checked={vendorMail.ids.includes(c.id)} onChange={() => toggle(c.id)} />
-                    <span className="flex-1">{c.orNumber || c.title}</span>
-                    <span className="font-medium">{format(c.amountPhp ?? c.amount)}</span>
-                    {vendorMail.kind !== '2307' && !c.proofOfPayment?.id && <span className="text-[10px] text-amber-600">no POP</span>}
-                  </label>
-                ))}
+              <div className="border border-gray-100 rounded-lg overflow-hidden mb-2">
+                <table className="w-full text-xs">
+                  <thead><tr className="bg-gray-50 text-gray-500">
+                    <th className="text-left font-medium px-3 py-1.5">Invoice</th>
+                    <th className="text-right font-medium px-3 py-1.5 w-36">Amount (editable)</th>
+                    {lines.length > 1 && <th className="w-8"></th>}
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {lines.map((ln, i) => (
+                      <tr key={ln.id}>
+                        <td className="px-3 py-1.5 text-gray-700">{ln.label}</td>
+                        <td className="px-3 py-1">
+                          <input type="number" step="0.01" value={ln.amount}
+                            onChange={ev => setVendorMail(m => ({ ...m, lines: m.lines.map((x, idx) => idx === i ? { ...x, amount: ev.target.value } : x) }))}
+                            className="w-full px-2 py-1 border border-gray-200 rounded text-right text-xs focus:outline-none focus:border-brand-400" />
+                        </td>
+                        {lines.length > 1 && (
+                          <td className="px-1 text-center">
+                            <button onClick={() => setVendorMail(m => ({ ...m, lines: m.lines.filter((_, idx) => idx !== i), ids: m.ids.filter(id => id !== ln.id), data2307: undefined, edited2307: false }))}
+                              className="text-red-400 hover:text-red-600">✕</button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <p className="text-xs text-gray-600 mb-3">Total: <span className="font-semibold">{format(total)}</span> · {vendorMail.ids.length} invoice(s)</p>
+              <p className="text-xs text-gray-600 mb-3">Total: <span className="font-semibold">{format(total)}</span> <span className="text-gray-400">(net of wtax)</span> · {lines.length} invoice(s)</p>
               <button onClick={sendVendorMail} disabled={vendorMailSending || !vendorMail.ids.length || !emailVal.trim()}
                 className="w-full py-2.5 rounded-lg text-xs font-medium disabled:opacity-60"
                 style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-contrast,#fff)' }}>
