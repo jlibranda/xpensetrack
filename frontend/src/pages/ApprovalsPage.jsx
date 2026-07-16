@@ -128,17 +128,18 @@ export default function ApprovalsPage() {
         {(() => {
           const ready = approvals.filter(a => a.actionable !== false).length;
           const waitingN = approvals.length - ready;
+          const srcLabel = source === 'ledger' ? 'AP & AR' : 'Expense';
           return (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500 mt-1">
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${ready > 0 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                {ready} for your action
+                {ready} {srcLabel} for your action
               </span>
               {waitingN > 0 && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
-                  ⏳ {waitingN} waiting on earlier approver{waitingN > 1 ? 's' : ''}
+                  ⏳ {waitingN} {srcLabel} waiting on earlier approver{waitingN > 1 ? 's' : ''}
                 </span>
               )}
-              <span className="text-xs text-gray-400">· {history.length} already actioned (see History)</span>
+              <span className="text-xs text-gray-400">· {history.length} {srcLabel} already actioned (see History)</span>
             </div>
           );
         })()}
