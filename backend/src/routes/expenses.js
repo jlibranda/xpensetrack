@@ -7,6 +7,7 @@ const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
 const { getUsdPhpRate } = require('../lib/fxrate');
 const { getFlowSteps, buildRowsFromSteps } = require('../lib/approvalChain');
+const { deleteReceiptsByIds, receiptIdsForExpenses } = require('../lib/receiptCleanup');
 const prisma = new PrismaClient();
 
 // Convert an amount to PHP using the org's current USD->PHP rate.
@@ -237,6 +238,10 @@ router.patch('/:id', authenticate, async (req, res) => {
       },
       include: expenseInclude,
     });
+    // Kapag pinalitan ang receipt sa edit, linisin ang lumang file para hindi mag-orphan.
+    if (receiptId !== undefined && e.receiptId && e.receiptId !== (receiptId || null)) {
+      await deleteReceiptsByIds([e.receiptId]);
+    }
     res.json(updated);
   } catch(err){ res.status(500).json({error:err.message}); }
 });
@@ -338,8 +343,10 @@ router.delete('/:id', authenticate, async (req, res) => {
     if(!e) return res.status(404).json({error:'Not found'});
     if(e.submittedById!==req.user.id && req.user.role!=='ADMIN') return res.status(403).json({error:'Forbidden'});
     if(!['DRAFT','CANCELLED','RETURNED'].includes(e.status)) return res.status(400).json({error:'Cannot delete'});
+    const orphanIds = [e.receiptId, e.proofOfPaymentId];
     await prisma.approval.deleteMany({where:{expenseId:e.id}});
     await prisma.expense.delete({where:{id:e.id}});
+    await deleteReceiptsByIds(orphanIds); // walang maiiwang orphan file
     res.json({message:'Deleted'});
   } catch(err){ res.status(500).json({error:err.message}); }
 });
@@ -353,8 +360,10 @@ router.post('/delete-selected', authenticate, requireRole('ADMIN'), async (req, 
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'No transactions selected.' });
     }
+    const orphanIds = await receiptIdsForExpenses(ids);
     await prisma.approval.deleteMany({ where: { expenseId: { in: ids } } });
     const result = await prisma.expense.deleteMany({ where: { id: { in: ids } } });
+    await deleteReceiptsByIds(orphanIds);
     await logAudit(req.user, 'TRANSACTION_BULK_DELETED', { targetType: 'TRANSACTION', details: `Deleted ${result.count} selected transaction(s)` });
     res.json({ deleted: result.count });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -376,13 +385,15 @@ router.post('/bulk-delete', authenticate, requireRole('ADMIN'), async (req, res)
       return res.status(400).json({ error: 'Please provide a date range (from / to) before deleting.' });
     }
 
-    const targets = await prisma.expense.findMany({ where, select: { id: true } });
+    const targets = await prisma.expense.findMany({ where, select: { id: true, receiptId: true, proofOfPaymentId: true } });
     const ids = targets.map(t => t.id);
     if (ids.length === 0) return res.json({ deleted: 0 });
+    const orphanIds = targets.flatMap(t => [t.receiptId, t.proofOfPaymentId]);
 
     // Remove dependent approvals first, then the expenses (permanent).
     await prisma.approval.deleteMany({ where: { expenseId: { in: ids } } });
     const result = await prisma.expense.deleteMany({ where: { id: { in: ids } } });
+    await deleteReceiptsByIds(orphanIds);
     await logAudit(req.user, 'TRANSACTION_BULK_DELETED', { targetType: 'TRANSACTION', details: `Deleted ${result.count} transaction(s) in range ${from||'…'} to ${to||'…'}${status?` (status ${status})`:''}` });
     res.json({ deleted: result.count });
   } catch (err) { res.status(500).json({ error: err.message }); }

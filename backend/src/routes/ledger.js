@@ -721,8 +721,11 @@ router.delete('/:id', authenticate, requirePermission(PERM, FALLBACK), async (re
     if (!isAdminFinance(req.user) && (docIsApproved(d) || !['DRAFT', 'RETURNED', 'REJECTED', 'CANCELLED'].includes(d.status))) {
       return res.status(403).json({ error: 'This AP/AR record is locked after approval — only Finance or Admin can delete it.' });
     }
+    const orphanIds = [d.receiptId, d.proofOfPaymentId];
     await prisma.approval.deleteMany({ where: { ledgerDocId: req.params.id } }).catch(() => {});
     await prisma.ledgerDoc.delete({ where: { id: req.params.id } });
+    const { deleteReceiptsByIds } = require('../lib/receiptCleanup');
+    await deleteReceiptsByIds(orphanIds); // walang maiiwang orphan file
     res.json({ message: 'Deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
