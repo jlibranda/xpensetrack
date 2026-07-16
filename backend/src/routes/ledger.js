@@ -671,10 +671,20 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
     const num = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
     // Per-invoice breakdown: Gross − Tax Withheld (EWT) = Net paid. This makes the
     // email figures MATCH the 2307 (tax) and the POP (net amount transferred).
+    // Default WTax uses the SAME formula as the 2307 builder so the email and
+    // the attached 2307 always match: recorded EWT, else base × rate/100
+    // (base = EWT base, else VAT-exclusive gross/1.12).
+    const wtaxLike2307 = (d, gross) => {
+      if (d.ewtAmount != null && num(d.ewtAmount) > 0) return +num(d.ewtAmount).toFixed(2);
+      const rate = num(d.ewtRate);
+      if (!rate) return 0;
+      const base = (d.ewtBase != null && num(d.ewtBase) > 0) ? num(d.ewtBase) : +(gross / 1.12).toFixed(2);
+      return +((base * rate) / 100).toFixed(2);
+    };
     const lines = docs.map(d => {
       const o = amounts && amounts[d.id];
       const gross = o && o.gross != null ? num(o.gross) : num(d.amountPhp ?? d.amount);
-      const wtax = o && o.wtax != null ? num(o.wtax) : num(d.ewtAmount);
+      const wtax = o && o.wtax != null ? num(o.wtax) : wtaxLike2307(d, gross);
       return { docNumber: d.docNumber, gross, wtax, net: +(gross - wtax).toFixed(2) };
     });
     const totals = {

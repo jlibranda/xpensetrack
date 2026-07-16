@@ -242,9 +242,20 @@ export default function TransactionsPage() {
 
   // Open the email compose window from the toolbar (checkbox selection).
   // Validates same-vendor + processed, and builds EDITABLE invoice lines.
+  // SAME computation as the BIR 2307 builder — para laging tugma ang email at 2307:
+  // tax = recorded EWT; kung wala, base × rate/100 (base = EWT base o VAT-exclusive amount).
+  const wtaxLike2307 = (r) => {
+    const gross = Number(r.amountPhp ?? r.amount ?? 0);
+    if (r.ewtAmount != null && Number(r.ewtAmount) > 0) return +Number(r.ewtAmount).toFixed(2);
+    const rate = Number(r.ewtRate ?? 0);
+    if (!rate) return 0;
+    const base = (r.ewtBase != null && Number(r.ewtBase) > 0) ? Number(r.ewtBase) : +(gross / 1.12).toFixed(2);
+    return +((base * rate) / 100).toFixed(2);
+  };
+
   const openVendorMailSingle = (kind, e) => setVendorMail({
     kind, vendorName: e.vendorName, ids: [e.id],
-    lines: [{ id: e.id, label: e.orNumber || e.title, gross: Number(e.amountPhp ?? e.amount ?? 0), wtax: Number(e.ewtAmount ?? 0), rate: Number(e.ewtRate ?? 0), origGross: Number(e.amountPhp ?? e.amount ?? 0), origWtax: Number(e.ewtAmount ?? 0) }],
+    lines: [{ id: e.id, label: e.orNumber || e.title, gross: Number(e.amountPhp ?? e.amount ?? 0), wtax: wtaxLike2307(e), rate: Number(e.ewtRate ?? 0), origGross: Number(e.amountPhp ?? e.amount ?? 0), origWtax: wtaxLike2307(e) }],
     cc: user?.email || '',
   });
 
@@ -260,7 +271,7 @@ export default function TransactionsPage() {
       kind,
       vendorName: picked[0].vendorName,
       ids: picked.map(r => r.id),
-      lines: picked.map(r => ({ id: r.id, label: r.orNumber || r.title, gross: Number(r.amountPhp ?? r.amount ?? 0), wtax: Number(r.ewtAmount ?? 0), rate: Number(r.ewtRate ?? 0), origGross: Number(r.amountPhp ?? r.amount ?? 0), origWtax: Number(r.ewtAmount ?? 0) })),
+      lines: picked.map(r => ({ id: r.id, label: r.orNumber || r.title, gross: Number(r.amountPhp ?? r.amount ?? 0), wtax: wtaxLike2307(r), rate: Number(r.ewtRate ?? 0), origGross: Number(r.amountPhp ?? r.amount ?? 0), origWtax: wtaxLike2307(r) })),
       cc: user?.email || '', // auto-populated: ang nagpo-process ng email
     });
   };
