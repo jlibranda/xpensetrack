@@ -410,6 +410,19 @@ export default function SettingsPage() {
   const brandColor = settings?.primaryColor || '#1D9E75';
   const persistPartial = async (partial) => { const updated = await api.patch('/settings', partial); applyTheme(updated); refresh(); return updated; };
 
+  // Bulk upload modal: { kind: 'vendors' | 'categories' } + result after an upload
+  const [bulkModal, setBulkModal] = useState(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkRes, setBulkRes] = useState(null);
+  const openBulk = (kind) => { setBulkRes(null); setBulkBusy(false); setBulkModal({ kind }); };
+  const runBulkFile = async (f) => {
+    if (!f || !bulkModal) return;
+    setBulkBusy(true); setBulkRes(null);
+    const res = bulkModal.kind === 'vendors' ? await importVendors(f) : await importCategories(f);
+    setBulkRes(res || null);
+    setBulkBusy(false);
+  };
+
   const liveCats = Array.isArray(settings?.categories) ? settings.categories : (settings?.categories?.split(',').map(c=>c.trim()).filter(Boolean) || []);
   const liveGl = settings?.categoryGlCodes || {};
   const liveCatTypes = settings?.categoryTypes || {};
@@ -573,18 +586,17 @@ export default function SettingsPage() {
   const importVendors = async (file) => {
     try {
       const rows = await readXlsx(file);
-      if (!rows.length) { toast.error('No rows found in the file.'); return; }
+      if (!rows.length) { toast.error('No rows found in the file.'); return { added:0, updated:0, skipped:[{ row:'-', reason:'No rows found in the file' }] }; }
       const byName = new Map(liveVendors.map(v => [String(v.name).toLowerCase(), { ...v }]));
-      let added = 0, updated = 0, skipped = 0;
-      for (const r of rows) {
+      let added = 0, updated = 0; const skipped = [];
+      rows.forEach((r, i) => {
+        const rowNo = i + 2; // +2: unang row ng data sa Excel (row 1 = headers)
         const name = pick(r, 'Name', 'Vendor', 'Payee', 'Vendor / payee name');
-        if (!name) { skipped++; continue; }
+        if (!name) { skipped.push({ row: rowNo, reason: 'Walang laman ang Name column' }); return; }
         const email = pick(r, 'Email', 'Email Address');
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { skipped++; continue; }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { skipped.push({ row: rowNo, name, reason: `Invalid email: "${email}"` }); return; }
         const key = name.toLowerCase();
         const prev = byName.get(key);
-        // MERGE with the existing record: a blank cell in the file keeps the
-        // current value instead of wiping it. Only non-blank cells overwrite.
         const typeRaw = pick(r, 'Type');
         const rec = {
           name: prev?.name || name,
@@ -597,10 +609,15 @@ export default function SettingsPage() {
         };
         if (prev) updated++; else added++;
         byName.set(key, rec);
-      }
-      await persistPartial({ vendors: Array.from(byName.values()) });
-      toast.success(`Vendors imported — ${added} added, ${updated} updated${skipped ? `, ${skipped} skipped` : ''}.`);
-    } catch (e) { toast.error('Could not read the file. Use the downloaded template format.'); }
+      });
+      if (added + updated > 0) await persistPartial({ vendors: Array.from(byName.values()) });
+      if (added + updated > 0) toast.success(`Vendors imported — ${added} added, ${updated} updated${skipped.length ? `, ${skipped.length} skipped` : ''}.`);
+      else toast.error('Walang na-upload — tingnan ang listahan ng dahilan sa window.');
+      return { added, updated, skipped };
+    } catch (e) {
+      toast.error('Could not read the file. Use the downloaded template format.');
+      return { added:0, updated:0, skipped:[{ row:'-', reason:'Hindi mabasa ang file — gamitin ang template format (.xlsx)' }] };
+    }
   };
 
   const exportCategories = () => downloadXlsx(
@@ -612,14 +629,15 @@ export default function SettingsPage() {
   const importCategories = async (file) => {
     try {
       const rows = await readXlsx(file);
-      if (!rows.length) { toast.error('No rows found in the file.'); return; }
+      if (!rows.length) { toast.error('No rows found in the file.'); return { added:0, updated:0, skipped:[{ row:'-', reason:'No rows found in the file' }] }; }
       const cats = [...liveCats];
       const gl = { ...liveGl };
       const types = { ...liveCatTypes };
-      let added = 0, updated = 0, skipped = 0;
-      for (const r of rows) {
+      let added = 0, updated = 0; const skipped = [];
+      rows.forEach((r, i) => {
+        const rowNo = i + 2; // Excel row number (row 1 = headers)
         const rawName = pick(r, 'Category', 'Name');
-        if (!rawName) { skipped++; continue; }
+        if (!rawName) { skipped.push({ row: rowNo, reason: 'Walang laman ang Category column' }); return; }
         // Match case-insensitively, but keep the org's existing casing when found
         // (GL codes and types are keyed by the exact category name).
         const existing = cats.find(c => String(c).toLowerCase() === rawName.toLowerCase());
@@ -629,10 +647,15 @@ export default function SettingsPage() {
         if (glVal) gl[name] = glVal;
         const typeVal = pick(r, 'Applies To', 'Type');
         if (typeVal || !existing) types[name] = normCatType(typeVal || 'BOTH');
-      }
-      await persistPartial({ categories: cats, categoryGlCodes: gl, categoryTypes: types });
-      toast.success(`Categories imported — ${added} added, ${updated} updated${skipped ? `, ${skipped} skipped` : ''}.`);
-    } catch (e) { toast.error('Could not read the file. Use the downloaded template format.'); }
+      });
+      if (added + updated > 0) await persistPartial({ categories: cats, categoryGlCodes: gl, categoryTypes: types });
+      if (added + updated > 0) toast.success(`Categories imported — ${added} added, ${updated} updated${skipped.length ? `, ${skipped.length} skipped` : ''}.`);
+      else toast.error('Walang na-upload — tingnan ang listahan ng dahilan sa window.');
+      return { added, updated, skipped };
+    } catch (e) {
+      toast.error('Could not read the file. Use the downloaded template format.');
+      return { added:0, updated:0, skipped:[{ row:'-', reason:'Hindi mabasa ang file — gamitin ang template format (.xlsx)' }] };
+    }
   };
 
   const uploadLogo = async (e) => {
@@ -933,13 +956,8 @@ export default function SettingsPage() {
               <h2 className="text-sm font-medium text-gray-700">Expense categories & GL codes</h2>
               {canEditCategories && (
               <div className="flex gap-2">
-                <button onClick={downloadCategoryTemplate} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Template</button>
                 <button onClick={exportCategories} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Excel</button>
-                <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer btn-like">
-                  ⬆ Bulk upload
-                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
-                    onChange={ev => { const f = ev.target.files?.[0]; ev.target.value=''; if (f) importCategories(f); }} />
-                </label>
+                <button onClick={() => openBulk('categories')} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬆ Bulk upload</button>
                 <button onClick={() => setRec({ title:'Add category', fields:catFields, initial:{ type:'BOTH' }, onSave: saveCat(null) })}
                   className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add</button>
               </div>
@@ -992,13 +1010,8 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium text-gray-700">Vendors / Payees</h2>
               <div className="flex gap-2">
-                <button onClick={downloadVendorTemplate} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Template</button>
                 <button onClick={exportVendors} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Excel</button>
-                <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer btn-like">
-                  ⬆ Bulk upload
-                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
-                    onChange={ev => { const f = ev.target.files?.[0]; ev.target.value=''; if (f) importVendors(f); }} />
-                </label>
+                <button onClick={() => openBulk('vendors')} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬆ Bulk upload</button>
                 <button onClick={() => setRec({ title:'Add vendor / payee', fields:vendorFields, initial:{ type:'COMPANY' }, onSave: saveVendor(null) })}
                   className="px-3 py-1.5 text-xs rounded-lg font-medium" style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>+ Add vendor</button>
               </div>
@@ -1103,6 +1116,60 @@ export default function SettingsPage() {
             onCancel={() => setRec(null)}
             onSave={rec.onSave}
           />
+        )}
+
+        {bulkModal && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !bulkBusy && setBulkModal(null)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={ev => ev.stopPropagation()}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Bulk upload — {bulkModal.kind === 'vendors' ? 'Vendors / Payees' : 'Categories'}
+                </h3>
+                <button onClick={() => setBulkModal(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none px-1">✕</button>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                1. I-download ang template &nbsp;→&nbsp; 2. Punan sa Excel &nbsp;→&nbsp; 3. I-upload dito.
+                Existing {bulkModal.kind === 'vendors' ? 'vendors' : 'categories'} (by name) ay ma-u-update; ang blangkong cell ay hindi magbubura ng dating detalye.
+              </p>
+
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={bulkModal.kind === 'vendors' ? downloadVendorTemplate : downloadCategoryTemplate}
+                  className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 font-medium">
+                  ⬇ Download template
+                </button>
+                <label className={`flex-1 px-3 py-2 text-xs rounded-lg font-medium text-center cursor-pointer btn-like ${bulkBusy ? 'opacity-60 pointer-events-none' : ''}`}
+                  style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
+                  {bulkBusy ? 'Uploading…' : '⬆ Upload file'}
+                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={bulkBusy}
+                    onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f) runBulkFile(f); }} />
+                </label>
+              </div>
+
+              {bulkRes && (
+                <div className="space-y-2">
+                  <div className={`px-3 py-2 rounded-lg text-xs border ${bulkRes.added + bulkRes.updated > 0 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                    {bulkRes.added} added · {bulkRes.updated} updated · {bulkRes.skipped.length} hindi na-upload
+                  </div>
+                  {bulkRes.skipped.length > 0 && (
+                    <div className="border border-red-100 rounded-lg overflow-hidden">
+                      <div className="bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-red-700">Hindi na-upload — dahilan:</div>
+                      <div className="max-h-40 overflow-y-auto divide-y divide-gray-50">
+                        {bulkRes.skipped.map((s, i) => (
+                          <div key={i} className="px-3 py-1.5 text-[11px] text-gray-600">
+                            <span className="font-mono text-gray-400">Row {s.row}</span>
+                            {s.name ? <span className="font-medium"> — {s.name}</span> : null}
+                            <span className="text-red-600"> — {s.reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-400">Ayusin ang mga row na iyan sa file at i-upload muli — ang mga na-upload na ay hindi madodoble (upsert by name).</p>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>
