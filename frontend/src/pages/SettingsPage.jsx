@@ -1300,15 +1300,25 @@ const EMAIL_TEMPLATE_DEFS = [
   { key: 'status_REPROCESSING', label: 'Status: Reprocessing', desc: 'Sent when a processed expense is undone and goes back for reprocessing.',
     subject: '↻ Expense back for reprocessing — {title}', message: 'A previously processed expense has been reverted and is now back for reprocessing. You will receive an updated notification once it has been processed again.',
     vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
-  { key: 'welcome', label: 'Welcome (new user)', desc: 'Sent to a new employee with their login details.',
-    subject: 'Welcome to {appName}!', message: 'Your {appName} account has been created. Here are your login details:',
-    vars: ['{name}','{email}','{password}','{appName}', ...EMP_VARS] },
-  { key: 'password_reset', label: 'Password reset', desc: 'Sent when a user requests a password reset.',
-    subject: 'Reset your {appName} password', message: 'Click below to reset your password. This link expires in 1 hour.',
-    vars: ['{name}','{appName}', ...EMP_VARS] },
   { key: 'payment_notification', label: 'Payment notification', desc: 'Sent manually from the Proof of Payment panel to tell the filer their expense has been paid/reimbursed.',
     subject: '💰 Payment sent — {title}', message: 'Good news! Your filed expense "{title}" ({amount}) has been paid/reimbursed. Proof of payment is on file.',
     vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+];
+
+// User management emails (Users module + auth) — edited via the toggle.
+const USER_MGMT_TEMPLATE_DEFS = [
+  { key: 'welcome', label: 'Welcome (new user)', desc: 'Sent to a new employee with their login details when their account is created.',
+    subject: 'Welcome to {appName}!', message: 'Your {appName} account has been created. Here are your login details:',
+    vars: ['{name}','{email}','{password}','{appName}', ...EMP_VARS] },
+  { key: 'password_reset', label: 'Password reset (forgot password)', desc: 'Sent when a user requests a password reset link from the login page.',
+    subject: 'Reset your {appName} password', message: 'Click below to reset your password. This link expires in 1 hour.',
+    vars: ['{name}','{appName}', ...EMP_VARS] },
+  { key: 'credentials_reset', label: 'Reset pwd (admin reset)', desc: 'Sent when an admin resets a user\u2019s password from the Users module. The new temporary password is included below the message.',
+    subject: 'Your {appName} password has been reset', message: 'Your password was reset by an administrator. Here are your new login details — you will be asked to change this password when you sign in.',
+    vars: ['{name}','{email}','{password}','{appName}', ...EMP_VARS] },
+  { key: 'credentials', label: 'Send credentials', desc: 'Sent by "Send credentials" (single or bulk) from the Users module. The temporary password is included below the message.',
+    subject: 'Your {appName} login details', message: 'Here are your login details for {appName}. Use the button below to open the app and sign in.',
+    vars: ['{name}','{email}','{password}','{appName}', ...EMP_VARS] },
 ];
 
 // AP/AR (payables & receivables) workflow templates — edited via the toggle.
@@ -1337,7 +1347,7 @@ const AP_AR_TEMPLATE_DEFS = [
 ];
 
 function EmailTemplatesTab({ settings, refresh, brand }) {
-  const ALL_DEFS = [...EMAIL_TEMPLATE_DEFS, ...AP_AR_TEMPLATE_DEFS];
+  const ALL_DEFS = [...EMAIL_TEMPLATE_DEFS, ...AP_AR_TEMPLATE_DEFS, ...USER_MGMT_TEMPLATE_DEFS];
   // Pre-fill each field with the current custom value, or the default draft if none.
   // This gives the admin an editable starting draft rather than a blank box.
   const saved = settings?.emailTemplates || {};
@@ -1353,7 +1363,7 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const defList = mode === 'apar' ? AP_AR_TEMPLATE_DEFS : EMAIL_TEMPLATE_DEFS;
+  const defList = mode === 'apar' ? AP_AR_TEMPLATE_DEFS : mode === 'users' ? USER_MGMT_TEMPLATE_DEFS : EMAIL_TEMPLATE_DEFS;
   const defFor = (key) => ALL_DEFS.find(d => d.key === key) || {};
   const get = (key, field) => tpls[key]?.[field] ?? '';
   const set = (key, field, val) => setTpls(t => ({ ...t, [key]: { ...(t[key] || {}), [field]: val } }));
@@ -1392,9 +1402,9 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
         The branded header, details, and buttons stay consistent.
       </p>
 
-      {/* Expense / AP & AR toggle */}
+      {/* Expense / AP & AR / User Management toggle */}
       <div className="seg-group mb-4">
-        {[['expense', 'Expense emails'], ['apar', 'AP & AR emails']].map(([val, label]) => (
+        {[['expense', 'Expense emails'], ['apar', 'AP & AR emails'], ['users', 'User management']].map(([val, label]) => (
           <button key={val} onClick={() => setMode(val)}
             className={`seg-btn ${mode === val ? 'active' : ''}`}>
             {label}

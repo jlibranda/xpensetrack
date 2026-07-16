@@ -210,7 +210,7 @@ router.post('/:id/reset-password', authenticate, requirePermission('reset_passwo
     // the user must change it at next login, and reusing it later gives a clear message.
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash, tempPasswordHash: passwordHash, failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: true } });
     const { sendCredentialsEmail } = require('../lib/email');
-    const ok = await sendCredentialsEmail(target.email, `${target.firstName||''} ${target.lastName||''}`.trim(), newPassword, target);
+    const ok = await sendCredentialsEmail(target.email, `${target.firstName||''} ${target.lastName||''}`.trim(), newPassword, target, 'credentials_reset');
     await logAudit(req.user, 'USER_PASSWORD_RESET', { targetType: 'USER', targetId: req.params.id, details: `Reset password for ${target.firstName||''} ${target.lastName||''}`.trim() });
     if (ok === false) {
       return res.status(400).json({ error: 'Password was reset, but the email could not be sent. Check email settings (RESEND_API_KEY / RESEND_FROM).' });

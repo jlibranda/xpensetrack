@@ -80,6 +80,9 @@ const DEFAULT_TEMPLATES = {
   apar_status_REPROCESSING:{ subject: '↻ AP/AR invoice back for reprocessing — {title}', message: 'A previously processed AP/AR invoice has been reverted and is now back for reprocessing.' },
   welcome:                 { subject: 'Welcome to {appName}!',               message: 'Your {appName} account has been created. Here are your login details:' },
   password_reset:          { subject: 'Reset your {appName} password',       message: 'Click below to reset your password. This link expires in 1 hour.' },
+  // User management: admin-triggered credential emails (Users module).
+  credentials:             { subject: 'Your {appName} login details',        message: 'Here are your login details for {appName}. Use the button below to open the app and sign in.' },
+  credentials_reset:       { subject: 'Your {appName} password has been reset', message: 'Your password was reset by an administrator. Here are your new login details — you will be asked to change this password when you sign in.' },
   // Payment / credit notification (sent manually from the Proof of Payment panel).
   payment_notification:      { subject: '💰 Payment sent — {title}',          message: 'Good news! Your filed expense "{title}" ({amount}) has been paid/reimbursed. Proof of payment is on file.' },
   apar_payment_notification: { subject: '💰 Payment posted — {title}',        message: 'This is to confirm that "{title}" ({amount}) has been paid/credited. Proof of payment is on file.' },
@@ -350,14 +353,20 @@ async function sendTestEmail(toEmail, toName) {
   , brand), brand.appName);
 }
 
-async function sendCredentialsEmail(toEmail, toName, password, employee) {
+async function sendCredentialsEmail(toEmail, toName, password, employee, templateKey = 'credentials') {
   const frontendUrl = process.env.FRONTEND_URL || 'https://xpensetrack.vercel.app';
   const brand = await getBranding();
   const appName = brand.appName;
-  return sendMail(toEmail, `Your ${appName} login details`, html(
-    `Your ${appName} login details`,
+  const custom = await getTemplates();
+  const emp = await employeeVars(employee || { firstName: (toName||'').split(' ')[0], lastName: (toName||'').split(' ').slice(1).join(' '), email: toEmail });
+  const vars = { name: toName, email: toEmail, password, appName, ...emp };
+  const key = DEFAULT_TEMPLATES[templateKey] ? templateKey : 'credentials';
+  const subject = tpl(custom, key, 'subject', vars);
+  const message = tpl(custom, key, 'message', vars);
+  return sendMail(toEmail, subject, html(
+    subject,
     `<p style="color:#374151;font-size:14px;margin:0 0 20px">Hi ${toName || 'there'},</p>
-     <p style="color:#374151;font-size:14px;margin:0 0 20px">Here are your login details for ${appName}. Use the button below to open the app and sign in.</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
      <div style="background:#f9fafb;border-radius:8px;padding:16px;margin:0 0 20px">
        <table style="width:100%;border-collapse:collapse">
          ${row('Username (email)', toEmail)}
