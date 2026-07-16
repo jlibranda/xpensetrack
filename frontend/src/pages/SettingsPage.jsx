@@ -16,6 +16,20 @@ const TABS = ['General','Branding','Categories','Expense Types','Vendors/Payees'
 function AccessControlTab({ settings, navigate, refresh }) {
   const { user: acUser } = useAuth();
   const acIsAdmin = acUser?.role === 'ADMIN';
+  // Synced top scrollbar for the wide permission matrix (usable from the top,
+  // not just the bottom). The dummy strip mirrors the table's scroll width and
+  // the two containers keep each other's scrollLeft in sync.
+  const acTopScroll = useRef(null);
+  const acBodyScroll = useRef(null);
+  const [acScrollW, setAcScrollW] = useState(0);
+  useEffect(() => {
+    const measure = () => setAcScrollW(acBodyScroll.current ? acBodyScroll.current.scrollWidth : 0);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  });
+  const syncFromTop = () => { if (acBodyScroll.current && acTopScroll.current) acBodyScroll.current.scrollLeft = acTopScroll.current.scrollLeft; };
+  const syncFromBody = () => { if (acBodyScroll.current && acTopScroll.current) acTopScroll.current.scrollLeft = acBodyScroll.current.scrollLeft; };
   // A non-admin managing access control must never see/grant these.
   const SENSITIVE_PERMS = ['manage_password', 'reset_passwords', 'send_credentials', 'manage_receipt_storage', 'upload_branding', 'change_branding', 'impersonate_user'];
   const DEFAULT_PERMS = {
@@ -190,7 +204,13 @@ function AccessControlTab({ settings, navigate, refresh }) {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-100">
+      {/* Top scrollbar (mirrors the table below) */}
+      {acScrollW > 0 && (
+        <div ref={acTopScroll} onScroll={syncFromTop} className="overflow-x-auto overflow-y-hidden mb-1" style={{ height: 14 }}>
+          <div style={{ width: acScrollW, height: 1 }} />
+        </div>
+      )}
+      <div ref={acBodyScroll} onScroll={syncFromBody} className="overflow-x-auto rounded-xl border border-gray-100">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b" style={{backgroundColor:'#1e293b'}}>

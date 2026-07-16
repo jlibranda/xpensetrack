@@ -284,7 +284,11 @@ export default function UsersPage() {
     } finally { setApprLoading(false); if (apprFileRef.current) apprFileRef.current.value=''; }
   };
 
-  const managers = users.filter(u=>['MANAGER','FINANCE','ADMIN'].includes(u.role));
+  // Approver / manager candidates follow Access Control: any role granted
+  // "Access My Approvals" (view_approvals) automatically becomes selectable as an
+  // approver — including custom roles. Defaults to MANAGER/FINANCE/ADMIN when unset.
+  const approverRoles = settings?.accessControl?.view_approvals || ['MANAGER','FINANCE','ADMIN'];
+  const managers = users.filter(u => approverRoles.includes(u.role) && u.isActive !== false);
   const initials = u => `${u.firstName?.[0]||''}${u.lastName?.[0]||''}`.toUpperCase();
   const fullName = u => `${u.lastName}, ${u.firstName}`.trim();
 
