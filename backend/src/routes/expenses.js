@@ -96,50 +96,15 @@ router.get('/pending-count', authenticate, async (req, res) => {
         });
         toApprove = rows.length;
       } else {
-        // For non-admins, count only approvals that are ACTUALLY actionable now.
-        // A pending row is actionable if its step is the first unsatisfied step
-        // (sequential) or always (any-order), and its step isn't already satisfied
-        // by an OR-group sibling.
+        // Count EVERY expense assigned to this approver that is still pending —
+        // including later-step items that are not yet actionable. The red bubble
+        // shows the approver's FULL pending queue.
         const myRows = await prisma.approval.findMany({
-          where: { approverId: req.user.id, status: 'PENDING', expenseId: { not: null } },
-          select: { id: true, expenseId: true, stepOrder: true, groupKey: true },
+          where: { approverId: req.user.id, status: 'PENDING', expenseId: { not: null }, expense: { status: 'PENDING' } },
+          select: { expenseId: true },
+          distinct: ['expenseId'],
         });
-        const expenseIds = [...new Set(myRows.map(r => r.expenseId))];
-        const actionableExpenses = new Set();
-
-        for (const exId of expenseIds) {
-          const all = await prisma.approval.findMany({ where: { expenseId: exId } });
-          // group into steps
-          const groups = {};
-          for (const a of all) {
-            const g = a.groupKey || `lvl:${a.stepOrder}`;
-            if (!groups[g]) groups[g] = { stepOrder: a.stepOrder, rows: [] };
-            groups[g].rows.push(a);
-          }
-          const steps = Object.values(groups).map(grp => ({
-            stepOrder: grp.stepOrder,
-            satisfied: grp.rows.some(r => r.status === 'APPROVED'),
-            blocked: grp.rows.every(r => r.status === 'REJECTED'),
-            rows: grp.rows,
-          })).sort((a,b)=>a.stepOrder-b.stepOrder);
-
-          // submitter's chain mode
-          const ex = await prisma.expense.findUnique({ where: { id: exId }, select: { submittedBy: { select: { approvalMode: true } } } });
-          const mode = ex?.submittedBy?.approvalMode || 'SEQUENTIAL';
-          const firstOpen = steps.find(s => !s.satisfied && !s.blocked);
-
-          // is any of my pending rows in this expense actionable?
-          const mine = myRows.filter(r => r.expenseId === exId);
-          for (const r of mine) {
-            const myStep = steps.find(s => s.stepOrder === r.stepOrder);
-            if (!myStep || myStep.satisfied || myStep.blocked) continue;
-            if (mode === 'ANY_ORDER' || (firstOpen && firstOpen.stepOrder === r.stepOrder)) {
-              actionableExpenses.add(exId);
-              break;
-            }
-          }
-        }
-        toApprove = actionableExpenses.size;
+        toApprove = myRows.length;
       }
     }
 

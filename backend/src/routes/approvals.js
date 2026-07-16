@@ -319,22 +319,13 @@ router.get('/ledger/pending', authenticate, requirePermission('view_approvals', 
 router.get('/ledger/pending-count', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
     const onBehalf = await canApproveOnBehalf(req.user);
+    // Count EVERY doc assigned to this approver that is still pending — including
+    // later-step items not yet actionable. The red bubble shows the FULL queue.
     const baseWhere = onBehalf
-      ? { status: 'PENDING', ledgerDocId: { not: null } }
-      : { approverId: req.user.id, status: 'PENDING', ledgerDocId: { not: null } };
-    const approvals = await prisma.approval.findMany({ where: baseWhere, include: { ledgerDoc: true }, orderBy: { createdAt: 'desc' } });
-    let count = 0; const seen = new Set();
-    for (const ap of approvals) {
-      if (!ap.ledgerDoc || seen.has(ap.ledgerDocId)) continue;
-      const all = await loadLedgerApprovals(ap.ledgerDocId);
-      const steps = summarizeSteps(all);
-      const thisStep = steps.find(s => s.stepOrder === ap.stepOrder);
-      if (thisStep && (thisStep.satisfied || thisStep.blocked)) continue;
-      if (onBehalf) { count++; seen.add(ap.ledgerDocId); continue; }
-      const mode = await chainModeForLedger(ap.ledgerDoc);
-      if (isActionable(ap, all, mode)) { count++; seen.add(ap.ledgerDocId); }
-    }
-    res.json({ count });
+      ? { status: 'PENDING', ledgerDocId: { not: null }, ledgerDoc: { status: 'PENDING' } }
+      : { approverId: req.user.id, status: 'PENDING', ledgerDocId: { not: null }, ledgerDoc: { status: 'PENDING' } };
+    const rows = await prisma.approval.findMany({ where: baseWhere, select: { ledgerDocId: true }, distinct: ['ledgerDocId'] });
+    res.json({ count: rows.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
