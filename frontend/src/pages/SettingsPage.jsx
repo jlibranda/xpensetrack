@@ -478,15 +478,17 @@ export default function SettingsPage() {
     { key:'name', label:'Vendor / payee name', type:'text', required:true },
     { key:'type', label:'Type', type:'select', default:'COMPANY', options:[{value:'COMPANY',label:'Company/Payee'},{value:'GOVERNMENT',label:'Government'},{value:'LGU',label:'LGU'}] },
     { key:'contactPerson', label:'Contact person', type:'text' },
-    { key:'email', label:'Email', type:'text', placeholder:'name@company.com' },
+    { key:'email', label:'Email (multiple allowed, separated by ;)', type:'text', placeholder:'name@company.com; accounting@company.com' },
     { key:'tin', label:'TIN (optional)', type:'text', mono:true, numericOnly:true },
     { key:'address', label:'Registered address (for BIR 2307)', type:'text' },
     { key:'zip', label:'ZIP', type:'text', numericOnly:true, maxLen:4 },
   ];
   const saveVendor = (idx) => async (v) => {
     if (!String(v.name).trim()) throw new Error('Vendor / payee name is required.');
-    if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v.email).trim())) throw new Error('Please enter a valid email address.');
-    const rec = { name: v.name.trim(), type: v.type || 'COMPANY', contactPerson: v.contactPerson || '', email: (v.email || '').trim(), tin: v.tin || '', address: v.address || '', zip: v.zip || '' };
+    // Multiple emails allowed, separated by ";" — validate each one.
+    const emailsOk = (val) => String(val).split(';').map(s => s.trim()).filter(Boolean).every(em => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+    if (v.email && !emailsOk(v.email)) throw new Error('Please enter valid email address(es), separated by ";" for multiple.');
+    const rec = { name: v.name.trim(), type: v.type || 'COMPANY', contactPerson: v.contactPerson || '', email: String(v.email || '').split(';').map(s => s.trim()).filter(Boolean).join('; '), tin: v.tin || '', address: v.address || '', zip: v.zip || '' };
     const vendors = idx == null ? [...liveVendors, rec] : liveVendors.map((x, i) => i === idx ? rec : x);
     await persistPartial({ vendors });
     toast.success(idx == null ? 'Vendor added' : 'Vendor updated'); setRec(null);
@@ -556,24 +558,55 @@ export default function SettingsPage() {
     return 'BOTH';
   };
 
-  // Blank templates for bulk upload — headers + sample rows the uploader can
-  // overwrite. Same columns the import reads, so the file works as-is.
-  const downloadVendorTemplate = () => downloadXlsx(
-    [
-      { Name: 'ABC Trading Corp.', Type: 'Company', 'Contact Person': 'Juan Dela Cruz', Email: 'juan@abctrading.ph', TIN: '123456789000', 'Registered Address': '123 Rizal Ave., Manila', ZIP: '1000' },
+  // Blank templates for bulk upload — a data sheet (headers + sample rows you
+  // overwrite) plus an "Instructions" sheet. The import only reads the FIRST
+  // sheet, so the instructions never get imported.
+  const downloadVendorTemplate = () => {
+    const wb = XLSX.utils.book_new();
+    const data = XLSX.utils.json_to_sheet([
+      { Name: 'ABC Trading Corp.', Type: 'Company', 'Contact Person': 'Juan Dela Cruz', Email: 'juan@abctrading.ph; accounting@abctrading.ph', TIN: '123456789000', 'Registered Address': '123 Rizal Ave., Manila', ZIP: '1000' },
       { Name: 'Bureau of Internal Revenue', Type: 'Government', 'Contact Person': '', Email: '', TIN: '', 'Registered Address': '', ZIP: '' },
       { Name: 'Quezon City LGU', Type: 'LGU', 'Contact Person': '', Email: '', TIN: '', 'Registered Address': '', ZIP: '' },
-    ],
-    'Vendors', 'vendors_template.xlsx'
-  );
-  const downloadCategoryTemplate = () => downloadXlsx(
-    [
+    ]);
+    XLSX.utils.book_append_sheet(wb, data, 'Vendors');
+    const instr = XLSX.utils.aoa_to_sheet([
+      ['INSTRUCTIONS — Vendors / Payees bulk upload'],
+      [''],
+      ['1. Fill out the "Vendors" sheet. The sample rows are examples — replace them with your own data.'],
+      ['2. Name is REQUIRED. Rows with a blank Name will be skipped.'],
+      ['3. Type: Company, Government, or LGU. Blank = Company (or keeps the current type for existing vendors).'],
+      ['4. Email: MULTIPLE emails are allowed — separate them with a semicolon ";".'],
+      ['   Example: juan@abctrading.ph; accounting@abctrading.ph'],
+      ['   Rows with an invalid email will be skipped and listed with the reason after upload.'],
+      ['5. Existing vendors (matched by Name) will be UPDATED. Blank cells will NOT erase existing details.'],
+      ['6. TIN and ZIP: numbers only. ZIP is up to 4 digits.'],
+      ['7. Upload the file back in Settings → Vendors/Payees → Bulk upload.'],
+    ]);
+    instr['!cols'] = [{ wch: 110 }];
+    XLSX.utils.book_append_sheet(wb, instr, 'Instructions');
+    XLSX.writeFile(wb, 'vendors_template.xlsx');
+  };
+  const downloadCategoryTemplate = () => {
+    const wb = XLSX.utils.book_new();
+    const data = XLSX.utils.json_to_sheet([
       { Category: 'Office Supplies', 'GL Code': '6100', 'Applies To': 'Expense' },
       { Category: 'Utilities', 'GL Code': '6200', 'Applies To': 'AP/AR' },
       { Category: 'Professional Fees', 'GL Code': '6300', 'Applies To': 'Both' },
-    ],
-    'Categories', 'categories_template.xlsx'
-  );
+    ]);
+    XLSX.utils.book_append_sheet(wb, data, 'Categories');
+    const instr = XLSX.utils.aoa_to_sheet([
+      ['INSTRUCTIONS — Categories bulk upload'],
+      [''],
+      ['1. Fill out the "Categories" sheet. The sample rows are examples — replace them with your own data.'],
+      ['2. Category is REQUIRED. Rows with a blank Category will be skipped.'],
+      ['3. Applies To: Expense, AP/AR, or Both. Blank = Both (or keeps the current setting for existing categories).'],
+      ['4. Existing categories (matched by name) will be UPDATED. Blank cells will NOT erase existing details.'],
+      ['5. Upload the file back in Settings → Categories → Bulk upload.'],
+    ]);
+    instr['!cols'] = [{ wch: 110 }];
+    XLSX.utils.book_append_sheet(wb, instr, 'Instructions');
+    XLSX.writeFile(wb, 'categories_template.xlsx');
+  };
 
   const exportVendors = () => downloadXlsx(
     liveVendors.map(v => ({
@@ -590,11 +623,15 @@ export default function SettingsPage() {
       const byName = new Map(liveVendors.map(v => [String(v.name).toLowerCase(), { ...v }]));
       let added = 0, updated = 0; const skipped = [];
       rows.forEach((r, i) => {
-        const rowNo = i + 2; // +2: unang row ng data sa Excel (row 1 = headers)
+        const rowNo = i + 2; // first data row in Excel (row 1 = headers)
         const name = pick(r, 'Name', 'Vendor', 'Payee', 'Vendor / payee name');
-        if (!name) { skipped.push({ row: rowNo, reason: 'Walang laman ang Name column' }); return; }
-        const email = pick(r, 'Email', 'Email Address');
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { skipped.push({ row: rowNo, name, reason: `Invalid email: "${email}"` }); return; }
+        if (!name) { skipped.push({ row: rowNo, reason: 'Name column is empty' }); return; }
+        // Multiple emails allowed, separated by ";" — validate each one.
+        const emailRaw = pick(r, 'Email', 'Email Address');
+        const emailList = emailRaw.split(';').map(s => s.trim()).filter(Boolean);
+        const badEmail = emailList.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+        if (badEmail) { skipped.push({ row: rowNo, name, reason: `Invalid email: "${badEmail}"` }); return; }
+        const email = emailList.join('; ');
         const key = name.toLowerCase();
         const prev = byName.get(key);
         const typeRaw = pick(r, 'Type');
@@ -612,11 +649,11 @@ export default function SettingsPage() {
       });
       if (added + updated > 0) await persistPartial({ vendors: Array.from(byName.values()) });
       if (added + updated > 0) toast.success(`Vendors imported — ${added} added, ${updated} updated${skipped.length ? `, ${skipped.length} skipped` : ''}.`);
-      else toast.error('Walang na-upload — tingnan ang listahan ng dahilan sa window.');
+      else toast.error('Nothing was uploaded — see the reasons listed in the window.');
       return { added, updated, skipped };
     } catch (e) {
       toast.error('Could not read the file. Use the downloaded template format.');
-      return { added:0, updated:0, skipped:[{ row:'-', reason:'Hindi mabasa ang file — gamitin ang template format (.xlsx)' }] };
+      return { added:0, updated:0, skipped:[{ row:'-', reason:'Could not read the file — use the downloaded template format (.xlsx)' }] };
     }
   };
 
@@ -637,7 +674,7 @@ export default function SettingsPage() {
       rows.forEach((r, i) => {
         const rowNo = i + 2; // Excel row number (row 1 = headers)
         const rawName = pick(r, 'Category', 'Name');
-        if (!rawName) { skipped.push({ row: rowNo, reason: 'Walang laman ang Category column' }); return; }
+        if (!rawName) { skipped.push({ row: rowNo, reason: 'Category column is empty' }); return; }
         // Match case-insensitively, but keep the org's existing casing when found
         // (GL codes and types are keyed by the exact category name).
         const existing = cats.find(c => String(c).toLowerCase() === rawName.toLowerCase());
@@ -650,11 +687,11 @@ export default function SettingsPage() {
       });
       if (added + updated > 0) await persistPartial({ categories: cats, categoryGlCodes: gl, categoryTypes: types });
       if (added + updated > 0) toast.success(`Categories imported — ${added} added, ${updated} updated${skipped.length ? `, ${skipped.length} skipped` : ''}.`);
-      else toast.error('Walang na-upload — tingnan ang listahan ng dahilan sa window.');
+      else toast.error('Nothing was uploaded — see the reasons listed in the window.');
       return { added, updated, skipped };
     } catch (e) {
       toast.error('Could not read the file. Use the downloaded template format.');
-      return { added:0, updated:0, skipped:[{ row:'-', reason:'Hindi mabasa ang file — gamitin ang template format (.xlsx)' }] };
+      return { added:0, updated:0, skipped:[{ row:'-', reason:'Could not read the file — use the downloaded template format (.xlsx)' }] };
     }
   };
 
@@ -1128,8 +1165,9 @@ export default function SettingsPage() {
                 <button onClick={() => setBulkModal(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none px-1">✕</button>
               </div>
               <p className="text-xs text-gray-500 mb-4">
-                1. I-download ang template &nbsp;→&nbsp; 2. Punan sa Excel &nbsp;→&nbsp; 3. I-upload dito.
-                Existing {bulkModal.kind === 'vendors' ? 'vendors' : 'categories'} (by name) ay ma-u-update; ang blangkong cell ay hindi magbubura ng dating detalye.
+                1. Download the template &nbsp;→&nbsp; 2. Fill it out in Excel &nbsp;→&nbsp; 3. Upload it here.
+                Existing {bulkModal.kind === 'vendors' ? 'vendors' : 'categories'} (matched by name) will be updated; blank cells will NOT erase existing details.
+                {bulkModal.kind === 'vendors' ? ' Multiple emails are allowed — separate them with ";".' : ''}
               </p>
 
               <div className="flex gap-2 mb-4">
@@ -1149,11 +1187,11 @@ export default function SettingsPage() {
               {bulkRes && (
                 <div className="space-y-2">
                   <div className={`px-3 py-2 rounded-lg text-xs border ${bulkRes.added + bulkRes.updated > 0 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                    {bulkRes.added} added · {bulkRes.updated} updated · {bulkRes.skipped.length} hindi na-upload
+                    {bulkRes.added} added · {bulkRes.updated} updated · {bulkRes.skipped.length} not uploaded
                   </div>
                   {bulkRes.skipped.length > 0 && (
                     <div className="border border-red-100 rounded-lg overflow-hidden">
-                      <div className="bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-red-700">Hindi na-upload — dahilan:</div>
+                      <div className="bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-red-700">Not uploaded — reasons:</div>
                       <div className="max-h-40 overflow-y-auto divide-y divide-gray-50">
                         {bulkRes.skipped.map((s, i) => (
                           <div key={i} className="px-3 py-1.5 text-[11px] text-gray-600">
@@ -1165,7 +1203,7 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   )}
-                  <p className="text-[11px] text-gray-400">Ayusin ang mga row na iyan sa file at i-upload muli — ang mga na-upload na ay hindi madodoble (upsert by name).</p>
+                  <p className="text-[11px] text-gray-400">Fix those rows in the file and upload again — rows that already went through will not be duplicated (matched by name).</p>
                 </div>
               )}
             </div>
