@@ -179,10 +179,11 @@ export default function ApprovalsPage() {
               {approvals.map(a => {
                 const e = a.expense;
                 const isSelected = selected?.id === a.id;
+                const waiting = a.actionable === false; // hindi pa umaabot sa step ng approver na ito
                 return (
                   <div key={a.id}
                     onClick={() => setSelected(isSelected ? null : a)}
-                    className={`bg-white rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-brand-400 ring-1 ring-brand-400' : 'border-gray-100 hover:border-gray-200'} p-4`}>
+                    className={`bg-white rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-brand-400 ring-1 ring-brand-400' : 'border-gray-100 hover:border-gray-200'} ${waiting ? 'opacity-75' : ''} p-4`}>
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 min-w-0 mr-3">
                         <p className="text-sm font-medium text-gray-900 truncate">{e.merchant || e.title}</p>
@@ -212,11 +213,17 @@ export default function ApprovalsPage() {
                     )}
 
                     <div onClick={ev => ev.stopPropagation()}>
+                      {waiting && (
+                        <div className="mb-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-[11px] text-gray-500">
+                          ⏳ In your queue — waiting for an earlier approver to act first. Buttons will unlock when it's your turn.
+                        </div>
+                      )}
                       <input
                         value={notes[a.id] || ''}
                         onChange={ev => { setNotes(n => ({...n, [a.id]: ev.target.value})); if (ev.target.value.trim()) setNoteError(er => { const c = { ...er }; delete c[a.id]; return c; }); }}
                         placeholder={noteError[a.id] ? '⚠ Reason is required — type it here' : 'Add note (required for Return and Reject)'}
-                        className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-none mb-2 ${noteError[a.id]
+                        disabled={waiting}
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-none mb-2 disabled:opacity-50 ${noteError[a.id]
                           ? 'border-red-500 ring-1 ring-red-300 placeholder-red-400 focus:border-red-500'
                           : 'border-gray-200 focus:border-brand-400'}`}
                       />
@@ -226,19 +233,19 @@ export default function ApprovalsPage() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => action(a.id, 'approve')}
-                          disabled={actioning === a.id + 'approve'}
+                          disabled={waiting || actioning === a.id + 'approve'}
                           className="flex-1 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-medium hover:bg-green-100 disabled:opacity-50 transition-colors">
                           {actioning === a.id + 'approve' ? '...' : '✓ Approve'}
                         </button>
                         <button
                           onClick={() => action(a.id, 'return')}
-                          disabled={actioning === a.id + 'return'}
+                          disabled={waiting || actioning === a.id + 'return'}
                           className="flex-1 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-medium hover:bg-amber-100 disabled:opacity-50 transition-colors">
                           {actioning === a.id + 'return' ? '...' : '↩ Return'}
                         </button>
                         <button
                           onClick={() => action(a.id, 'reject')}
-                          disabled={actioning === a.id + 'reject'}
+                          disabled={waiting || actioning === a.id + 'reject'}
                           className="flex-1 py-2 bg-red-50 text-red-700 border border-red-100 rounded-lg text-xs font-medium hover:bg-red-100 disabled:opacity-50 transition-colors">
                           {actioning === a.id + 'reject' ? '...' : '✗ Reject'}
                         </button>

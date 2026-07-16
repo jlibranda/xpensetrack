@@ -94,10 +94,15 @@ router.get('/pending', authenticate, requirePermission('view_approvals', ['MANAG
       const steps = summarizeSteps(all);
       const thisStep = steps.find(s => s.stepOrder === ap.stepOrder);
       if (thisStep && (thisStep.satisfied || thisStep.blocked)) continue; // step already resolved
-      if (onBehalf) { visible.push(ap); seenExpenses.add(ap.expenseId); continue; }
+      // Include EVERY assigned pending item so the list matches the badge count.
+      // `actionable:false` marks items still waiting on an earlier approver.
       const mode = await chainModeForExpense(ap.expense);
-      if (isActionable(ap, all, mode)) { visible.push(ap); seenExpenses.add(ap.expenseId); }
+      const actionable = onBehalf ? true : isActionable(ap, all, mode);
+      visible.push({ ...ap, actionable });
+      seenExpenses.add(ap.expenseId);
     }
+    // Actionable items first, then the waiting queue.
+    visible.sort((a, b) => (b.actionable === true) - (a.actionable === true));
     res.json(visible);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -308,10 +313,13 @@ router.get('/ledger/pending', authenticate, requirePermission('view_approvals', 
       const steps = summarizeSteps(all);
       const thisStep = steps.find(s => s.stepOrder === ap.stepOrder);
       if (thisStep && (thisStep.satisfied || thisStep.blocked)) continue;
-      if (onBehalf) { visible.push(ap); seen.add(ap.ledgerDocId); continue; }
+      // Include EVERY assigned pending item so the list matches the badge count.
       const mode = await chainModeForLedger(ap.ledgerDoc);
-      if (isActionable(ap, all, mode)) { visible.push(ap); seen.add(ap.ledgerDocId); }
+      const actionable = onBehalf ? true : isActionable(ap, all, mode);
+      visible.push({ ...ap, actionable });
+      seen.add(ap.ledgerDocId);
     }
+    visible.sort((a, b) => (b.actionable === true) - (a.actionable === true));
     res.json(visible);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
