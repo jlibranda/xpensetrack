@@ -251,6 +251,9 @@ export default function TransactionsPage() {
         saveVendor: vendorMail.saveVendor !== false, // default: save manual email for next time
         attachPop: vendorMail.attachPop !== false,
         attach2307: vendorMail.attach2307 !== false,
+        subject: vendorMail.subject,       // undefined = use saved template
+        message: vendorMail.message,       // undefined = use saved template
+        data2307: vendorMail.data2307 || undefined, // edited via the 2307 editor
       });
       toast.success(r.message || 'Sent to vendor');
       setVendorMail(null);
@@ -791,8 +794,13 @@ export default function TransactionsPage() {
                   </div>
 
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => setGen2307Data(null)} className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50">← Back</button>
-                    <button onClick={generate2307Pdf} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#dc2626' }}>📄 Generate PDF</button>
+                    <button onClick={() => { if (gen2307._forEmail) { setGen2307(null); setGen2307Data(null); } else setGen2307Data(null); }} className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50">← Back</button>
+                    {gen2307._forEmail ? (
+                      <button onClick={() => { const { _forEmail, ...clean } = d; setVendorMail(m => ({ ...m, data2307: clean, edited2307: true })); setGen2307(null); setGen2307Data(null); }}
+                        className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#16a34a' }}>✅ Attach this 2307 to the email</button>
+                    ) : (
+                      <button onClick={generate2307Pdf} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#dc2626' }}>📄 Generate PDF</button>
+                    )}
                   </div>
                   <p className="text-[11px] text-gray-400">Fills the official BIR 2307 (Jan 2018 ENCS). Verify figures before issuing to the payee.</p>
                 </div>
@@ -804,13 +812,30 @@ export default function TransactionsPage() {
 
       {/* ✉️ Email vendor (POP + 2307) modal — pick which PROCESSED invoices of the
           same vendor to include; one email, POP file(s) + one combined 2307. */}
-      {vendorMail && (() => {
+      {vendorMail && !gen2307Data && (() => {
         const v = vendorRec(vendorMail.vendorName);
         const candidates = rows.filter(r => r._isLedger && ['PROCESSED','PAID'].includes(r.status) && String(r.vendorName||'').trim().toLowerCase() === String(vendorMail.vendorName||'').trim().toLowerCase());
-        const toggle = (id) => setVendorMail(m => ({ ...m, ids: m.ids.includes(id) ? m.ids.filter(x => x !== id) : [...m.ids, id] }));
+        const toggle = (id) => setVendorMail(m => ({ ...m, ids: m.ids.includes(id) ? m.ids.filter(x => x !== id) : [...m.ids, id], data2307: undefined, edited2307: false }));
         const total = candidates.filter(c => vendorMail.ids.includes(c.id)).reduce((s, c) => s + Number(c.amountPhp ?? c.amount ?? 0), 0);
         const emailVal = vendorMail.email ?? (v?.email || '');
         const contactVal = vendorMail.contactPerson ?? (v?.contactPerson || '');
+        // Pre-populated (editable) subject + message from the saved template.
+        const subVars = (s) => String(s || '')
+          .replaceAll('{contactPerson}', contactVal || vendorMail.vendorName)
+          .replaceAll('{vendorName}', vendorMail.vendorName)
+          .replaceAll('{appName}', settings?.appName || '')
+          .replaceAll('{senderName}', `${user?.firstName || ''} ${user?.lastName || ''}`.trim());
+        const tplV = settings?.emailTemplates?.vendor_payment || {};
+        const subjVal = vendorMail.subject ?? subVars(tplV.subject || 'Payment processed — {vendorName}');
+        const msgVal = vendorMail.message ?? subVars(tplV.message || 'Please be advised that payment for the below invoice(s) has been successfully processed. The funds should now be reflected in your account. 2307 to follow.');
+        const openEditor2307 = async () => {
+          if (!vendorMail.ids.length) return;
+          try {
+            const data = await api.get(`/ledger/2307/prepare?ids=${encodeURIComponent(vendorMail.ids.join(','))}`);
+            setGen2307({ _forEmail: true, vendorName: vendorMail.vendorName });
+            setGen2307Data(data);
+          } catch (e2) { toast.error(e2.error || 'Could not prepare the 2307'); }
+        };
         return (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !vendorMailSending && setVendorMail(null)}>
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={ev => ev.stopPropagation()}>
@@ -841,9 +866,20 @@ export default function TransactionsPage() {
                     Save this email to Vendors/Payees for next time
                   </label>
                 )}
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-0.5">Subject (editable)</label>
+                  <input value={subjVal} onChange={ev => setVendorMail(m => ({ ...m, subject: ev.target.value }))}
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-0.5">Message (editable — invoice table, totals, and sender block are added automatically below it)</label>
+                  <textarea value={msgVal} onChange={ev => setVendorMail(m => ({ ...m, message: ev.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400" />
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mb-2">Select the processed invoice(s) to include — one email with your chosen attachment(s):</p>
-              <div className="flex gap-4 mb-2 text-xs text-gray-700">
+              <p className="text-xs text-gray-500 mb-2">Select the processed invoice(s) to include:</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2 text-xs text-gray-700">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input type="checkbox" checked={vendorMail.attachPop !== false}
                     onChange={ev => setVendorMail(m => ({ ...m, attachPop: ev.target.checked }))} />
@@ -854,8 +890,24 @@ export default function TransactionsPage() {
                     onChange={ev => setVendorMail(m => ({ ...m, attach2307: ev.target.checked }))} />
                   Attach 2307
                 </label>
+                {vendorMail.attach2307 !== false && (
+                  vendorMail.edited2307 ? (
+                    <span className="flex items-center gap-1.5 text-green-600 font-medium">
+                      ✓ 2307 reviewed
+                      <button onClick={openEditor2307} className="underline text-[11px] text-gray-500 font-normal">edit again</button>
+                    </span>
+                  ) : (
+                    <button onClick={openEditor2307} disabled={!vendorMail.ids.length}
+                      className="px-2.5 py-1 rounded-lg border border-gray-200 hover:bg-gray-50 text-[11px] disabled:opacity-50">
+                      ✏️ Review / edit 2307
+                    </button>
+                  )
+                )}
               </div>
-              <div className="border border-gray-100 rounded-lg divide-y divide-gray-50 mb-3 max-h-48 overflow-y-auto">
+              {vendorMail.attach2307 !== false && !vendorMail.edited2307 && (
+                <p className="text-[11px] text-amber-600 mb-2">Tip: click "Review / edit 2307" to open the same 2307 editor (period, ATC rows, amounts) before attaching. If skipped, an auto-generated 2307 will be attached.</p>
+              )}
+              <div className="border border-gray-100 rounded-lg divide-y divide-gray-50 mb-3 max-h-40 overflow-y-auto">
                 {candidates.map(c => (
                   <label key={c.id} className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-gray-50">
                     <input type="checkbox" checked={vendorMail.ids.includes(c.id)} onChange={() => toggle(c.id)} />
@@ -871,7 +923,7 @@ export default function TransactionsPage() {
                 style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-contrast,#fff)' }}>
                 {vendorMailSending ? 'Sending…' : `✉️ Send ${vendorMail.attachPop !== false && vendorMail.attach2307 !== false ? 'POP + 2307' : vendorMail.attach2307 === false ? 'POP only' : '2307 only'} (${vendorMail.ids.length})`}
               </button>
-              <p className="text-[11px] text-gray-400 mt-2">The email wording can be customized in Settings → Email Templates → AP & AR.</p>
+              <p className="text-[11px] text-gray-400 mt-2">Default wording comes from Settings → Email Templates → AP & AR — edits here apply to this email only.</p>
             </div>
           </div>
         );

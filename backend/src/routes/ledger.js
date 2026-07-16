@@ -612,11 +612,18 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
     }
 
     // Attachment 2: ONE combined BIR 2307 covering ALL selected invoices.
+    // If the caller passed edited 2307 data (from the Generate-2307 editor),
+    // fill the form with THAT — otherwise auto-build from the invoices.
     if (attach2307) try {
-      const docs2307 = await fetch2307Docs({ ids });
-      if (docs2307.length) {
-        const data = await build2307(docs2307);
-        const prepared = prepare2307(data);
+      let prepared = req.body?.data2307 && typeof req.body.data2307 === 'object' ? req.body.data2307 : null;
+      if (!prepared) {
+        const docs2307 = await fetch2307Docs({ ids });
+        if (docs2307.length) {
+          const data = await build2307(docs2307);
+          prepared = prepare2307(data);
+        }
+      }
+      if (prepared) {
         const pdf = await fill2307Pdf(prepared);
         const vSlug = vendorName.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
         attachments.push({ filename: `2307-${vSlug}.pdf`, content: Buffer.from(pdf).toString('base64'), contentType: 'application/pdf' });
@@ -638,6 +645,8 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
       paymentDate: latestPaid ? new Date(latestPaid).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
       senderName: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim(),
       attachments,
+      subjectOverride: req.body?.subject,
+      messageOverride: req.body?.message,
     });
     if (!sent) return res.status(500).json({ error: 'Email could not be sent — check the email configuration (RESEND_API_KEY / RESEND_FROM) on the server.' });
 

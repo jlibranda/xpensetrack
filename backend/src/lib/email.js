@@ -487,13 +487,13 @@ async function sendPaymentNotificationEmail(toEmail, toName, doc, employee, kind
 // payment image(s) and a combined BIR 2307 PDF attached. `recipients` may contain
 // several addresses (vendor email supports ";"-separated lists). Returns the
 // number of recipients successfully emailed.
-async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, invoices, totalPhp, paymentDate, senderName, attachments }) {
+async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, invoices, totalPhp, paymentDate, senderName, attachments, subjectOverride, messageOverride }) {
   const brand = await getBranding();
   const appName = brand.appName;
   const custom = await getTemplates();
   const vars = { contactPerson: contactPerson || vendorName, vendorName, appName, senderName };
-  const subject = tpl(custom, 'vendor_payment', 'subject', vars);
-  const message = tpl(custom, 'vendor_payment', 'message', vars);
+  const subject = (subjectOverride && subjectOverride.trim()) ? subst(subjectOverride, vars) : tpl(custom, 'vendor_payment', 'subject', vars);
+  const message = (messageOverride && messageOverride.trim()) ? subst(messageOverride, vars) : tpl(custom, 'vendor_payment', 'message', vars);
   const peso = (n) => `\u20b1${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const invoiceRows = (invoices || []).map(inv =>
