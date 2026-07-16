@@ -223,8 +223,8 @@ export default function Layout() {
               style={navLinkStyle}>
               <span className="w-4 text-center text-sm">{item.icon}</span>
               <span>{item.label}</span>
-              {item.to === '/expenses' && (pendingCounts.myPending > 0 || pendingCounts.myReturned > 0) && (
-                <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">{(pendingCounts.myPending || 0) + (pendingCounts.myReturned || 0)}</span>
+              {item.to === '/expenses' && pendingCounts.myReturned > 0 && (
+                <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold" title="Returned to you — needs your action">{pendingCounts.myReturned}</span>
               )}
             </NavLink>
           ))}
@@ -262,8 +262,8 @@ export default function Layout() {
                 style={navLinkStyle}>
                 <span className="w-4 text-center text-sm">🧾</span>
                 <span>My Expenses</span>
-                {(pendingCounts.myPending > 0 || pendingCounts.myReturned > 0) && (
-                  <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">{(pendingCounts.myPending || 0) + (pendingCounts.myReturned || 0)}</span>
+                {pendingCounts.myReturned > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold" title="Returned to you — needs your action">{pendingCounts.myReturned}</span>
                 )}
               </NavLink>
               {(navVisible({ perm:'manage_ap_ar' }) || navVisible({ perm:'view_approvals' })) && (

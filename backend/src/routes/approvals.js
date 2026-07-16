@@ -115,7 +115,9 @@ router.get('/history', authenticate, requirePermission('view_approvals', ['MANAG
       : { approverId: req.user.id, status: { not: 'PENDING' }, expenseId: { not: null } };
     const approvals = await prisma.approval.findMany({
       where,
-      include: { expense: { include: { submittedBy: { select: { id: true, firstName: true, lastName: true } }, receipt: { select: { id: true, mimeType: true } } } } },
+      // Full include (same as /pending): the frontend History needs e.approvals
+      // with approver names to show who the form is currently pending with.
+      include: { expense: { include: expenseInclude } },
       orderBy: { updatedAt: 'desc' },
       take: 100,
     });
