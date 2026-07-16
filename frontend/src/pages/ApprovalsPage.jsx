@@ -186,13 +186,6 @@ export default function ApprovalsPage() {
                         <p className="text-xs text-gray-500 mt-0.5">
                           <span className="font-semibold text-gray-700">{personName(e.submittedBy)}</span> · {e.submittedBy?.department || 'No dept'} · {new Date(e.expenseDate).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}
                         </p>
-                        {(() => {
-                          const pendingApprovers = (e.approvals || []).filter(ap => ap.status === 'PENDING').map(ap => personName(ap.approver));
-                          const uniq = [...new Set(pendingApprovers)];
-                          return uniq.length ? (
-                            <p className="text-xs text-amber-600 mt-0.5">Waiting on: <span className="font-medium">{uniq.join(', ')}</span></p>
-                          ) : null;
-                        })()}
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-medium text-gray-900">{format(e.amountPhp)}</p>
@@ -256,7 +249,6 @@ export default function ApprovalsPage() {
                   <span className="text-gray-800 text-right max-w-[60%]">{val}</span>
                 </div>
               ) : null;
-              const waiting = [...new Set((e.approvals || []).filter(ap => ap.status === 'PENDING').sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0)).map(ap => personName(ap.approver)))].join(', ');
               return (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setSelected(null)}>
                   <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5" onClick={ev => ev.stopPropagation()}>
@@ -284,7 +276,6 @@ export default function ApprovalsPage() {
                       {row('Cost center', e.costCenter)}
                       {row('Date', e.expenseDate ? new Date(e.expenseDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '')}
                       {row('Approval level', selected.level ? `Level ${selected.level}` : '')}
-                      {row('Waiting on', waiting)}
                       {e.description && e.description !== e.title ? row('Notes', e.description) : null}
                     </div>
                     {e.status === 'APPROVED' && (
