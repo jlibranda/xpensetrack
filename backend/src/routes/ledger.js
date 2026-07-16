@@ -520,6 +520,132 @@ router.post('/2307/pdf', authenticate, requirePermission(PERM, FALLBACK), async 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST /api/ledger/email-vendor — email the vendor their Proof of Payment (POP)
+// and a combined BIR 2307 PDF covering one or MORE processed invoices.
+// Body: { ids: [ledgerDocId, ...] }  — all docs must belong to the same vendor.
+router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+  try {
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'Select at least one invoice.' });
+
+    // Respect the master email switch.
+    const org = await prisma.orgSettings.findFirst();
+    if (org?.emailNotificationsEnabled === false) {
+      return res.status(400).json({ error: 'Email notifications are OFF in Settings — turn them ON first.' });
+    }
+
+    const docs = await prisma.ledgerDoc.findMany({
+      where: { id: { in: ids } },
+      include: { proofOfPayment: { select: { id: true, storageKey: true, data: true, mimeType: true, filename: true } } },
+    });
+    if (!docs.length) return res.status(404).json({ error: 'Invoices not found.' });
+
+    // All invoices must belong to ONE vendor (one email, one 2307).
+    const vendorName = (docs[0].vendorName || '').trim();
+    if (!vendorName) return res.status(400).json({ error: 'Invoice has no vendor name.' });
+    if (docs.some(d => (d.vendorName || '').trim().toLowerCase() !== vendorName.toLowerCase())) {
+      return res.status(400).json({ error: 'All selected invoices must belong to the same vendor.' });
+    }
+    // Only processed/paid invoices may be announced as paid.
+    const notReady = docs.filter(d => !['PROCESSED', 'PAID'].includes(d.status));
+    if (notReady.length) {
+      return res.status(400).json({ error: `Not yet processed: ${notReady.map(d => d.docNumber || d.id.slice(0, 6)).join(', ')}. Only Processed invoices can be emailed to the vendor.` });
+    }
+
+    // Vendor contact from Settings → Vendors/Payees (email supports ";" lists).
+    // For vendors NOT in the list (free-typed "others"), the caller may pass a
+    // manual { email, contactPerson } override — optionally saved back to Settings.
+    let vendors = [];
+    try { vendors = JSON.parse(org?.vendors || '[]'); } catch { vendors = []; }
+    const vendor = vendors.find(v => String(v.name || '').trim().toLowerCase() === vendorName.toLowerCase());
+    const manualEmail = String(req.body?.email || '').trim();
+    const manualContact = String(req.body?.contactPerson || '').trim();
+    const emailSource = manualEmail || vendor?.email || '';
+    const recipients = emailSource.split(';').map(s => s.trim()).filter(Boolean);
+    if (!recipients.length) {
+      return res.status(400).json({ error: `No email on file for "${vendorName}". Type the vendor's email in the form, or add it in Settings → Vendors/Payees.` });
+    }
+    const badEmail = recipients.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+    if (badEmail) return res.status(400).json({ error: `Invalid email: "${badEmail}"` });
+    const contactPerson = manualContact || vendor?.contactPerson || '';
+
+    // Optionally persist the manual details so next time it's automatic.
+    if (manualEmail && req.body?.saveVendor) {
+      try {
+        if (vendor) {
+          vendor.email = manualEmail;
+          if (manualContact) vendor.contactPerson = manualContact;
+        } else {
+          vendors.push({ name: vendorName, type: 'COMPANY', contactPerson: manualContact, email: manualEmail, tin: '', address: '', zip: '' });
+        }
+        await prisma.orgSettings.update({ where: { id: org.id }, data: { vendors: JSON.stringify(vendors) } });
+      } catch (e) { console.error('Vendor save-back failed:', e.message); }
+    }
+
+    // What to attach: both by default, or POP-only / 2307-only (e.g. "2307 to
+    // follow" workflows where the POP is sent first and the 2307 later).
+    const attachPop = req.body?.attachPop !== false;
+    const attach2307 = req.body?.attach2307 !== false;
+    if (!attachPop && !attach2307) return res.status(400).json({ error: 'Select at least one attachment (POP and/or 2307).' });
+
+    // Attachments 1: distinct proof-of-payment file(s) — several invoices may share ONE proof.
+    const storage = require('../lib/storage');
+    const seenProof = new Set();
+    const attachments = [];
+    if (attachPop) {
+      for (const d of docs) {
+        const p = d.proofOfPayment;
+        if (!p || seenProof.has(p.id)) continue;
+        seenProof.add(p.id);
+        let buffer = null;
+        if (p.storageKey && storage.storageConfigured()) {
+          try { const got = await storage.getObject(p.storageKey); buffer = got.buffer; } catch (e) { console.error('POP fetch failed:', e.message); }
+        }
+        if (!buffer && p.data) buffer = Buffer.from(p.data);
+        if (!buffer) continue;
+        const ext = (p.mimeType || '').includes('pdf') ? 'pdf' : (p.mimeType || '').includes('png') ? 'png' : 'jpg';
+        attachments.push({ filename: p.filename || `proof-of-payment-${attachments.length + 1}.${ext}`, content: buffer.toString('base64'), contentType: p.mimeType || undefined });
+      }
+      if (!attachments.length) {
+        return res.status(400).json({ error: 'No proof of payment uploaded yet for the selected invoice(s). Upload the POP first in Transactions, or untick "Attach POP" to send the 2307 only.' });
+      }
+    }
+
+    // Attachment 2: ONE combined BIR 2307 covering ALL selected invoices.
+    if (attach2307) try {
+      const docs2307 = await fetch2307Docs({ ids });
+      if (docs2307.length) {
+        const data = await build2307(docs2307);
+        const prepared = prepare2307(data);
+        const pdf = await fill2307Pdf(prepared);
+        const vSlug = vendorName.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+        attachments.push({ filename: `2307-${vSlug}.pdf`, content: Buffer.from(pdf).toString('base64'), contentType: 'application/pdf' });
+      }
+    } catch (e) { console.error('2307 build for vendor email failed:', e.message); }
+    if (!attachments.length) {
+      return res.status(400).json({ error: 'Nothing to attach — the 2307 could not be generated for the selected invoice(s).' });
+    }
+
+    // Send (one email per recipient address).
+    const { sendVendorPaymentEmail } = require('../lib/email');
+    const latestPaid = docs.map(d => d.processedAt || d.paidAt || d.updatedAt).sort().pop();
+    const sent = await sendVendorPaymentEmail({
+      recipients,
+      contactPerson,
+      vendorName,
+      invoices: docs.map(d => ({ docNumber: d.docNumber, amountPhp: d.amountPhp ?? d.amount })),
+      totalPhp: docs.reduce((s, d) => s + Number(d.amountPhp ?? d.amount ?? 0), 0),
+      paymentDate: latestPaid ? new Date(latestPaid).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
+      senderName: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim(),
+      attachments,
+    });
+    if (!sent) return res.status(500).json({ error: 'Email could not be sent — check the email configuration (RESEND_API_KEY / RESEND_FROM) on the server.' });
+
+    await logAudit(req.user, 'VENDOR_PAYMENT_EMAILED', { targetType: 'LEDGER', details: `Emailed ${vendorName} (${recipients.join(', ')}): ${docs.length} invoice(s), ${attachments.length} attachment(s)` });
+    res.json({ message: `Sent to ${recipients.join(', ')} — ${docs.length} invoice(s), ${attachments.length} attachment(s) (POP + 2307).`, sent, recipients });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/:id', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
     const doc = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id }, include });

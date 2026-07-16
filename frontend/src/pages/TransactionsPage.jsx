@@ -231,6 +231,32 @@ export default function TransactionsPage() {
 
   const [uploadingProof, setUploadingProof] = useState(false);
   const [notifying, setNotifying] = useState(false);
+
+  // ✉️ Email vendor (POP + 2307): { vendorName, ids: [docId,...] } — supports
+  // several invoices in one email (one/many POPs + one combined 2307).
+  const [vendorMail, setVendorMail] = useState(null);
+  const [vendorMailSending, setVendorMailSending] = useState(false);
+  const vendorRec = (name) => (Array.isArray(settings?.vendors) ? settings.vendors : []).find(v => String(v.name||'').trim().toLowerCase() === String(name||'').trim().toLowerCase());
+  const sendVendorMail = async () => {
+    if (!vendorMail?.ids?.length) return;
+    setVendorMailSending(true);
+    try {
+      const v = vendorRec(vendorMail.vendorName);
+      const email = (vendorMail.email ?? (v?.email || '')).trim();
+      const contactPerson = (vendorMail.contactPerson ?? (v?.contactPerson || '')).trim();
+      const r = await api.post('/ledger/email-vendor', {
+        ids: vendorMail.ids,
+        email,
+        contactPerson,
+        saveVendor: vendorMail.saveVendor !== false, // default: save manual email for next time
+        attachPop: vendorMail.attachPop !== false,
+        attach2307: vendorMail.attach2307 !== false,
+      });
+      toast.success(r.message || 'Sent to vendor');
+      setVendorMail(null);
+    } catch (e2) { toast.error(e2.error || 'Failed to email vendor'); }
+    finally { setVendorMailSending(false); }
+  };
   const notifyPayment = async (id) => {
     setNotifying(true);
     try {
@@ -627,7 +653,7 @@ export default function TransactionsPage() {
                   <p className="text-xs text-gray-400">No proof of payment uploaded</p>
                 )}
                 {e.proofOfPayment?.id && canProcess && (
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     {e.paymentNotifiedAt ? (
                       <p className="text-xs font-medium flex items-center gap-1" style={{ color: '#16a34a' }}>
                         ✓ Payment notification sent · {new Date(e.paymentNotifiedAt).toLocaleDateString()}
@@ -637,6 +663,12 @@ export default function TransactionsPage() {
                         className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-60"
                         style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-contrast,#fff)' }}>
                         {notifying ? 'Sending…' : '✉️ Send payment notification'}
+                      </button>
+                    )}
+                    {e._isLedger && (
+                      <button onClick={() => setVendorMail({ vendorName: e.vendorName, ids: [e.id] })}
+                        className="text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200 hover:bg-gray-50">
+                        ✉️ Email vendor (POP + 2307)
                       </button>
                     )}
                     <p className="text-[10px] text-gray-400 mt-1">Emails the filer that this {source === 'ledger' ? 'AP/AR invoice' : 'expense'} has been paid/credited. Sent once only.</p>
@@ -765,6 +797,81 @@ export default function TransactionsPage() {
                   <p className="text-[11px] text-gray-400">Fills the official BIR 2307 (Jan 2018 ENCS). Verify figures before issuing to the payee.</p>
                 </div>
               )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ✉️ Email vendor (POP + 2307) modal — pick which PROCESSED invoices of the
+          same vendor to include; one email, POP file(s) + one combined 2307. */}
+      {vendorMail && (() => {
+        const v = vendorRec(vendorMail.vendorName);
+        const candidates = rows.filter(r => r._isLedger && ['PROCESSED','PAID'].includes(r.status) && String(r.vendorName||'').trim().toLowerCase() === String(vendorMail.vendorName||'').trim().toLowerCase());
+        const toggle = (id) => setVendorMail(m => ({ ...m, ids: m.ids.includes(id) ? m.ids.filter(x => x !== id) : [...m.ids, id] }));
+        const total = candidates.filter(c => vendorMail.ids.includes(c.id)).reduce((s, c) => s + Number(c.amountPhp ?? c.amount ?? 0), 0);
+        const emailVal = vendorMail.email ?? (v?.email || '');
+        const contactVal = vendorMail.contactPerson ?? (v?.contactPerson || '');
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !vendorMailSending && setVendorMail(null)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={ev => ev.stopPropagation()}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-semibold text-gray-800">Email vendor — {vendorMail.vendorName}</h3>
+                <button onClick={() => setVendorMail(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none px-1">✕</button>
+              </div>
+              {!v && (
+                <p className="text-[11px] text-amber-600 mb-2">This vendor is not in Settings → Vendors/Payees ("others"). Type the email below — you can save it for next time.</p>
+              )}
+              <div className="space-y-2 mb-3">
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-0.5">To — email(s), separate multiple with ";"</label>
+                  <input value={emailVal} onChange={ev => setVendorMail(m => ({ ...m, email: ev.target.value }))}
+                    placeholder="accounting@vendor.com; owner@vendor.com"
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-0.5">Contact person (for the "Dear ..." greeting)</label>
+                  <input value={contactVal} onChange={ev => setVendorMail(m => ({ ...m, contactPerson: ev.target.value }))}
+                    placeholder={vendorMail.vendorName}
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400" />
+                </div>
+                {(!v || !v.email || (vendorMail.email !== undefined && vendorMail.email !== (v?.email || ''))) && emailVal.trim() && (
+                  <label className="flex items-center gap-2 text-[11px] text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={vendorMail.saveVendor !== false}
+                      onChange={ev => setVendorMail(m => ({ ...m, saveVendor: ev.target.checked }))} />
+                    Save this email to Vendors/Payees for next time
+                  </label>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mb-2">Select the processed invoice(s) to include — one email with your chosen attachment(s):</p>
+              <div className="flex gap-4 mb-2 text-xs text-gray-700">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={vendorMail.attachPop !== false}
+                    onChange={ev => setVendorMail(m => ({ ...m, attachPop: ev.target.checked }))} />
+                  Attach POP
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={vendorMail.attach2307 !== false}
+                    onChange={ev => setVendorMail(m => ({ ...m, attach2307: ev.target.checked }))} />
+                  Attach 2307
+                </label>
+              </div>
+              <div className="border border-gray-100 rounded-lg divide-y divide-gray-50 mb-3 max-h-48 overflow-y-auto">
+                {candidates.map(c => (
+                  <label key={c.id} className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" checked={vendorMail.ids.includes(c.id)} onChange={() => toggle(c.id)} />
+                    <span className="flex-1">{c.orNumber || c.title}</span>
+                    <span className="font-medium">{format(c.amountPhp ?? c.amount)}</span>
+                    {!c.proofOfPayment?.id && <span className="text-[10px] text-amber-600">no POP</span>}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-600 mb-3">Total: <span className="font-semibold">{format(total)}</span> · {vendorMail.ids.length} invoice(s)</p>
+              <button onClick={sendVendorMail} disabled={vendorMailSending || !vendorMail.ids.length || !emailVal.trim() || (vendorMail.attachPop === false && vendorMail.attach2307 === false)}
+                className="w-full py-2.5 rounded-lg text-xs font-medium disabled:opacity-60"
+                style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-contrast,#fff)' }}>
+                {vendorMailSending ? 'Sending…' : `✉️ Send ${vendorMail.attachPop !== false && vendorMail.attach2307 !== false ? 'POP + 2307' : vendorMail.attach2307 === false ? 'POP only' : '2307 only'} (${vendorMail.ids.length})`}
+              </button>
+              <p className="text-[11px] text-gray-400 mt-2">The email wording can be customized in Settings → Email Templates → AP & AR.</p>
             </div>
           </div>
         );

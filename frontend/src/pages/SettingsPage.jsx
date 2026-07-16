@@ -1502,6 +1502,9 @@ const AP_AR_TEMPLATE_DEFS = [
   { key: 'apar_payment_notification', label: 'Payment notification', desc: 'Sent manually from the Proof of Payment panel to confirm an AP/AR invoice has been paid/credited.',
     subject: '💰 Payment posted — {title}', message: 'This is to confirm that "{title}" ({amount}) has been paid/credited. Proof of payment is on file.',
     vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
+  { key: 'vendor_payment', label: 'Vendor payment notice (POP + 2307)', desc: 'Sent to the VENDOR\u2019s email (Settings \u2192 Vendors/Payees) with the proof of payment file(s) and one combined BIR 2307 attached. Supports multiple invoices in one email; the invoice list, totals, and sender block are added automatically below the message.',
+    subject: 'Payment processed — {vendorName}', message: 'Please be advised that payment for the below invoice(s) has been successfully processed. The funds should now be reflected in your account. 2307 to follow.',
+    vars: ['{contactPerson}','{vendorName}','{appName}','{senderName}'] },
 ];
 
 function EmailTemplatesTab({ settings, refresh, brand, onDirtyChange }) {

@@ -83,6 +83,8 @@ const DEFAULT_TEMPLATES = {
   // User management: admin-triggered credential emails (Users module).
   credentials:             { subject: 'Your {appName} login details',        message: 'Here are your login details for {appName}. Use the button below to open the app and sign in.' },
   credentials_reset:       { subject: 'Your {appName} password has been reset', message: 'Your password was reset by an administrator. Here are your new login details — you will be asked to change this password when you sign in.' },
+  // Vendor-facing: payment notice with POP + BIR 2307 attached (AP invoices).
+  vendor_payment:          { subject: 'Payment processed — {vendorName}', message: 'Please be advised that payment for the below invoice(s) has been successfully processed. The funds should now be reflected in your account. 2307 to follow.' },
   // Payment / credit notification (sent manually from the Proof of Payment panel).
   payment_notification:      { subject: '💰 Payment sent — {title}',          message: 'Good news! Your filed expense "{title}" ({amount}) has been paid/reimbursed. Proof of payment is on file.' },
   apar_payment_notification: { subject: '💰 Payment posted — {title}',        message: 'This is to confirm that "{title}" ({amount}) has been paid/credited. Proof of payment is on file.' },
@@ -171,23 +173,27 @@ function row(label, value) {
   return `<tr><td style="padding:8px 0;color:#6b7280;font-size:14px;width:40%">${label}</td><td style="padding:8px 0;color:#111;font-size:14px;font-weight:500">${value}</td></tr>`;
 }
 
-async function sendMail(to, subject, htmlBody, fromName) {
+async function sendMail(to, subject, htmlBody, fromName, attachments) {
+  // attachments: [{ filename, content (base64 string), contentType }] — optional.
   // Build the From header. RESEND_FROM may be either a bare address
   // ("noreply@yourdomain.com") or a full header ("Cashalo <noreply@yourdomain.com>").
   const name = fromName || FALLBACK_APP_NAME;
   const buildFrom = (val) => (val && val.includes('<')) ? val : `${name} <${val}>`;
+  const atts = Array.isArray(attachments) ? attachments.filter(a => a && a.filename && a.content) : [];
 
   // 1) Resend (preferred).
   const resendKey = process.env.RESEND_API_KEY;
   const resendFrom = process.env.RESEND_FROM || process.env.EMAIL_FROM;
   if (resendKey && resendFrom) {
     try {
+      const payload = { from: buildFrom(resendFrom), to: [to], subject, html: htmlBody };
+      if (atts.length) payload.attachments = atts.map(a => ({ filename: a.filename, content: a.content, content_type: a.contentType || undefined }));
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendKey}` },
-        body: JSON.stringify({ from: buildFrom(resendFrom), to: [to], subject, html: htmlBody }),
+        body: JSON.stringify(payload),
       });
-      if (res.ok) { console.log(`Email sent via Resend to ${to}: ${subject}`); return true; }
+      if (res.ok) { console.log(`Email sent via Resend to ${to}: ${subject}${atts.length ? ` (${atts.length} attachment/s)` : ''}`); return true; }
       const data = await res.json().catch(() => ({}));
       console.error('Resend error:', res.status, JSON.stringify(data));
       return false;
@@ -199,10 +205,12 @@ async function sendMail(to, subject, htmlBody, fromName) {
   const fromEmail = process.env.MAILERSEND_FROM;
   if (apiKey && fromEmail) {
     try {
+      const payload = { from: { email: fromEmail, name }, to: [{ email: to }], subject, html: htmlBody };
+      if (atts.length) payload.attachments = atts.map(a => ({ filename: a.filename, content: a.content, disposition: 'attachment' }));
       const res = await fetch('https://api.mailersend.com/v1/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ from: { email: fromEmail, name }, to: [{ email: to }], subject, html: htmlBody }),
+        body: JSON.stringify(payload),
       });
       if (res.ok || res.status === 202) { console.log(`Email sent via MailerSend to ${to}: ${subject}`); return true; }
       const data = await res.json().catch(() => ({}));
@@ -475,4 +483,48 @@ async function sendPaymentNotificationEmail(toEmail, toName, doc, employee, kind
   , brand), appName);
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert, sendPasswordChangedEmail, sendApprovalReminderEmail, sendPaymentNotificationEmail };
+// Vendor-facing payment notice: multiple invoices, one email, with the proof of
+// payment image(s) and a combined BIR 2307 PDF attached. `recipients` may contain
+// several addresses (vendor email supports ";"-separated lists). Returns the
+// number of recipients successfully emailed.
+async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, invoices, totalPhp, paymentDate, senderName, attachments }) {
+  const brand = await getBranding();
+  const appName = brand.appName;
+  const custom = await getTemplates();
+  const vars = { contactPerson: contactPerson || vendorName, vendorName, appName, senderName };
+  const subject = tpl(custom, 'vendor_payment', 'subject', vars);
+  const message = tpl(custom, 'vendor_payment', 'message', vars);
+  const peso = (n) => `\u20b1${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const invoiceRows = (invoices || []).map(inv =>
+    row(`Invoice ${inv.docNumber || '(no number)'}`, peso(inv.amountPhp))
+  ).join('');
+
+  const body =
+    `<p style="color:#374151;font-size:14px;margin:0 0 16px">Dear ${contactPerson || vendorName},</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 16px">Good day!</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
+     <p style="color:#111;font-size:14px;font-weight:600;margin:0 0 8px">Payment Details</p>
+     <div style="background:#f9fafb;border-radius:8px;padding:16px;margin:0 0 20px">
+       <table style="width:100%;border-collapse:collapse">
+         ${invoiceRows}
+         ${row('<strong>Total Amount</strong>', `<strong>${peso(totalPhp)}</strong> <span style="color:#6b7280;font-weight:400">(net of wtax)</span>`)}
+         ${row('Payment Date', paymentDate)}
+         ${row('Method', 'Online Transfer')}
+       </table>
+     </div>
+     <p style="color:#374151;font-size:14px;margin:0 0 16px">Please find attached for reference. If you have any questions regarding this payment, feel free to reach out.</p>
+     <p style="color:#374151;font-size:14px;margin:0 0 4px">Thank you.</p>
+     <p style="color:#111;font-size:14px;font-weight:600;margin:16px 0 0">${senderName}</p>
+     <p style="color:#6b7280;font-size:13px;margin:0">${appName} Finance</p>`;
+
+  const htmlBody = html(subject, body, brand);
+  let sent = 0;
+  for (const to of recipients) {
+    const ok = await sendMail(to, subject, htmlBody, appName, attachments);
+    if (ok) sent++;
+  }
+  return sent;
+}
+
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert, sendPasswordChangedEmail, sendApprovalReminderEmail, sendPaymentNotificationEmail, sendVendorPaymentEmail };
