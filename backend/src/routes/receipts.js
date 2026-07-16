@@ -77,7 +77,7 @@ router.get('/storage-stats', authenticate, requirePermission('manage_receipt_sto
     const total = await prisma.receipt.count();
     const withBytes = await prisma.receipt.count({ where: { NOT: { data: null } } });
     const inStorage = await prisma.receipt.count({ where: { NOT: { storageKey: null } } });
-    const orphans = await prisma.receipt.count({ where: { expenses: { none: {} }, ledgerDocs: { none: {} } } });
+    const orphans = await prisma.receipt.count({ where: { expenses: { none: {} }, ledgerDocs: { none: {} }, proofForExpenses: { none: {} }, proofForLedger: { none: {} } } });
     res.json({ total, withBytes, inStorage, orphans });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -120,10 +120,10 @@ router.delete('/:id', authenticate, async (req, res) => {
   try {
     const r = await prisma.receipt.findUnique({
       where: { id: req.params.id },
-      select: { id: true, storageKey: true, expenses: { select: { id: true } }, ledgerDocs: { select: { id: true } } },
+      select: { id: true, storageKey: true, expenses: { select: { id: true } }, ledgerDocs: { select: { id: true } }, proofForExpenses: { select: { id: true } }, proofForLedger: { select: { id: true } } },
     });
     if (!r) return res.json({ deleted: false, reason: 'not_found' });
-    if ((r.expenses?.length || 0) > 0 || (r.ledgerDocs?.length || 0) > 0) {
+    if ((r.expenses?.length || 0) > 0 || (r.ledgerDocs?.length || 0) > 0 || (r.proofForExpenses?.length || 0) > 0 || (r.proofForLedger?.length || 0) > 0) {
       return res.status(409).json({ deleted: false, reason: 'linked' });
     }
     if (r.storageKey) { try { require('../lib/storage').deleteObject(r.storageKey); } catch (e) {} }
@@ -138,7 +138,10 @@ router.post('/purge-orphans', authenticate, requirePermission('manage_receipt_st
   try {
     const storage = require('../lib/storage');
     const orphans = await prisma.receipt.findMany({
-      where: { expenses: { none: {} }, ledgerDocs: { none: {} } },
+      // A receipt is an orphan ONLY if NOTHING points to it — not as a scanned
+      // receipt AND not as a proof of payment (expense or AP/AR). Proof-of-payment
+      // files are linked documents, never orphans.
+      where: { expenses: { none: {} }, ledgerDocs: { none: {} }, proofForExpenses: { none: {} }, proofForLedger: { none: {} } },
       select: { id: true, storageKey: true },
     });
     let count = 0;
