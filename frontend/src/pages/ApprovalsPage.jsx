@@ -125,10 +125,23 @@ export default function ApprovalsPage() {
     <div className="max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-medium text-gray-900">My Approvals</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          <span className="inline-flex items-center justify-center min-w-6 h-6 px-2 rounded-full bg-red-500 text-white text-sm font-bold mr-1">{approvals.length}</span>
-          pending · {history.length} actioned
-        </p>
+        {(() => {
+          const ready = approvals.filter(a => a.actionable !== false).length;
+          const waitingN = approvals.length - ready;
+          return (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500 mt-1">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${ready > 0 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                {ready} for your action
+              </span>
+              {waitingN > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
+                  ⏳ {waitingN} waiting on earlier approver{waitingN > 1 ? 's' : ''}
+                </span>
+              )}
+              <span className="text-xs text-gray-400">· {history.length} already actioned (see History)</span>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Source toggle: Expenses vs AP & AR invoices */}
