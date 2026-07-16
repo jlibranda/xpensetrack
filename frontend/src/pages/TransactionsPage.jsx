@@ -893,7 +893,25 @@ export default function TransactionsPage() {
                   <div className="flex gap-2 pt-1">
                     <button onClick={() => { if (gen2307._forEmail) { setGen2307(null); setGen2307Data(null); } else setGen2307Data(null); }} className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50">← Back</button>
                     {gen2307._forEmail ? (
-                      <button onClick={() => { const { _forEmail, ...clean } = d; setVendorMail(m => ({ ...m, data2307: clean, edited2307: true })); setGen2307(null); setGen2307Data(null); }}
+                      <button onClick={() => {
+                        const { _forEmail, ...clean } = d;
+                        // SYNC the compose figures with the edited 2307 so the email
+                        // always matches the attached form: total income -> Gross,
+                        // total tax -> WTax, distributed proportionally per invoice.
+                        const n = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
+                        const totIncome = (clean.rows || []).reduce((t, r) => t + n(r.m1) + n(r.m2) + n(r.m3), 0);
+                        const totTax = (clean.rows || []).reduce((t, r) => t + n(r.tax), 0);
+                        setVendorMail(m => {
+                          const ls = m.lines || [];
+                          const grossSum = ls.reduce((t, l) => t + n(l.gross), 0);
+                          const lines = ls.map(l => {
+                            const share = grossSum > 0 ? n(l.gross) / grossSum : (ls.length ? 1 / ls.length : 0);
+                            return { ...l, gross: +(totIncome * share).toFixed(2), wtax: +(totTax * share).toFixed(2) };
+                          });
+                          return { ...m, data2307: clean, edited2307: true, lines };
+                        });
+                        setGen2307(null); setGen2307Data(null);
+                      }}
                         className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#16a34a' }}>✅ Attach this 2307 to the email</button>
                     ) : (
                       <button onClick={generate2307Pdf} className="flex-1 py-2 text-white rounded-lg text-xs font-medium hover:opacity-90" style={{ backgroundColor: '#dc2626' }}>📄 Generate PDF</button>
@@ -1056,7 +1074,10 @@ export default function TransactionsPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-gray-600 mb-3">Total Amount Paid: <span className="font-semibold">{format(total)}</span> <span className="text-gray-400">(net of wtax — ito rin ang lalabas sa email at tutugma sa POP/2307)</span></p>
+              <p className="text-xs text-gray-600 mb-3">Total Amount Paid: <span className="font-semibold">{format(total)}</span> <span className="text-gray-400">(net of wtax — this is what appears in the email and matches the POP/2307)</span></p>
+              {vendorMail.edited2307 && (
+                <p className="text-[11px] text-green-600 -mt-2 mb-3">✓ Figures synced with the attached 2307 (Gross = income payments, WTax = tax withheld). You can still fine-tune them above.</p>
+              )}
               <button onClick={sendVendorMail} disabled={vendorMailSending || !vendorMail.ids.length || !emailVal.trim()}
                 className="w-full py-2.5 rounded-lg text-xs font-medium disabled:opacity-60"
                 style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-contrast,#fff)' }}>

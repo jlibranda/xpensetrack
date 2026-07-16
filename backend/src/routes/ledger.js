@@ -664,8 +664,15 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
       return res.status(400).json({ error: 'Nothing to attach — the 2307 could not be generated for the selected invoice(s).' });
     }
 
+    // Guard: Resend rejects payloads over ~40MB — check attachment total first
+    // so the user gets a CLEAR error instead of a generic send failure.
+    const totalBytes = attachments.reduce((t, a) => t + Math.ceil((a.content?.length || 0) * 0.75), 0);
+    if (totalBytes > 35 * 1024 * 1024) {
+      return res.status(400).json({ error: `Attachments too large (${(totalBytes / 1024 / 1024).toFixed(1)} MB — limit ~35 MB). Try fewer invoices per email, or compress the proof images.` });
+    }
+
     // Send (one email per recipient address).
-    const { sendVendorPaymentEmail } = require('../lib/email');
+    const { sendVendorPaymentEmail, getLastSendError } = require('../lib/email');
     // Editable display amounts from the compose window: { [docId]: {gross, wtax} }.
     const amounts = (req.body?.amounts && typeof req.body.amounts === 'object') ? req.body.amounts : null;
     const num = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
@@ -708,7 +715,10 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
       includePaymentMeta: kind === 'pop',
       cc,
     });
-    if (!sent) return res.status(500).json({ error: 'Email could not be sent — check the email configuration (RESEND_API_KEY / RESEND_FROM) on the server.' });
+    if (!sent) {
+      const real = getLastSendError();
+      return res.status(500).json({ error: real ? `Email failed — ${real}` : 'Email could not be sent — check the email configuration (RESEND_API_KEY / RESEND_FROM) on the server.' });
+    }
 
     // Stamp the docs so the table shows which invoices already got this email.
     const stamp = kind === '2307' ? { form2307EmailedAt: new Date() } : { popEmailedAt: new Date() };

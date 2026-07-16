@@ -174,7 +174,11 @@ function row(label, value) {
   return `<tr><td style="padding:8px 0;color:#6b7280;font-size:14px;width:40%">${label}</td><td style="padding:8px 0;color:#111;font-size:14px;font-weight:500">${value}</td></tr>`;
 }
 
+let LAST_SEND_ERROR = '';
+function getLastSendError() { return LAST_SEND_ERROR; }
+
 async function sendMail(to, subject, htmlBody, fromName, attachments, cc) {
+  LAST_SEND_ERROR = '';
   // attachments: [{ filename, content (base64 string), contentType }] — optional.
   // cc: array of addresses — optional.
   // Build the From header. RESEND_FROM may be either a bare address
@@ -198,9 +202,10 @@ async function sendMail(to, subject, htmlBody, fromName, attachments, cc) {
       });
       if (res.ok) { console.log(`Email sent via Resend to ${to}: ${subject}${atts.length ? ` (${atts.length} attachment/s)` : ''}`); return true; }
       const data = await res.json().catch(() => ({}));
+      LAST_SEND_ERROR = `Resend ${res.status}: ${data?.message || data?.error || JSON.stringify(data)}`;
       console.error('Resend error:', res.status, JSON.stringify(data));
       return false;
-    } catch (err) { console.error('Resend failed:', err.message); return false; }
+    } catch (err) { LAST_SEND_ERROR = `Resend: ${err.message}`; console.error('Resend failed:', err.message); return false; }
   }
 
   // 2) MailerSend (legacy fallback, if still configured).
@@ -218,9 +223,10 @@ async function sendMail(to, subject, htmlBody, fromName, attachments, cc) {
       });
       if (res.ok || res.status === 202) { console.log(`Email sent via MailerSend to ${to}: ${subject}`); return true; }
       const data = await res.json().catch(() => ({}));
+      LAST_SEND_ERROR = `MailerSend ${res.status}: ${data?.message || JSON.stringify(data)}`;
       console.error('MailerSend error:', res.status, JSON.stringify(data));
       return false;
-    } catch (err) { console.error('MailerSend failed:', err.message); return false; }
+    } catch (err) { LAST_SEND_ERROR = `MailerSend: ${err.message}`; console.error('MailerSend failed:', err.message); return false; }
   }
 
   // 3) Nothing configured.
@@ -540,4 +546,4 @@ async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, i
   return sent;
 }
 
-module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert, sendPasswordChangedEmail, sendApprovalReminderEmail, sendPaymentNotificationEmail, sendVendorPaymentEmail };
+module.exports = { sendApprovalRequestEmail, sendStatusUpdateEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail, sendCredentialsEmail, sendStorageFullAlert, sendPasswordChangedEmail, sendApprovalReminderEmail, sendPaymentNotificationEmail, sendVendorPaymentEmail, getLastSendError };
