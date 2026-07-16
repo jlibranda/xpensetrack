@@ -509,7 +509,21 @@ router.get('/2307/prepare', authenticate, requirePermission(PERM, FALLBACK), asy
     const vendorNames = [...new Set(docs.map(d => norm(d.vendorName)).filter(Boolean))];
     if (vendorNames.length > 1) return res.status(400).json({ error: `Selected invoices belong to different payees (${[...new Set(docs.map(d => (d.vendorName||'').trim()).filter(Boolean))].join(', ')}). A 2307 is per payee — please select invoices for one vendor only.` });
     const data = await build2307(docs);
-    res.json(prepare2307(data));
+    const prepared = prepare2307(data);
+    // Backfill payee details from Settings → Vendors/Payees (normalized name
+    // match) so the editor ALWAYS shows the vendor's address/ZIP/TIN on open.
+    try {
+      const org = await prisma.orgSettings.findFirst();
+      const vendors = JSON.parse(org?.vendors || '[]');
+      const v = vendors.find(x => norm(x.name) === norm(prepared.payee?.name));
+      if (v) {
+        prepared.payee = prepared.payee || {};
+        if (!prepared.payee.address) prepared.payee.address = v.address || '';
+        if (!prepared.payee.zip) prepared.payee.zip = v.zip || '';
+        if (!prepared.payee.tin) prepared.payee.tin = v.tin || '';
+      }
+    } catch (e) { /* ignore */ }
+    res.json(prepared);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

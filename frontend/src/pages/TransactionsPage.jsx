@@ -244,7 +244,7 @@ export default function TransactionsPage() {
   // Validates same-vendor + processed, and builds EDITABLE invoice lines.
   const openVendorMailSingle = (kind, e) => setVendorMail({
     kind, vendorName: e.vendorName, ids: [e.id],
-    lines: [{ id: e.id, label: e.orNumber || e.title, gross: Number(e.amountPhp ?? e.amount ?? 0), wtax: Number(e.ewtAmount ?? 0) }],
+    lines: [{ id: e.id, label: e.orNumber || e.title, gross: Number(e.amountPhp ?? e.amount ?? 0), wtax: Number(e.ewtAmount ?? 0), rate: Number(e.ewtRate ?? 0), origGross: Number(e.amountPhp ?? e.amount ?? 0), origWtax: Number(e.ewtAmount ?? 0) }],
     cc: user?.email || '',
   });
 
@@ -260,7 +260,7 @@ export default function TransactionsPage() {
       kind,
       vendorName: picked[0].vendorName,
       ids: picked.map(r => r.id),
-      lines: picked.map(r => ({ id: r.id, label: r.orNumber || r.title, gross: Number(r.amountPhp ?? r.amount ?? 0), wtax: Number(r.ewtAmount ?? 0) })),
+      lines: picked.map(r => ({ id: r.id, label: r.orNumber || r.title, gross: Number(r.amountPhp ?? r.amount ?? 0), wtax: Number(r.ewtAmount ?? 0), rate: Number(r.ewtRate ?? 0), origGross: Number(r.amountPhp ?? r.amount ?? 0), origWtax: Number(r.ewtAmount ?? 0) })),
       cc: user?.email || '', // auto-populated: ang nagpo-process ng email
     });
   };
@@ -902,6 +902,15 @@ export default function TransactionsPage() {
         const v = vendorRec(vendorMail.vendorName);
         const lines = vendorMail.lines || [];
         const numv = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
+        // Auto-compute ng WTax kapag binago ang Gross: (a) proporsyonal sa
+        // orihinal na Gross↔WTax ng invoice, o (b) EWT rate sa VAT-exclusive
+        // base kung walang orihinal. Editable pa rin ang WTax pagkatapos.
+        const autoWtax = (ln, gross) => {
+          const g = numv(gross);
+          if (numv(ln.origGross) > 0 && numv(ln.origWtax) > 0) return +((g * numv(ln.origWtax)) / numv(ln.origGross)).toFixed(2);
+          if (numv(ln.rate) > 0) return +(((g / 1.12) * numv(ln.rate)) / 100).toFixed(2);
+          return numv(ln.wtax);
+        };
         const totGross = lines.reduce((sum, ln) => sum + numv(ln.gross), 0);
         const totWtax = lines.reduce((sum, ln) => sum + numv(ln.wtax), 0);
         const total = totGross - totWtax; // Net = Total Amount Paid
@@ -999,7 +1008,7 @@ export default function TransactionsPage() {
                   <thead><tr className="bg-gray-50 text-gray-500">
                     <th className="text-left font-medium px-3 py-1.5">Invoice</th>
                     <th className="text-right font-medium px-2 py-1.5 w-28">Gross</th>
-                    <th className="text-right font-medium px-2 py-1.5 w-24">WTax (EWT)</th>
+                    <th className="text-right font-medium px-2 py-1.5 w-24">WTax (EWT) <span className="font-normal text-gray-400">auto</span></th>
                     <th className="text-right font-medium px-2 py-1.5 w-28">Net</th>
                     {lines.length > 1 && <th className="w-8"></th>}
                   </tr></thead>
@@ -1009,7 +1018,7 @@ export default function TransactionsPage() {
                         <td className="px-3 py-1.5 text-gray-700">{ln.label}</td>
                         <td className="px-2 py-1">
                           <input type="number" step="0.01" value={ln.gross}
-                            onChange={ev => setVendorMail(m => ({ ...m, lines: m.lines.map((x, idx) => idx === i ? { ...x, gross: ev.target.value } : x) }))}
+                            onChange={ev => setVendorMail(m => ({ ...m, lines: m.lines.map((x, idx) => idx === i ? { ...x, gross: ev.target.value, wtax: autoWtax(x, ev.target.value) } : x) }))}
                             className="w-full px-2 py-1 border border-gray-200 rounded text-right text-xs focus:outline-none focus:border-brand-400" />
                         </td>
                         <td className="px-2 py-1">
