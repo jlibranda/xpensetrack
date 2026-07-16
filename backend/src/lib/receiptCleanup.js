@@ -7,18 +7,28 @@ const { PrismaClient } = require('@prisma/client');
 const storage = require('./storage');
 const prisma = new PrismaClient();
 
-// Delete the given Receipt ids (nulls/dupes are fine).
+// Delete the given Receipt ids (nulls/dupes are fine). SAFETY: a receipt is only
+// deleted if NOTHING references it anymore (not as receipt, not as proof of
+// payment, expense or AP/AR) — so a shared/linked file can never be lost.
 async function deleteReceiptsByIds(receiptIds) {
   const ids = [...new Set((receiptIds || []).filter(Boolean))];
   if (!ids.length) return 0;
   try {
-    const receipts = await prisma.receipt.findMany({ where: { id: { in: ids } }, select: { id: true, storageKey: true } });
+    const receipts = await prisma.receipt.findMany({
+      where: {
+        id: { in: ids },
+        expenses: { none: {} }, ledgerDocs: { none: {} },
+        proofForExpenses: { none: {} }, proofForLedger: { none: {} },
+      },
+      select: { id: true, storageKey: true },
+    });
     for (const r of receipts) {
       if (r.storageKey && storage.storageConfigured()) {
         try { await storage.deleteObject(r.storageKey); } catch (e) { console.error('Receipt object delete failed:', e.message); }
       }
     }
-    const del = await prisma.receipt.deleteMany({ where: { id: { in: ids } } });
+    if (!receipts.length) return 0;
+    const del = await prisma.receipt.deleteMany({ where: { id: { in: receipts.map(r => r.id) } } });
     return del.count;
   } catch (e) {
     console.error('Receipt cleanup failed:', e.message);

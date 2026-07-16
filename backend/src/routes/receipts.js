@@ -92,13 +92,18 @@ router.post('/purge', authenticate, requirePermission('manage_receipt_storage'),
     if (confirm !== 'PURGE') return res.status(400).json({ error: "Type PURGE to confirm." });
     const storage = require('../lib/storage');
     const metas = await prisma.receipt.findMany({
-      select: { id: true, storageKey: true, data: false, expenses: { select: { status: true, createdAt: true } } },
+      select: { id: true, storageKey: true, data: false, expenses: { select: { status: true, createdAt: true } }, proofForExpenses: { select: { id: true } }, proofForLedger: { select: { id: true } } },
     });
     let count = 0;
     for (const m of metas) {
+      // NEVER purge proof-of-payment files — they are linked financial documents.
+      if ((m.proofForExpenses?.length || 0) > 0 || (m.proofForLedger?.length || 0) > 0) continue;
+      // Only EXPENSE scan receipts are purged; AP/AR receipts and unattached
+      // uploads are untouched (orphans have their own purge-orphans endpoint).
       const exp = (m.expenses && m.expenses[0]) || null;
-      if (status && (!exp || exp.status !== status)) continue;
-      if (olderThan && (!exp || new Date(exp.createdAt) >= new Date(olderThan))) continue;
+      if (!exp) continue;
+      if (status && exp.status !== status) continue;
+      if (olderThan && new Date(exp.createdAt) >= new Date(olderThan)) continue;
       if (m.storageKey) { await storage.deleteObject(m.storageKey).catch(() => {}); }
       try {
         await prisma.receipt.update({ where: { id: m.id }, data: { data: null, storageKey: null } });
