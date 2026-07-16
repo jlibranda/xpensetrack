@@ -269,6 +269,13 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState('General');
+  const [tplDirty, setTplDirty] = useState(false); // Email Templates tab has unsaved edits
+  const switchTab = (t) => {
+    if (t !== tab && tab === 'Email Templates' && tplDirty &&
+        !window.confirm('You have unsaved email template changes. Leave this tab without saving?')) return;
+    if (t !== 'Email Templates') setTplDirty(false);
+    setTab(t);
+  };
   const [form, setForm] = useState(null);
   const [rec, setRec] = useState(null); // active add/edit record modal
   const [saving, setSaving] = useState(false);
@@ -643,7 +650,7 @@ export default function SettingsPage() {
           if (t === 'Vendors/Payees') return canApAr || canManageSettings;
           return true; // General, Categories
         }).map(t => (
-          <button key={t} onClick={()=>setTab(t)}
+          <button key={t} onClick={()=>switchTab(t)}
             className={`seg-btn ${tab===t?'active':''}`}>
             {t}
           </button>
@@ -1021,7 +1028,7 @@ export default function SettingsPage() {
         )}
 
         {tab === 'Access Control' && canAccessControl && <AccessControlTab settings={settings} navigate={navigate} refresh={refresh} />}
-        {tab === 'Email Templates' && canManageSettings && <EmailTemplatesTab settings={settings} refresh={refresh} brand={settings?.primaryColor||'#1D9E75'} />}
+        {tab === 'Email Templates' && canManageSettings && <EmailTemplatesTab settings={settings} refresh={refresh} brand={settings?.primaryColor||'#1D9E75'} onDirtyChange={setTplDirty} />}
 
         {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
 
@@ -1346,7 +1353,7 @@ const AP_AR_TEMPLATE_DEFS = [
     vars: ['{name}','{title}','{amount}', ...EMP_VARS] },
 ];
 
-function EmailTemplatesTab({ settings, refresh, brand }) {
+function EmailTemplatesTab({ settings, refresh, brand, onDirtyChange }) {
   const ALL_DEFS = [...EMAIL_TEMPLATE_DEFS, ...AP_AR_TEMPLATE_DEFS, ...USER_MGMT_TEMPLATE_DEFS];
   // Pre-fill each field with the current custom value, or the default draft if none.
   // This gives the admin an editable starting draft rather than a blank box.
@@ -1359,9 +1366,19 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
     };
   }
   const [tpls, setTpls] = useState(initial);
-  const [mode, setMode] = useState('expense'); // 'expense' | 'apar'
+  const [baseline, setBaseline] = useState(initial);   // last-saved snapshot, for dirty detection
+  const [mode, setMode] = useState('expense'); // 'expense' | 'apar' | 'users'
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+
+  // Unsaved-changes protection — same behavior as the General settings tab:
+  // amber notice + confirm before navigating away/refreshing with unsaved edits.
+  const dirty = ALL_DEFS.some(d =>
+    (tpls[d.key]?.subject ?? '') !== (baseline[d.key]?.subject ?? '') ||
+    (tpls[d.key]?.message ?? '') !== (baseline[d.key]?.message ?? '')
+  );
+  useUnsavedChanges(dirty);
+  useEffect(() => { onDirtyChange && onDirtyChange(dirty); }, [dirty]);
 
   const defList = mode === 'apar' ? AP_AR_TEMPLATE_DEFS : mode === 'users' ? USER_MGMT_TEMPLATE_DEFS : EMAIL_TEMPLATE_DEFS;
   const defFor = (key) => ALL_DEFS.find(d => d.key === key) || {};
@@ -1385,6 +1402,7 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
         if (Object.keys(entry).length) clean[d.key] = entry;
       }
       await api.patch('/settings', { emailTemplates: clean });
+      setBaseline(tpls);
       if (refresh) refresh();
       setMsg('✅ Email templates saved.');
       setTimeout(() => setMsg(''), 3000);
@@ -1435,10 +1453,16 @@ function EmailTemplatesTab({ settings, refresh, brand }) {
 
       {msg && <div className={`mt-4 px-3 py-2 rounded-lg text-sm border ${msg.startsWith('✅')?'bg-green-50 text-green-700 border-green-100':'bg-red-50 text-red-700 border-red-100'}`}>{msg}</div>}
 
+      {dirty && !saving && (
+        <div className="mt-4 px-3 py-2 rounded-lg text-sm border bg-amber-50 text-amber-700 border-amber-100">
+          You have unsaved changes — click <span className="font-semibold">Save email templates</span> to keep them.
+        </div>
+      )}
+
       <button onClick={save} disabled={saving}
         className="mt-5 w-full py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60"
         style={{ backgroundColor: brand, color: 'var(--brand-contrast,#fff)' }}>
-        {saving ? 'Saving...' : 'Save email templates'}
+        {saving ? 'Saving...' : dirty ? 'Save email templates •' : 'Save email templates'}
       </button>
     </div>
   );
