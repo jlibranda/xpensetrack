@@ -365,7 +365,8 @@ async function build2307(docs) {
   const payee = { name: first.vendorName || '', tin: first.vendorTin || '', address: '', zip: '' };
   try {
     const vendors = JSON.parse(org?.vendors || '[]');
-    const v = vendors.find(x => x.name === payee.name);
+    const normName = (x) => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const v = vendors.find(x => normName(x.name) === normName(payee.name));
     if (v) { payee.address = v.address || ''; payee.zip = v.zip || ''; if (!payee.tin) payee.tin = v.tin || ''; }
   } catch (e) { /* ignore */ }
 
@@ -631,6 +632,15 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
         }
       }
       if (prepared) {
+        // Guarantee the payee block is complete: backfill name from the invoice
+        // vendor and address/TIN/ZIP from the Settings vendor record if blank.
+        prepared.payee = prepared.payee || {};
+        if (!prepared.payee.name) prepared.payee.name = vendorName;
+        if (vendor) {
+          if (!prepared.payee.address) prepared.payee.address = vendor.address || '';
+          if (!prepared.payee.zip) prepared.payee.zip = vendor.zip || '';
+          if (!prepared.payee.tin) prepared.payee.tin = vendor.tin || '';
+        }
         const pdf = await fill2307Pdf(prepared);
         const vSlug = vendorName.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
         attachments.push({ filename: `2307-${vSlug}.pdf`, content: Buffer.from(pdf).toString('base64'), contentType: 'application/pdf' });
@@ -642,15 +652,29 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
 
     // Send (one email per recipient address).
     const { sendVendorPaymentEmail } = require('../lib/email');
-    // Editable display amounts from the compose window: { [docId]: number }.
+    // Editable display amounts from the compose window: { [docId]: {gross, wtax} }.
     const amounts = (req.body?.amounts && typeof req.body.amounts === 'object') ? req.body.amounts : null;
+    const num = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
+    // Per-invoice breakdown: Gross − Tax Withheld (EWT) = Net paid. This makes the
+    // email figures MATCH the 2307 (tax) and the POP (net amount transferred).
+    const lines = docs.map(d => {
+      const o = amounts && amounts[d.id];
+      const gross = o && o.gross != null ? num(o.gross) : num(d.amountPhp ?? d.amount);
+      const wtax = o && o.wtax != null ? num(o.wtax) : num(d.ewtAmount);
+      return { docNumber: d.docNumber, gross, wtax, net: +(gross - wtax).toFixed(2) };
+    });
+    const totals = {
+      gross: +lines.reduce((t, l) => t + l.gross, 0).toFixed(2),
+      wtax: +lines.reduce((t, l) => t + l.wtax, 0).toFixed(2),
+      net: +lines.reduce((t, l) => t + l.net, 0).toFixed(2),
+    };
     const latestPaid = docs.map(d => d.processedAt || d.paidAt || d.updatedAt).sort().pop();
     const sent = await sendVendorPaymentEmail({
       recipients,
       contactPerson,
       vendorName,
-      invoices: docs.map(d => ({ docNumber: d.docNumber, amountPhp: (amounts && amounts[d.id] != null) ? amounts[d.id] : (d.amountPhp ?? d.amount) })),
-      totalPhp: docs.reduce((s, d) => s + Number((amounts && amounts[d.id] != null) ? amounts[d.id] : (d.amountPhp ?? d.amount ?? 0)), 0),
+      invoices: lines,
+      totals,
       paymentDate: latestPaid ? new Date(latestPaid).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
       senderName: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim(),
       attachments,

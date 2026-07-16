@@ -491,7 +491,7 @@ async function sendPaymentNotificationEmail(toEmail, toName, doc, employee, kind
 // payment image(s) and a combined BIR 2307 PDF attached. `recipients` may contain
 // several addresses (vendor email supports ";"-separated lists). Returns the
 // number of recipients successfully emailed.
-async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, invoices, totalPhp, paymentDate, senderName, attachments, subjectOverride, messageOverride, templateKey = 'vendor_payment', includePaymentMeta = true, cc }) {
+async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, invoices, totals, paymentDate, senderName, attachments, subjectOverride, messageOverride, templateKey = 'vendor_payment', includePaymentMeta = true, cc }) {
   const brand = await getBranding();
   const appName = brand.appName;
   const custom = await getTemplates();
@@ -501,9 +501,16 @@ async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, i
   const message = (messageOverride && messageOverride.trim()) ? subst(messageOverride, vars) : tpl(custom, key, 'message', vars);
   const peso = (n) => `\u20b1${(Number(String(n ?? '').replace(/,/g, '')) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  const invoiceRows = (invoices || []).map(inv =>
-    row(`Invoice ${inv.docNumber || '(no number)'}`, peso(inv.amountPhp))
-  ).join('');
+  // Breakdown table: Gross − Tax Withheld (EWT) = Net Amount. The Net matches
+  // the amount actually transferred (POP) and the Tax matches the 2307.
+  const th = (t, right = true) => `<th style="padding:6px 8px;font-size:12px;color:#6b7280;font-weight:600;text-align:${right ? 'right' : 'left'};border-bottom:1px solid #e5e7eb">${t}</th>`;
+  const td = (t, right = true, bold = false) => `<td style="padding:6px 8px;font-size:13px;color:#111;text-align:${right ? 'right' : 'left'};${bold ? 'font-weight:700;' : ''}border-bottom:1px solid #f3f4f6">${t}</td>`;
+  const invoiceTable = `
+       <table style="width:100%;border-collapse:collapse;margin:0 0 8px">
+         <tr>${th('Invoice No.', false)}${th('Gross Amount')}${th('Tax Withheld (EWT)')}${th('Net Amount')}</tr>
+         ${(invoices || []).map(inv => `<tr>${td(inv.docNumber || '(no number)', false)}${td(peso(inv.gross))}${td(peso(inv.wtax))}${td(peso(inv.net))}</tr>`).join('')}
+         <tr>${td('<strong>Total</strong>', false, true)}${td(peso(totals?.gross), true, true)}${td(peso(totals?.wtax), true, true)}${td(peso(totals?.net), true, true)}</tr>
+       </table>`;
 
   const body =
     `<p style="color:#374151;font-size:14px;margin:0 0 16px">Dear ${contactPerson || vendorName},</p>
@@ -511,9 +518,9 @@ async function sendVendorPaymentEmail({ recipients, contactPerson, vendorName, i
      <p style="color:#374151;font-size:14px;margin:0 0 20px">${message}</p>
      <p style="color:#111;font-size:14px;font-weight:600;margin:0 0 8px">Payment Details</p>
      <div style="background:#f9fafb;border-radius:8px;padding:16px;margin:0 0 20px">
+       ${invoiceTable}
        <table style="width:100%;border-collapse:collapse">
-         ${invoiceRows}
-         ${row('<strong>Total Amount</strong>', `<strong>${peso(totalPhp)}</strong> <span style="color:#6b7280;font-weight:400">(net of wtax)</span>`)}
+         ${row('<strong>Total Amount Paid</strong>', `<strong>${peso(totals?.net)}</strong> <span style="color:#6b7280;font-weight:400">(net of wtax)</span>`)}
          ${includePaymentMeta ? row('Payment Date', paymentDate) : ''}
          ${includePaymentMeta ? row('Method', 'Online Transfer') : ''}
        </table>

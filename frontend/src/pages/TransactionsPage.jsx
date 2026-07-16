@@ -244,7 +244,7 @@ export default function TransactionsPage() {
   // Validates same-vendor + processed, and builds EDITABLE invoice lines.
   const openVendorMailSingle = (kind, e) => setVendorMail({
     kind, vendorName: e.vendorName, ids: [e.id],
-    lines: [{ id: e.id, label: e.orNumber || e.title, amount: Number(e.amountPhp ?? e.amount ?? 0) }],
+    lines: [{ id: e.id, label: e.orNumber || e.title, gross: Number(e.amountPhp ?? e.amount ?? 0), wtax: Number(e.ewtAmount ?? 0) }],
     cc: user?.email || '',
   });
 
@@ -260,7 +260,7 @@ export default function TransactionsPage() {
       kind,
       vendorName: picked[0].vendorName,
       ids: picked.map(r => r.id),
-      lines: picked.map(r => ({ id: r.id, label: r.orNumber || r.title, amount: Number(r.amountPhp ?? r.amount ?? 0) })),
+      lines: picked.map(r => ({ id: r.id, label: r.orNumber || r.title, gross: Number(r.amountPhp ?? r.amount ?? 0), wtax: Number(r.ewtAmount ?? 0) })),
       cc: user?.email || '', // auto-populated: ang nagpo-process ng email
     });
   };
@@ -281,7 +281,7 @@ export default function TransactionsPage() {
         subject: vendorMail.subject,       // undefined = use saved template
         message: vendorMail.message,       // undefined = use saved template
         data2307: vendorMail.data2307 || undefined, // edited via the 2307 editor
-        amounts: Object.fromEntries((vendorMail.lines || []).map(ln => [ln.id, Number(ln.amount) || 0])), // edited display amounts
+        amounts: Object.fromEntries((vendorMail.lines || []).map(ln => [ln.id, { gross: Number(String(ln.gross ?? '').replace(/,/g, '')) || 0, wtax: Number(String(ln.wtax ?? '').replace(/,/g, '')) || 0 }])), // edited breakdown
       });
       toast.success(r.message || 'Sent to vendor');
       setVendorMail(null);
@@ -901,7 +901,10 @@ export default function TransactionsPage() {
       {vendorMail && !gen2307Data && (() => {
         const v = vendorRec(vendorMail.vendorName);
         const lines = vendorMail.lines || [];
-        const total = lines.reduce((sum, ln) => sum + (Number(ln.amount) || 0), 0);
+        const numv = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
+        const totGross = lines.reduce((sum, ln) => sum + numv(ln.gross), 0);
+        const totWtax = lines.reduce((sum, ln) => sum + numv(ln.wtax), 0);
+        const total = totGross - totWtax; // Net = Total Amount Paid
         const emailVal = vendorMail.email ?? (v?.email || '');
         const contactVal = vendorMail.contactPerson ?? (v?.contactPerson || '');
         // Pre-populated (editable) subject + message from the saved template.
@@ -995,18 +998,26 @@ export default function TransactionsPage() {
                 <table className="w-full text-xs">
                   <thead><tr className="bg-gray-50 text-gray-500">
                     <th className="text-left font-medium px-3 py-1.5">Invoice</th>
-                    <th className="text-right font-medium px-3 py-1.5 w-36">Amount (editable)</th>
+                    <th className="text-right font-medium px-2 py-1.5 w-28">Gross</th>
+                    <th className="text-right font-medium px-2 py-1.5 w-24">WTax (EWT)</th>
+                    <th className="text-right font-medium px-2 py-1.5 w-28">Net</th>
                     {lines.length > 1 && <th className="w-8"></th>}
                   </tr></thead>
                   <tbody className="divide-y divide-gray-50">
                     {lines.map((ln, i) => (
                       <tr key={ln.id}>
                         <td className="px-3 py-1.5 text-gray-700">{ln.label}</td>
-                        <td className="px-3 py-1">
-                          <input type="number" step="0.01" value={ln.amount}
-                            onChange={ev => setVendorMail(m => ({ ...m, lines: m.lines.map((x, idx) => idx === i ? { ...x, amount: ev.target.value } : x) }))}
+                        <td className="px-2 py-1">
+                          <input type="number" step="0.01" value={ln.gross}
+                            onChange={ev => setVendorMail(m => ({ ...m, lines: m.lines.map((x, idx) => idx === i ? { ...x, gross: ev.target.value } : x) }))}
                             className="w-full px-2 py-1 border border-gray-200 rounded text-right text-xs focus:outline-none focus:border-brand-400" />
                         </td>
+                        <td className="px-2 py-1">
+                          <input type="number" step="0.01" value={ln.wtax}
+                            onChange={ev => setVendorMail(m => ({ ...m, lines: m.lines.map((x, idx) => idx === i ? { ...x, wtax: ev.target.value } : x) }))}
+                            className="w-full px-2 py-1 border border-gray-200 rounded text-right text-xs focus:outline-none focus:border-brand-400" />
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-medium text-gray-800">{format(numv(ln.gross) - numv(ln.wtax))}</td>
                         {lines.length > 1 && (
                           <td className="px-1 text-center">
                             <button onClick={() => setVendorMail(m => ({ ...m, lines: m.lines.filter((_, idx) => idx !== i), ids: m.ids.filter(id => id !== ln.id), data2307: undefined, edited2307: false }))}
@@ -1015,10 +1026,17 @@ export default function TransactionsPage() {
                         )}
                       </tr>
                     ))}
+                    <tr className="bg-gray-50 font-semibold text-gray-800">
+                      <td className="px-3 py-1.5">Total</td>
+                      <td className="px-2 py-1.5 text-right">{format(totGross)}</td>
+                      <td className="px-2 py-1.5 text-right">{format(totWtax)}</td>
+                      <td className="px-2 py-1.5 text-right">{format(total)}</td>
+                      {lines.length > 1 && <td></td>}
+                    </tr>
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-gray-600 mb-3">Total: <span className="font-semibold">{format(total)}</span> <span className="text-gray-400">(net of wtax)</span> · {lines.length} invoice(s)</p>
+              <p className="text-xs text-gray-600 mb-3">Total Amount Paid: <span className="font-semibold">{format(total)}</span> <span className="text-gray-400">(net of wtax — ito rin ang lalabas sa email at tutugma sa POP/2307)</span></p>
               <button onClick={sendVendorMail} disabled={vendorMailSending || !vendorMail.ids.length || !emailVal.trim()}
                 className="w-full py-2.5 rounded-lg text-xs font-medium disabled:opacity-60"
                 style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-contrast,#fff)' }}>
