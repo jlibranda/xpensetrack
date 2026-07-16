@@ -24,6 +24,7 @@ export default function ApprovalsPage() {
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger' (AP/AR)
   const [counts, setCounts] = useState({ expense: 0, ledger: 0 });
   const [notes, setNotes] = useState({});
+  const [noteError, setNoteError] = useState({}); // {id:true} kapag nag-Return/Reject nang walang note
   const [selected, setSelected] = useState(null);
   const [actioning, setActioning] = useState(null);
   const { format } = useCurrency();
@@ -88,11 +89,14 @@ export default function ApprovalsPage() {
 
   const action = async (id, type) => {
     if (type === 'return' && !notes[id]?.trim()) {
+      setNoteError(e => ({ ...e, [id]: true }));
       toast.error('Please add a comment before returning to submitter.'); return;
     }
     if (type === 'reject' && !notes[id]?.trim()) {
+      setNoteError(e => ({ ...e, [id]: true }));
       toast.error('Please add a reason before rejecting.'); return;
     }
+    setNoteError(e => { const c = { ...e }; delete c[id]; return c; });
     setActioning(id + type);
     try {
       const base = source === 'ledger' ? '/approvals/ledger' : '/approvals';
@@ -210,10 +214,15 @@ export default function ApprovalsPage() {
                     <div onClick={ev => ev.stopPropagation()}>
                       <input
                         value={notes[a.id] || ''}
-                        onChange={ev => setNotes(n => ({...n, [a.id]: ev.target.value}))}
-                        placeholder="Add note (required for Return and Reject)"
-                        className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400 mb-2"
+                        onChange={ev => { setNotes(n => ({...n, [a.id]: ev.target.value})); if (ev.target.value.trim()) setNoteError(er => { const c = { ...er }; delete c[a.id]; return c; }); }}
+                        placeholder={noteError[a.id] ? '⚠ Reason is required — type it here' : 'Add note (required for Return and Reject)'}
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-none mb-2 ${noteError[a.id]
+                          ? 'border-red-500 ring-1 ring-red-300 placeholder-red-400 focus:border-red-500'
+                          : 'border-gray-200 focus:border-brand-400'}`}
                       />
+                      {noteError[a.id] && (
+                        <p className="text-[11px] text-red-500 -mt-1 mb-2">Please type the reason above before Return / Reject.</p>
+                      )}
                       <div className="flex gap-2">
                         <button
                           onClick={() => action(a.id, 'approve')}
