@@ -54,7 +54,7 @@ export default function LedgerPage({ mode = 'manage' }) {
   // Self / Team scope toggle (mirrors My Expenses). Admin sees all; Finance also gets All.
   const scopeTabs = scopeTabsFor(user?.role, settings?.accessControl);
   // FINANCE & ADMIN manage company-wide AP/AR, so default to All; others to Self.
-  const [scope, setScope] = useState(['FINANCE', 'ADMIN'].includes(user?.role) ? 'all' : 'self');
+  const [scope, setScope] = useState(user?.role === 'ADMIN' ? 'all' : 'self');
   // Full manage rights (create/edit/delete/submit). Approvers with only
   // view_approvals get read-only access so they can still see invoices they handled.
   const canManageApAr = user?.role === 'ADMIN' || (settings?.accessControl?.manage_ap_ar || ['FINANCE', 'ADMIN']).includes(user?.role);
@@ -557,14 +557,13 @@ export default function LedgerPage({ mode = 'manage' }) {
                       const isApproved = a.status === 'APPROVED';
                       const isReturned = a.status === 'REJECTED' && (a.notes || '').startsWith('[RETURNED]');
                       const isRejected = a.status === 'REJECTED' && !isReturned;
-                      const isPending = a.status === 'PENDING';
-                      const accent = isApproved ? '#16a34a' : isReturned ? '#d97706' : isPending ? '#64748b' : '#dc2626';
+                      const accent = isApproved ? '#16a34a' : isReturned ? '#d97706' : '#dc2626';
                       const cleanNote = (a.notes || '').startsWith('[auto]') ? '' : (a.notes || '').replace(/^\[RETURNED\]\s*/, '');
                       return (
                         <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg border"
                           style={{
-                            backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : isReturned ? 'rgba(217,119,6,0.12)' : isPending ? 'rgba(148,163,184,0.12)' : 'rgba(220,38,38,0.12)',
-                            borderColor: isApproved ? 'rgba(22,163,74,0.35)' : isReturned ? 'rgba(217,119,6,0.35)' : isPending ? 'rgba(148,163,184,0.35)' : 'rgba(220,38,38,0.35)',
+                            backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : isReturned ? 'rgba(217,119,6,0.12)' : 'rgba(220,38,38,0.12)',
+                            borderColor: isApproved ? 'rgba(22,163,74,0.35)' : isReturned ? 'rgba(217,119,6,0.35)' : 'rgba(220,38,38,0.35)',
                           }}>
                           <div className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold mt-0.5 shrink-0 text-white" style={{ backgroundColor: accent }}>
                             {isApproved ? '✓' : isReturned ? '↩' : isRejected ? '✗' : '⌛'}

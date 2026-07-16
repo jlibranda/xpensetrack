@@ -10,9 +10,14 @@ import ReceiptImage from '../components/ReceiptImage';
 const personName = (u) => u ? (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email || '—') : '—';
 const pendingApprovers = (e) => {
   if (e.status !== 'PENDING') return '';
-  const names = (e.approvals || [])
-    .filter(a => a.status === 'PENDING')
-    .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0)) // show in approval-step sequence
+  // Only the approver(s) it is CURRENTLY waiting on — i.e. the earliest step that
+  // still has a pending approval. Later-step approvers are not shown, since the
+  // form hasn't reached them yet.
+  const pending = (e.approvals || []).filter(a => a.status === 'PENDING');
+  if (!pending.length) return '';
+  const currentStep = Math.min(...pending.map(a => a.stepOrder ?? a.level ?? 0));
+  const names = pending
+    .filter(a => (a.stepOrder ?? a.level ?? 0) === currentStep)
     .map(a => personName(a.approver));
   return [...new Set(names)].join(', ');
 };
