@@ -543,6 +543,25 @@ export default function SettingsPage() {
     return 'BOTH';
   };
 
+  // Blank templates for bulk upload — headers + sample rows the uploader can
+  // overwrite. Same columns the import reads, so the file works as-is.
+  const downloadVendorTemplate = () => downloadXlsx(
+    [
+      { Name: 'ABC Trading Corp.', Type: 'Company', 'Contact Person': 'Juan Dela Cruz', Email: 'juan@abctrading.ph', TIN: '123456789000', 'Registered Address': '123 Rizal Ave., Manila', ZIP: '1000' },
+      { Name: 'Bureau of Internal Revenue', Type: 'Government', 'Contact Person': '', Email: '', TIN: '', 'Registered Address': '', ZIP: '' },
+      { Name: 'Quezon City LGU', Type: 'LGU', 'Contact Person': '', Email: '', TIN: '', 'Registered Address': '', ZIP: '' },
+    ],
+    'Vendors', 'vendors_template.xlsx'
+  );
+  const downloadCategoryTemplate = () => downloadXlsx(
+    [
+      { Category: 'Office Supplies', 'GL Code': '6100', 'Applies To': 'Expense' },
+      { Category: 'Utilities', 'GL Code': '6200', 'Applies To': 'AP/AR' },
+      { Category: 'Professional Fees', 'GL Code': '6300', 'Applies To': 'Both' },
+    ],
+    'Categories', 'categories_template.xlsx'
+  );
+
   const exportVendors = () => downloadXlsx(
     liveVendors.map(v => ({
       Name: v.name || '', Type: { COMPANY:'Company', GOVERNMENT:'Government', LGU:'LGU' }[v.type||'COMPANY'],
@@ -909,6 +928,7 @@ export default function SettingsPage() {
               <h2 className="text-sm font-medium text-gray-700">Expense categories & GL codes</h2>
               {canEditCategories && (
               <div className="flex gap-2">
+                <button onClick={downloadCategoryTemplate} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Template</button>
                 <button onClick={exportCategories} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Excel</button>
                 <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer btn-like">
                   ⬆ Bulk upload
@@ -967,6 +987,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium text-gray-700">Vendors / Payees</h2>
               <div className="flex gap-2">
+                <button onClick={downloadVendorTemplate} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Template</button>
                 <button onClick={exportVendors} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">⬇ Excel</button>
                 <label className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer btn-like">
                   ⬆ Bulk upload
