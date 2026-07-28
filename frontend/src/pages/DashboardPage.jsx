@@ -71,7 +71,7 @@ export default function DashboardPage() {
     const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
     Promise.all([
-      api.get(`/expenses?limit=8&scope=${scope}`),
+      canExpense ? api.get(`/expenses?limit=8&scope=${scope}`) : Promise.resolve([]),
       api.get(`/reports/summary?from=${from}&to=${to}&scope=${scope}`).catch(() => null),
       // AP/AR for this month — silently null if the user can't view the ledger.
       api.get(`/ledger?from=${from}&to=${to}&scope=${scope}`).catch(() => null),
@@ -139,7 +139,12 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {source === 'expense' ? (<>
+      {!canExpense && !apArAllowed && (
+        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400 mb-6">
+          The Expense module is disabled for your role. Contact your administrator if you need access.
+        </div>
+      )}
+      {source === 'expense' && canExpense ? (<>
       {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {[
@@ -186,8 +191,10 @@ export default function DashboardPage() {
           <h2 className="text-sm font-medium text-gray-700 mb-3">Quick actions</h2>
           <div className="space-y-2">
             {[
-              { label: 'Add a new expense', sub: 'Scan receipt or enter manually', action: () => navigate('/expenses/new'), icon: '+' },
-              { label: 'View all expenses', sub: 'Your expense history', action: () => navigate('/expenses'), icon: '🧾' },
+              ...(canExpense ? [
+                { label: 'Add a new expense', sub: 'Scan receipt or enter manually', action: () => navigate('/expenses/new'), icon: '+' },
+                { label: 'View all expenses', sub: 'Your expense history', action: () => navigate('/expenses'), icon: '🧾' },
+              ] : []),
               ...(apArAllowed ? [{ label: 'View AP & AR', sub: 'Payables & receivables', action: () => navigate('/ap-ar'), icon: '📑' }] : []),
               ...(canExport ? [{ label: 'Download report', sub: 'Export this month to Excel', action: exportReport, icon: '⬇' }] : []),
             ].map((a, i) => (
@@ -251,7 +258,7 @@ export default function DashboardPage() {
           </table>
         )}
       </div>
-      </>) : (<>
+      </>) : apArAllowed ? (<>
         {/* ===== AP & AR view ===== */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           {[
@@ -358,7 +365,7 @@ export default function DashboardPage() {
             </table>
           )}
         </div>
-      </>)}
+      </>) : null}
     </div>
   );
 }

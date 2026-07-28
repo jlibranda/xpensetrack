@@ -47,7 +47,7 @@ async function teamMemberIds(userId) {
   return [...ids];
 }
 
-router.get('/', authenticate, async (req, res) => {
+router.get('/', authenticate, requirePermission('access_expenses', ['EMPLOYEE', 'MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
     const { status, category, from, to, page=1, limit=20, scope } = req.query;
     const where = {};
