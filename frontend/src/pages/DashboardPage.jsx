@@ -37,8 +37,9 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { settings } = useOrg();
   // Access Control: hide the Expense toggle/view when the role lacks access_expenses
-  const canExpense = user?.role === 'ADMIN' || (settings?.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user?.role);
-  useEffect(() => { if (!canExpense && source === 'expense' && Array.isArray(ledger)) setSource('ledger'); }, [canExpense, source, ledger]);
+  const acReady = !!user && !!settings;
+  const canExpense = !acReady ? true : (user.role === 'ADMIN' || (settings.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user.role));
+  useEffect(() => { if (acReady && !canExpense && source === 'expense' && Array.isArray(ledger)) setSource('ledger'); }, [acReady, canExpense, source, ledger]);
   const canExport = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
   const canViewSpending = ['FINANCE','ADMIN'].includes(user?.role);
 

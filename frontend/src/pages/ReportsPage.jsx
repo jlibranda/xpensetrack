@@ -19,8 +19,11 @@ export default function ReportsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger'
-  const canExpense = user?.role === 'ADMIN' || (settings?.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user?.role);
-  useEffect(() => { if (!canExpense && source === 'expense') setSource('ledger'); }, [canExpense, source]);
+  // While user/settings are still loading, treat access as ALLOWED — otherwise
+  // the view briefly flips to AP&AR on first paint ("blinking" pending items).
+  const acReady = !!user && !!settings;
+  const canExpense = !acReady ? true : (user.role === 'ADMIN' || (settings.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user.role));
+  useEffect(() => { if (acReady && !canExpense && source === 'expense') setSource('ledger'); }, [acReady, canExpense, source]);
 
   const [ledgerRows, setLedgerRows] = useState([]);
   const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default)
