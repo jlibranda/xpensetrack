@@ -90,6 +90,11 @@ export default function ExpensesPage() {
     return real?.notes || '';
   };
 
+  // Access Control: 'access_expenses' — kapag naka-uncheck ang role, walang
+  // access sa buong Expense module (ADMIN laging may access).
+  const __acAllowed = user?.role === 'ADMIN' || (settings?.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user?.role);
+  if (!__acAllowed) return <Navigate to="/" replace />;
+
   return (
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">

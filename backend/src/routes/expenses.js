@@ -1,7 +1,7 @@
 // src/routes/expenses.js
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, requireRole, hasPermission } = require('../middleware/auth');
+const { authenticate, requireRole, hasPermission, requirePermission } = require('../middleware/auth');
 const { sendApprovalRequestEmail, sendPaymentNotificationEmail } = require('../lib/email');
 const { createNotification } = require('../lib/notifications');
 const { logAudit } = require('../lib/audit');
@@ -131,7 +131,7 @@ router.get('/:id', authenticate, async (req, res) => {
   } catch(err){ res.status(500).json({error:err.message}); }
 });
 
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, requirePermission('access_expenses', ['EMPLOYEE', 'MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
     const { title, description, amount, currency='PHP', category='OTHER',
             expenseType='REIMBURSEMENT', receiptId, costCenter, expenseDate,
@@ -207,7 +207,7 @@ router.post('/check-duplicate', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.patch('/:id', authenticate, async (req, res) => {
+router.patch('/:id', authenticate, requirePermission('access_expenses', ['EMPLOYEE', 'MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
     const e = await prisma.expense.findUnique({ where: { id: req.params.id }, include: { approvals: true } });
     if(!e) return res.status(404).json({error:'Not found'});
@@ -246,7 +246,7 @@ router.patch('/:id', authenticate, async (req, res) => {
   } catch(err){ res.status(500).json({error:err.message}); }
 });
 
-router.post('/:id/submit', authenticate, async (req, res) => {
+router.post('/:id/submit', authenticate, requirePermission('access_expenses', ['EMPLOYEE', 'MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
     const expense = await prisma.expense.findUnique({
       where:{id:req.params.id},

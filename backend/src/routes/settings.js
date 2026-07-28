@@ -239,4 +239,110 @@ router.post('/exchange-rate/refresh', authenticate, requirePermission('manage_se
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+
+// ---------------------------------------------------------------------------
+// Google Sheet vendor sync: link a sheet (shared as "Anyone with the link —
+// Viewer") and pull the Vendors/Payees list from it. MERGE semantics: matched
+// by Name (case-insensitive); blank cells never erase existing details.
+// ---------------------------------------------------------------------------
+function parseCsv(text) {
+  // Small quote-aware CSV parser (handles commas/quotes/newlines in cells).
+  const rows = []; let row = []; let cell = ''; let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else inQ = false; }
+      else cell += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); cell = '';
+      if (row.some(c => String(c).trim() !== '')) rows.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  row.push(cell);
+  if (row.some(c => String(c).trim() !== '')) rows.push(row);
+  return rows;
+}
+
+function gsheetCsvUrl(link) {
+  // Accepts a normal Google Sheets link and converts it to the CSV export URL.
+  const m = String(link || '').match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (!m) return null;
+  const gid = (String(link).match(/[#&?]gid=(\d+)/) || [])[1] || '0';
+  return `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv&gid=${gid}`;
+}
+
+// Save (or clear) the linked sheet URL.
+router.post('/vendors-gsheet', authenticate, async (req, res) => {
+  try {
+    const canManage = await hasPermission(req.user, 'manage_settings', ['FINANCE', 'ADMIN']);
+    if (!canManage) return res.status(403).json({ error: 'Not allowed' });
+    const url = String(req.body?.url || '').trim();
+    if (url && !gsheetCsvUrl(url)) return res.status(400).json({ error: 'That does not look like a Google Sheets link (docs.google.com/spreadsheets/...).' });
+    const s = await getOrCreate();
+    await prisma.orgSettings.update({ where: { id: s.id }, data: { vendorSheetUrl: url || null } });
+    res.json({ message: url ? 'Google Sheet linked.' : 'Google Sheet unlinked.' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Pull the vendor list from the linked sheet NOW.
+router.post('/vendors-gsheet/sync', authenticate, async (req, res) => {
+  try {
+    const canManage = await hasPermission(req.user, 'manage_settings', ['FINANCE', 'ADMIN']);
+    const canApAr = await hasPermission(req.user, 'manage_ap_ar', ['FINANCE', 'ADMIN']);
+    if (!canManage && !canApAr) return res.status(403).json({ error: 'Not allowed' });
+    const s = await getOrCreate();
+    const csvUrl = gsheetCsvUrl(s.vendorSheetUrl);
+    if (!csvUrl) return res.status(400).json({ error: 'No Google Sheet linked yet — paste the sheet link first.' });
+
+    const resp = await fetch(csvUrl, { redirect: 'follow' });
+    if (!resp.ok) return res.status(400).json({ error: `Could not read the sheet (HTTP ${resp.status}). Make sure it is shared as "Anyone with the link — Viewer".` });
+    const text = await resp.text();
+    if (text.trim().startsWith('<')) return res.status(400).json({ error: 'The sheet is not accessible — set sharing to "Anyone with the link — Viewer" and try again.' });
+
+    const grid = parseCsv(text);
+    if (grid.length < 2) return res.status(400).json({ error: 'The sheet has no data rows (row 1 must be headers).' });
+    const headers = grid[0].map(h => String(h).trim().toLowerCase());
+    const col = (...names) => headers.findIndex(h => names.some(n => h === n.toLowerCase()));
+    const iName = col('Name', 'Vendor', 'Payee', 'Vendor / payee name');
+    if (iName === -1) return res.status(400).json({ error: 'No "Name" column found in row 1. Expected columns: Name, Type, Contact Person, Email, TIN, Registered Address, ZIP.' });
+    const iType = col('Type'), iContact = col('Contact Person', 'Contact', 'Contact Name'), iEmail = col('Email', 'Email Address'), iTin = col('TIN'), iAddr = col('Registered Address', 'Address'), iZip = col('ZIP', 'Zip Code');
+    const cell = (r, i) => (i === -1 ? '' : String(r[i] ?? '').trim());
+    const normType = (t) => { const x = String(t || '').trim().toUpperCase(); return ['COMPANY','GOVERNMENT','LGU'].includes(x) ? x : (x.startsWith('GOV') ? 'GOVERNMENT' : x === 'LGU' ? 'LGU' : 'COMPANY'); };
+
+    let vendors = [];
+    try { vendors = JSON.parse(s.vendors || '[]'); } catch { vendors = []; }
+    const byName = new Map(vendors.map(v => [String(v.name).toLowerCase(), { ...v }]));
+    let added = 0, updated = 0; const skipped = [];
+    for (let r = 1; r < grid.length; r++) {
+      const rowNo = r + 1;
+      const name = cell(grid[r], iName);
+      if (!name) { skipped.push({ row: rowNo, reason: 'Name column is empty' }); continue; }
+      const emailRaw = cell(grid[r], iEmail);
+      const emailList = emailRaw.split(';').map(x => x.trim()).filter(Boolean);
+      const badEmail = emailList.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+      if (badEmail) { skipped.push({ row: rowNo, name, reason: `Invalid email: "${badEmail}"` }); continue; }
+      const key = name.toLowerCase();
+      const prev = byName.get(key);
+      const typeRaw = cell(grid[r], iType);
+      const rec = {
+        name: prev?.name || name,
+        type: typeRaw ? normType(typeRaw) : (prev?.type || 'COMPANY'),
+        contactPerson: cell(grid[r], iContact) || prev?.contactPerson || '',
+        email: emailList.join('; ') || prev?.email || '',
+        tin: cell(grid[r], iTin).replace(/\D/g, '') || prev?.tin || '',
+        address: cell(grid[r], iAddr) || prev?.address || '',
+        zip: cell(grid[r], iZip).replace(/\D/g, '').slice(0, 4) || prev?.zip || '',
+      };
+      if (prev) updated++; else added++;
+      byName.set(key, rec);
+    }
+    await prisma.orgSettings.update({ where: { id: s.id }, data: { vendors: JSON.stringify(Array.from(byName.values())), vendorSheetSyncedAt: new Date() } });
+    res.json({ added, updated, skipped, total: byName.size, syncedAt: new Date() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

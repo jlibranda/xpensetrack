@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 // Sensible defaults if Access Control hasn't been configured yet.
 // Mirrors the frontend DEFAULT_PERMS so behaviour is consistent.
 const DEFAULT_PERMS = {
+  access_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
   view_team: ['MANAGER', 'FINANCE', 'ADMIN'],
   view_approvals: ['MANAGER', 'FINANCE', 'ADMIN'],
   view_reports: ['MANAGER', 'FINANCE', 'ADMIN'],

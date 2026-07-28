@@ -33,6 +33,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   // A non-admin managing access control must never see/grant these.
   const SENSITIVE_PERMS = ['manage_password', 'reset_passwords', 'send_credentials', 'manage_receipt_storage', 'upload_branding', 'change_branding', 'impersonate_user'];
   const DEFAULT_PERMS = {
+    access_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
     view_team: ['MANAGER','FINANCE','ADMIN'],
     view_approvals: ['MANAGER','FINANCE','ADMIN'],
     approve_on_behalf: ['ADMIN'],
@@ -58,6 +59,7 @@ function AccessControlTab({ settings, navigate, refresh }) {
   };
 
   const PERM_LABELS = {
+    access_expenses: 'Access Expense module (My Expenses — file, scan, edit, submit). Uncheck to remove ALL expense filing access for the role',
     view_team: 'View team data (Team scope toggle on Dashboard/Expenses/etc.)',
     view_approvals: 'Access My Approvals',
     approve_on_behalf: 'Approve on behalf of approvers (unblock stuck approvals)',
@@ -409,6 +411,29 @@ export default function SettingsPage() {
   // remember to save. They read from the live `settings`, independent of the General draft.
   const brandColor = settings?.primaryColor || '#1D9E75';
   const persistPartial = async (partial) => { const updated = await api.patch('/settings', partial); applyTheme(updated); refresh(); return updated; };
+
+  // Google Sheet vendor sync
+  const [gsheetUrl, setGsheetUrl] = useState(null); // null = not touched, use settings value
+  const [gsheetBusy, setGsheetBusy] = useState(false);
+  const [gsheetRes, setGsheetRes] = useState(null);
+  const gsheetVal = gsheetUrl ?? (settings?.vendorSheetUrl || '');
+  const saveGsheet = async () => {
+    try {
+      const r = await api.post('/settings/vendors-gsheet', { url: gsheetVal.trim() });
+      toast.success(r.message || 'Saved');
+      refresh();
+    } catch (e2) { toast.error(e2.error || 'Could not save the link'); }
+  };
+  const syncGsheet = async () => {
+    setGsheetBusy(true); setGsheetRes(null);
+    try {
+      const r = await api.post('/settings/vendors-gsheet/sync', {});
+      setGsheetRes(r);
+      toast.success(`Synced — ${r.added} added, ${r.updated} updated${r.skipped?.length ? `, ${r.skipped.length} skipped` : ''}.`);
+      refresh();
+    } catch (e2) { setGsheetRes({ error: e2.error || 'Sync failed' }); toast.error(e2.error || 'Sync failed'); }
+    finally { setGsheetBusy(false); }
+  };
 
   // Bulk upload modal: { kind: 'vendors' | 'categories' } + result after an upload
   const [bulkModal, setBulkModal] = useState(null);
@@ -1077,6 +1102,52 @@ export default function SettingsPage() {
               ))}
             </div>
             <p className="text-xs text-gray-400 mt-2">Add/Edit opens a window and saves right away. These appear in the AP/AR “Add Document” Vendor/Payee dropdown; Government hides Vendor TIN, Doc/OR no., and PO no.</p>
+
+            {/* Google Sheet vendor sync */}
+            <div className="mt-8 pt-6 border-t border-gray-100">
+              <h2 className="text-sm font-medium text-gray-700 mb-1">🔗 Google Sheet sync</h2>
+              <p className="text-xs text-gray-400 mb-3">
+                Keep your Vendors/Payees list in a Google Sheet and pull it here anytime. Requirements: (1) share the sheet as <span className="font-medium text-gray-500">"Anyone with the link — Viewer"</span>; (2) row 1 headers: <span className="font-mono">Name, Type, Contact Person, Email, TIN, Registered Address, ZIP</span> (same as the bulk-upload template). Sync uses merge — blank cells never erase existing details.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                <input value={gsheetVal} onChange={ev => setGsheetUrl(ev.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  className="flex-1 min-w-[260px] px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-brand-400" />
+                <button onClick={saveGsheet} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">Save link</button>
+                <button onClick={syncGsheet} disabled={gsheetBusy || !(settings?.vendorSheetUrl || '').trim()}
+                  className="px-3 py-1.5 text-xs rounded-lg font-medium disabled:opacity-50"
+                  style={{ backgroundColor: brandColor, color: 'var(--brand-contrast,#fff)' }}>
+                  {gsheetBusy ? 'Syncing…' : '🔄 Sync now'}
+                </button>
+              </div>
+              {settings?.vendorSheetSyncedAt && (
+                <p className="text-[11px] text-gray-400 mb-2">Last synced: {new Date(settings.vendorSheetSyncedAt).toLocaleString()}</p>
+              )}
+              {gsheetRes && !gsheetRes.error && (
+                <div className="space-y-2">
+                  <div className="px-3 py-2 rounded-lg text-xs border bg-green-50 text-green-700 border-green-100">
+                    {gsheetRes.added} added · {gsheetRes.updated} updated · {gsheetRes.skipped?.length || 0} not synced · {gsheetRes.total} total vendors
+                  </div>
+                  {gsheetRes.skipped?.length > 0 && (
+                    <div className="border border-red-100 rounded-lg overflow-hidden">
+                      <div className="bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-red-700">Not synced — reasons:</div>
+                      <div className="max-h-40 overflow-y-auto divide-y divide-gray-50">
+                        {gsheetRes.skipped.map((k, i) => (
+                          <div key={i} className="px-3 py-1.5 text-[11px] text-gray-600">
+                            <span className="font-mono text-gray-400">Row {k.row}</span>
+                            {k.name ? <span className="font-medium"> — {k.name}</span> : null}
+                            <span className="text-red-600"> — {k.reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {gsheetRes?.error && (
+                <div className="px-3 py-2 rounded-lg text-xs border bg-red-50 text-red-700 border-red-100">{gsheetRes.error}</div>
+              )}
+            </div>
 
             {/* ATC codes for BIR 2307 / EWT */}
             <div className="mt-8 pt-6 border-t border-gray-100">

@@ -259,6 +259,8 @@ model OrgSettings {
   timezone             String   @default("Asia/Manila")
   approvalFollowUpDays Int      @default(0)
   vendors              String   @default("[]")  // JSON: [{name, tin?}]
+  vendorSheetUrl       String?  // Google Sheet link for vendor list sync
+  vendorSheetSyncedAt  DateTime?
   updatedAt            DateTime @updatedAt
 }
 

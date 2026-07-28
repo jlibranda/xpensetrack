@@ -93,6 +93,7 @@ export default function Layout() {
   const isManagerOnly = user?.role === 'MANAGER'; // managers don't get Analytics
   // Permission check driven by Access Control settings (ADMIN always allowed).
   const DEFAULT_NAV_PERMS = {
+    access_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
     view_approvals: ['MANAGER','FINANCE','ADMIN'],
     view_reports: ['MANAGER','FINANCE','ADMIN'],
     manage_ap_ar: ['FINANCE','ADMIN'],
@@ -218,7 +219,8 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto" onClick={() => setMobileNavOpen(false)}>
-          {NAV.filter(item => !(showManagement && item.to === '/expenses')).map(item => (
+          {NAV.filter(item => !(showManagement && item.to === '/expenses'))
+            .filter(item => !(item.to.startsWith('/expenses') && !can('access_expenses'))).map(item => (
             <NavLink key={item.to} to={item.to} end={item.exact} className={navLinkClass}
               style={navLinkStyle}>
               <span className="w-4 text-center text-sm">{item.icon}</span>
@@ -258,6 +260,7 @@ export default function Layout() {
                   )}
                 </NavLink>
               )}
+              {can('access_expenses') && (
               <NavLink to="/expenses" end className={navLinkClass}
                 style={navLinkStyle}>
                 <span className="w-4 text-center text-sm">🧾</span>
@@ -266,6 +269,7 @@ export default function Layout() {
                   <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold" title="Returned to you — needs your action">{pendingCounts.myReturned}</span>
                 )}
               </NavLink>
+              )}
               {(navVisible({ perm:'manage_ap_ar' }) || navVisible({ perm:'view_approvals' })) && (
                 <NavLink to="/ap-ar" className={navLinkClass}
                   style={navLinkStyle}>

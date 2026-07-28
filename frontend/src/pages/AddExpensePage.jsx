@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../lib/api';
 import toast from '../lib/toast';
 import { useOrg } from '../context/OrgContext';
+import { useAuth } from '../context/AuthContext';
 import ReceiptImage from '../components/ReceiptImage';
 import useUnsavedChanges from '../hooks/useUnsavedChanges';
 
@@ -13,6 +14,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'https://xpensetrack-production
 export default function AddExpensePage() {
   const navigate = useNavigate();
   const { settings } = useOrg();
+  const { user } = useAuth();
   const _catTypes = settings?.categoryTypes || {};
   const categories = (settings?.categories || ['MEALS','TRAVEL','ACCOMMODATION','SUPPLIES','COMMUNICATIONS','OTHER'])
     .filter(c => ['EXPENSE','BOTH'].includes(_catTypes[c] || 'BOTH'))
@@ -172,6 +174,11 @@ export default function AddExpensePage() {
   };
 
   const brandColor = settings?.primaryColor || '#1D9E75';
+
+  // Access Control: 'access_expenses' — kapag naka-uncheck ang role, walang
+  // access sa buong Expense module (ADMIN laging may access).
+  const __acAllowed = user?.role === 'ADMIN' || (settings?.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user?.role);
+  if (!__acAllowed) return <Navigate to="/" replace />;
 
   return (
     <div className="max-w-2xl mx-auto">
