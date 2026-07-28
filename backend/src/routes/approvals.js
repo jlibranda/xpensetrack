@@ -52,7 +52,7 @@ function summarizeSteps(approvals) {
       : grp.rows.every(r => r.status === 'REJECTED');
     return { stepOrder: grp.stepOrder, rule, satisfied, blocked, rows: grp.rows };
   });
-  steps.sort((a, b) => a.stepOrder - b.stepOrder);
+  steps.sort((a, b) => Number(a.stepOrder ?? 0) - Number(b.stepOrder ?? 0));
   return steps;
 }
 
@@ -63,7 +63,17 @@ function isActionable(approval, allApprovals, mode) {
   if (mode === 'ANY_ORDER') return true;
   const steps = summarizeSteps(allApprovals);
   const firstOpen = steps.find(s => !s.satisfied && !s.blocked);
-  return !!firstOpen && firstOpen.stepOrder === approval.stepOrder;
+  // Normalize step orders (null/string-proof) so legacy rows can't wrongly block.
+  return !!firstOpen && Number(firstOpen.stepOrder ?? 0) === Number(approval.stepOrder ?? 0);
+}
+
+// Names of the approvers the doc is CURRENTLY waiting for (first open step) —
+// shown on waiting cards so approvers see exactly who must act first.
+function waitingForNames(allApprovals, approverNameById) {
+  const steps = summarizeSteps(allApprovals);
+  const firstOpen = steps.find(s => !s.satisfied && !s.blocked);
+  if (!firstOpen) return '';
+  return [...new Set(firstOpen.rows.filter(r => r.status === 'PENDING').map(r => approverNameById(r.approverId)).filter(Boolean))].join(', ');
 }
 
 async function chainModeForExpense(expense) {
@@ -98,7 +108,14 @@ router.get('/pending', authenticate, requirePermission('view_approvals', ['MANAG
       // `actionable:false` marks items still waiting on an earlier approver.
       const mode = await chainModeForExpense(ap.expense);
       const actionable = onBehalf ? true : isActionable(ap, all, mode);
-      visible.push({ ...ap, actionable });
+      let waitingFor = '';
+      if (!actionable) {
+        const ids = [...new Set(all.filter(r => r.status === 'PENDING').map(r => r.approverId))];
+        const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, lastName: true } });
+        const nameOf = (id) => { const u = users.find(x => x.id === id); return u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : ''; };
+        waitingFor = waitingForNames(all, nameOf);
+      }
+      visible.push({ ...ap, actionable, waitingFor });
       seenExpenses.add(ap.expenseId);
     }
     // Actionable items first, then the waiting queue.
@@ -318,7 +335,14 @@ router.get('/ledger/pending', authenticate, requirePermission('view_approvals', 
       // Include EVERY assigned pending item so the list matches the badge count.
       const mode = await chainModeForLedger(ap.ledgerDoc);
       const actionable = onBehalf ? true : isActionable(ap, all, mode);
-      visible.push({ ...ap, actionable });
+      let waitingFor = '';
+      if (!actionable) {
+        const ids = [...new Set(all.filter(r => r.status === 'PENDING').map(r => r.approverId))];
+        const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, lastName: true } });
+        const nameOf = (id) => { const u = users.find(x => x.id === id); return u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : ''; };
+        waitingFor = waitingForNames(all, nameOf);
+      }
+      visible.push({ ...ap, actionable, waitingFor });
       seen.add(ap.ledgerDocId);
     }
     visible.sort((a, b) => (b.actionable === true) - (a.actionable === true));

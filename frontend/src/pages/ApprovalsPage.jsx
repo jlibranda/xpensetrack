@@ -247,7 +247,7 @@ export default function ApprovalsPage() {
                     <div onClick={ev => ev.stopPropagation()}>
                       {waiting && (
                         <div className="mb-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-[11px] text-gray-500">
-                          ⏳ In your queue — waiting for an earlier approver to act first. Buttons will unlock when it's your turn.
+                          ⏳ In your queue — waiting for {a.waitingFor ? <span className="font-medium text-gray-700">{a.waitingFor}</span> : 'an earlier approver'} to act first. Buttons will unlock when it's your turn.
                         </div>
                       )}
                       <input
