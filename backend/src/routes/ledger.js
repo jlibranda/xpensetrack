@@ -1064,7 +1064,7 @@ router.post('/:id/notify-payment', authenticate, requireRole('FINANCE', 'ADMIN')
   try {
     const d = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id } });
     if (!d) return res.status(404).json({ error: 'Not found' });
-    if (d.paymentNotifiedAt) return res.status(409).json({ error: 'Payment notification already sent', paymentNotifiedAt: d.paymentNotifiedAt });
+    if (d.paymentNotifiedAt && !req.body?.resend) return res.status(409).json({ error: 'Payment notification already sent', paymentNotifiedAt: d.paymentNotifiedAt });
     const creator = d.createdById ? await prisma.user.findUnique({ where: { id: d.createdById } }).catch(() => null) : null;
     const to = creator?.email;
     if (!to) return res.status(400).json({ error: 'No recipient email on file' });

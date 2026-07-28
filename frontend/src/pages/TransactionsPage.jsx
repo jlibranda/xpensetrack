@@ -307,12 +307,13 @@ export default function TransactionsPage() {
     } catch (e2) { toast.error(e2.error || 'Failed to email vendor'); }
     finally { setVendorMailSending(false); }
   };
-  const notifyPayment = async (id) => {
+  const notifyPayment = async (id, resend = false) => {
+    if (resend && !window.confirm('Resend the payment notification (with the POP attached) to the filer?')) return;
     setNotifying(true);
     try {
       const endpoint = source === 'ledger' ? `/ledger/${id}/notify-payment` : `/expenses/${id}/notify-payment`;
-      const r = await api.post(endpoint, {});
-      toast.success('Payment notification email sent');
+      const r = await api.post(endpoint, { resend });
+      toast.success(resend ? 'Payment notification resent' : 'Payment notification email sent');
       setDetail(d => (d && d.id === id) ? { ...d, paymentNotifiedAt: r.paymentNotifiedAt || new Date().toISOString() } : d);
       await load();
     } catch (e) {
@@ -735,8 +736,10 @@ export default function TransactionsPage() {
                 {e.proofOfPayment?.id && canProcess && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {e.paymentNotifiedAt ? (
-                      <p className="text-xs font-medium flex items-center gap-1" style={{ color: '#16a34a' }}>
+                      <p className="text-xs font-medium flex items-center gap-2" style={{ color: '#16a34a' }}>
                         ✓ Payment notification sent · {new Date(e.paymentNotifiedAt).toLocaleDateString()}
+                        <button onClick={() => notifyPayment(e.id, true)} disabled={notifying}
+                          className="underline text-[11px] text-gray-500 font-normal disabled:opacity-50">resend</button>
                       </p>
                     ) : (
                       <button onClick={() => notifyPayment(e.id)} disabled={notifying}

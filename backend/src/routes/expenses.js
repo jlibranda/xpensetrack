@@ -516,7 +516,7 @@ router.post('/:id/notify-payment', authenticate, requireRole('FINANCE', 'ADMIN')
   try {
     const e = await prisma.expense.findUnique({ where: { id: req.params.id }, include: { submittedBy: true } });
     if (!e) return res.status(404).json({ error: 'Not found' });
-    if (e.paymentNotifiedAt) return res.status(409).json({ error: 'Payment notification already sent', paymentNotifiedAt: e.paymentNotifiedAt });
+    if (e.paymentNotifiedAt && !req.body?.resend) return res.status(409).json({ error: 'Payment notification already sent', paymentNotifiedAt: e.paymentNotifiedAt });
     const to = e.submittedBy?.email;
     if (!to) return res.status(400).json({ error: 'No recipient email on file' });
     const toName = `${e.submittedBy.firstName || ''} ${e.submittedBy.lastName || ''}`.trim() || 'there';
