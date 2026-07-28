@@ -36,6 +36,9 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { settings } = useOrg();
+  // Access Control: hide the Expense toggle/view when the role lacks access_expenses
+  const canExpense = user?.role === 'ADMIN' || (settings?.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user?.role);
+  useEffect(() => { if (!canExpense && source === 'expense' && Array.isArray(ledger)) setSource('ledger'); }, [canExpense, source, ledger]);
   const canExport = ['MANAGER','FINANCE','ADMIN'].includes(user?.role);
   const canViewSpending = ['FINANCE','ADMIN'].includes(user?.role);
 
@@ -125,7 +128,7 @@ export default function DashboardPage() {
           The AP & AR option only appears for users who can view the ledger. */}
       {apArAllowed && (
         <div className="seg-group mb-5">
-          {[['expense', 'Expenses'], ['ledger', 'AP & AR']].map(([val, label]) => (
+          {[['expense', 'Expenses'], ['ledger', 'AP & AR']].filter(([val]) => val !== 'expense' || canExpense).map(([val, label]) => (
             <button key={val} onClick={() => setSource(val)}
               className={`seg-btn ${source === val ? 'active' : ''}`}>
               {label}
