@@ -41,7 +41,7 @@ export default function ReportsPage() {
   useEffect(() => {
     api.get('/users').then(d => setUsers(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [source]);
+  useEffect(() => { if (!acReady) return; load(); /* eslint-disable-next-line */ }, [source, acReady]);
 
   const load = async (f = from, t = to) => {
     setLoading(true);

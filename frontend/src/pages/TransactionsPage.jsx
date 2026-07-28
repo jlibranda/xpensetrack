@@ -163,7 +163,7 @@ export default function TransactionsPage() {
       setMsg({ text: e.error || 'Failed to load', ok: false });
     } finally { setLoading(false); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, from, to, source]);
+  useEffect(() => { if (!acReady) return; load(); /* eslint-disable-next-line */ }, [status, from, to, source, acReady]);
 
   // Quick date-range presets for the Filter. Setting from/to re-triggers load().
   const setQuickRange = (mode) => {

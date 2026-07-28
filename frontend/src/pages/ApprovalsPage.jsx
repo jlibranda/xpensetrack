@@ -95,7 +95,7 @@ export default function ApprovalsPage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { setSelected(null); load(); /* eslint-disable-next-line */ }, [source]);
+  useEffect(() => { if (!acReady) return; setSelected(null); load(); /* eslint-disable-next-line */ }, [source, acReady]);
 
   // Pending counts for BOTH sources, so each toggle shows its own bubble.
   const loadCounts = async () => {
@@ -107,7 +107,7 @@ export default function ApprovalsPage() {
       setCounts({ expense: Array.isArray(pe) ? pe.length : 0, ledger: Array.isArray(pl) ? pl.length : 0 });
     } catch { /* ignore */ }
   };
-  useEffect(() => { loadCounts(); }, []);
+  useEffect(() => { if (!acReady) return; loadCounts(); }, [acReady]);
 
   const action = async (id, type) => {
     if (type === 'return' && !notes[id]?.trim()) {

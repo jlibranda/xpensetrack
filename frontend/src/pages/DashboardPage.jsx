@@ -66,6 +66,7 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    if (!acReady) return; // hintayin ang permissions bago mag-fetch — iwas expense flash
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
@@ -80,7 +81,7 @@ export default function DashboardPage() {
       setSummary(sum);
       setLedger(Array.isArray(led) ? led : null);
     }).finally(() => setLoading(false));
-  }, [scope]);
+  }, [scope, acReady, canExpense]);
 
   const chartData = summary?.byCategory
     ? Object.entries(summary.byCategory).map(([name, value]) => ({ name: name.charAt(0) + name.slice(1).toLowerCase(), value }))
