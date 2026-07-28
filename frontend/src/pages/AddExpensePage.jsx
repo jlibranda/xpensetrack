@@ -177,7 +177,8 @@ export default function AddExpensePage() {
 
   // Access Control: 'access_expenses' — kapag naka-uncheck ang role, walang
   // access sa buong Expense module (ADMIN laging may access).
-  const __acAllowed = user?.role === 'ADMIN' || (settings?.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user?.role);
+  const __acArr = settings?.accessControl?.access_expenses;
+  const __acAllowed = user?.role === 'ADMIN' || !Array.isArray(__acArr) || __acArr.includes(user?.role);
   if (!__acAllowed) return <Navigate to="/" replace />;
 
   return (

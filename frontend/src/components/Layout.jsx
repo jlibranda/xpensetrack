@@ -101,7 +101,11 @@ export default function Layout() {
   };
   const can = (perm) => {
     if (user?.role === 'ADMIN') return true;
-    const allowed = settings?.accessControl?.[perm] || DEFAULT_NAV_PERMS[perm] || ['ADMIN'];
+    const explicit = settings?.accessControl?.[perm];
+    if (Array.isArray(explicit)) return explicit.includes(user?.role);
+    // access_expenses defaults to EVERY role (incl. custom) until explicitly set.
+    if (perm === 'access_expenses') return true;
+    const allowed = DEFAULT_NAV_PERMS[perm] || ['ADMIN'];
     return allowed.includes(user?.role);
   };
   // The Management section shows if the user can see any item in it (incl. an

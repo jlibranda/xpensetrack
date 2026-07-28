@@ -86,7 +86,13 @@ function AccessControlTab({ settings, navigate, refresh }) {
 
   const [perms, setPerms] = useState(() => {
     const ac = settings?.accessControl;
-    return (ac && Object.keys(ac).length > 0) ? { ...DEFAULT_PERMS, ...ac } : DEFAULT_PERMS;
+    const base = (ac && Object.keys(ac).length > 0) ? { ...DEFAULT_PERMS, ...ac } : { ...DEFAULT_PERMS };
+    // access_expenses defaults to EVERY role (incl. custom) until explicitly set.
+    if (!Array.isArray(ac?.access_expenses)) {
+      const customRoles = Array.isArray(ac?.__roles__) ? ac.__roles__ : [];
+      base.access_expenses = [...new Set([...DEFAULT_PERMS.access_expenses, ...customRoles])];
+    }
+    return base;
   });
   const [saved2, setSaved2] = useState(false);
   const [saving2, setSaving2] = useState(false);

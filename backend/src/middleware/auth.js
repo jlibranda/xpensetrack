@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 // Sensible defaults if Access Control hasn't been configured yet.
 // Mirrors the frontend DEFAULT_PERMS so behaviour is consistent.
 const DEFAULT_PERMS = {
-  access_expenses: ['EMPLOYEE','MANAGER','FINANCE','ADMIN'],
+  access_expenses: '*', // default: EVERY role (incl. custom) — enforced only when explicitly set in Access Control
   view_team: ['MANAGER', 'FINANCE', 'ADMIN'],
   view_approvals: ['MANAGER', 'FINANCE', 'ADMIN'],
   view_reports: ['MANAGER', 'FINANCE', 'ADMIN'],
@@ -75,7 +75,11 @@ const hasPermission = async (user, permKey, fallbackRoles = ['ADMIN']) => {
       if (ac && Array.isArray(ac[permKey])) allowed = ac[permKey];
     }
   } catch (e) { /* fall through to defaults */ }
-  if (!allowed) allowed = DEFAULT_PERMS[permKey] || fallbackRoles;
+  if (!allowed) {
+    const def = DEFAULT_PERMS[permKey] || fallbackRoles;
+    if (def === '*') return true; // allow-all default (e.g. access_expenses)
+    allowed = def;
+  }
   return allowed.includes(user.role);
 };
 

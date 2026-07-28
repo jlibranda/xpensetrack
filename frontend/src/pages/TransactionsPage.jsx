@@ -68,7 +68,8 @@ export default function TransactionsPage() {
   // While user/settings are still loading, treat access as ALLOWED — otherwise
   // the view briefly flips to AP&AR on first paint ("blinking" pending items).
   const acReady = !!user && !!settings;
-  const canExpense = !acReady ? true : (user.role === 'ADMIN' || (settings.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user.role));
+  const __acExp = settings?.accessControl?.access_expenses;
+  const canExpense = !acReady ? true : (user.role === 'ADMIN' || !Array.isArray(__acExp) || __acExp.includes(user.role));
   useEffect(() => { if (acReady && !canExpense && source === 'expense') setSource('ledger'); }, [acReady, canExpense, source]);
 
   const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default = all dates)
