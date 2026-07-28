@@ -97,15 +97,39 @@ router.get('/pending-count', authenticate, async (req, res) => {
         });
         toApprove = rows.length;
       } else {
-        // Count EVERY expense assigned to this approver that is still pending —
-        // including later-step items that are not yet actionable. The red bubble
-        // shows the approver's FULL pending queue.
+        // Count ONLY expenses the approver can act on RIGHT NOW (their step is
+        // the first open one) — badges notify when it's truly their turn.
         const myRows = await prisma.approval.findMany({
           where: { approverId: req.user.id, status: 'PENDING', expenseId: { not: null }, expense: { status: 'PENDING' } },
-          select: { expenseId: true },
-          distinct: ['expenseId'],
+          select: { expenseId: true, stepOrder: true },
         });
-        toApprove = myRows.length;
+        const expenseIds = [...new Set(myRows.map(r => r.expenseId))];
+        let actionableCount = 0;
+        for (const exId of expenseIds) {
+          const all = await prisma.approval.findMany({ where: { expenseId: exId } });
+          const groups = {};
+          for (const a of all) {
+            const k = Number(a.stepOrder ?? 0);
+            if (!groups[k]) groups[k] = [];
+            groups[k].push(a);
+          }
+          const steps = Object.keys(groups).map(Number).sort((a, b) => a - b).map(k => ({
+            stepOrder: k,
+            satisfied: groups[k].some(r => r.status === 'APPROVED'),
+            blocked: groups[k].every(r => r.status === 'REJECTED'),
+          }));
+          const ex = await prisma.expense.findUnique({ where: { id: exId }, select: { submittedBy: { select: { approvalMode: true } } } });
+          const mode = ex?.submittedBy?.approvalMode || 'SEQUENTIAL';
+          const firstOpen = steps.find(x => !x.satisfied && !x.blocked);
+          const mine = myRows.filter(r => r.expenseId === exId);
+          const ok = mine.some(r => {
+            const myStep = steps.find(x => x.stepOrder === Number(r.stepOrder ?? 0));
+            if (!myStep || myStep.satisfied || myStep.blocked) return false;
+            return mode === 'ANY_ORDER' || (firstOpen && firstOpen.stepOrder === Number(r.stepOrder ?? 0));
+          });
+          if (ok) actionableCount++;
+        }
+        toApprove = actionableCount;
       }
     }
 

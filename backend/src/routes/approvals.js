@@ -107,19 +107,13 @@ router.get('/pending', authenticate, requirePermission('view_approvals', ['MANAG
       // Include EVERY assigned pending item so the list matches the badge count.
       // `actionable:false` marks items still waiting on an earlier approver.
       const mode = await chainModeForExpense(ap.expense);
+      // ONLY items that are actionable NOW appear in the approver's queue —
+      // later-step approvers are notified only when it's actually their turn.
       const actionable = onBehalf ? true : isActionable(ap, all, mode);
-      let waitingFor = '';
-      if (!actionable) {
-        const ids = [...new Set(all.filter(r => r.status === 'PENDING').map(r => r.approverId))];
-        const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, lastName: true } });
-        const nameOf = (id) => { const u = users.find(x => x.id === id); return u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : ''; };
-        waitingFor = waitingForNames(all, nameOf);
-      }
-      visible.push({ ...ap, actionable, waitingFor });
+      if (!actionable) continue;
+      visible.push({ ...ap, actionable: true });
       seenExpenses.add(ap.expenseId);
     }
-    // Actionable items first, then the waiting queue.
-    visible.sort((a, b) => (b.actionable === true) - (a.actionable === true));
     res.json(visible);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -335,17 +329,10 @@ router.get('/ledger/pending', authenticate, requirePermission('view_approvals', 
       // Include EVERY assigned pending item so the list matches the badge count.
       const mode = await chainModeForLedger(ap.ledgerDoc);
       const actionable = onBehalf ? true : isActionable(ap, all, mode);
-      let waitingFor = '';
-      if (!actionable) {
-        const ids = [...new Set(all.filter(r => r.status === 'PENDING').map(r => r.approverId))];
-        const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, lastName: true } });
-        const nameOf = (id) => { const u = users.find(x => x.id === id); return u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : ''; };
-        waitingFor = waitingForNames(all, nameOf);
-      }
-      visible.push({ ...ap, actionable, waitingFor });
+      if (!actionable) continue;
+      visible.push({ ...ap, actionable: true });
       seen.add(ap.ledgerDocId);
     }
-    visible.sort((a, b) => (b.actionable === true) - (a.actionable === true));
     res.json(visible);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -353,13 +340,24 @@ router.get('/ledger/pending', authenticate, requirePermission('view_approvals', 
 router.get('/ledger/pending-count', authenticate, requirePermission('view_approvals', ['MANAGER', 'FINANCE', 'ADMIN']), async (req, res) => {
   try {
     const onBehalf = await canApproveOnBehalf(req.user);
-    // Count EVERY doc assigned to this approver that is still pending — including
-    // later-step items not yet actionable. The red bubble shows the FULL queue.
+    // Count ONLY the docs the approver can act on RIGHT NOW — badges notify
+    // when it's truly their turn, not while an earlier step is still open.
     const baseWhere = onBehalf
       ? { status: 'PENDING', ledgerDocId: { not: null }, ledgerDoc: { status: 'PENDING' } }
       : { approverId: req.user.id, status: 'PENDING', ledgerDocId: { not: null }, ledgerDoc: { status: 'PENDING' } };
-    const rows = await prisma.approval.findMany({ where: baseWhere, select: { ledgerDocId: true }, distinct: ['ledgerDocId'] });
-    res.json({ count: rows.length });
+    const approvals = await prisma.approval.findMany({ where: baseWhere, include: { ledgerDoc: true } });
+    let count = 0; const seen = new Set();
+    for (const ap of approvals) {
+      if (!ap.ledgerDoc || seen.has(ap.ledgerDocId)) continue;
+      const all = await loadLedgerApprovals(ap.ledgerDocId);
+      const steps = summarizeSteps(all);
+      const thisStep = steps.find(x => Number(x.stepOrder ?? 0) === Number(ap.stepOrder ?? 0));
+      if (thisStep && (thisStep.satisfied || thisStep.blocked)) continue;
+      if (onBehalf) { count++; seen.add(ap.ledgerDocId); continue; }
+      const mode = await chainModeForLedger(ap.ledgerDoc);
+      if (isActionable(ap, all, mode)) { count++; seen.add(ap.ledgerDocId); }
+    }
+    res.json({ count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
