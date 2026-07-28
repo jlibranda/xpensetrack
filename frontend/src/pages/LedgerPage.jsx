@@ -553,32 +553,53 @@ export default function LedgerPage({ mode = 'manage' }) {
                 <div className="mb-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Approval Trail</p>
                   <div className="space-y-2">
-                    {[...viewing.approvals].sort((a, b) => (a.stepOrder || a.level || 0) - (b.stepOrder || b.level || 0)).map((a, i) => {
+                    {(() => {
+                      // Which step is CURRENTLY open? Rows on that step show red
+                      // "Pending approval"; later pending rows show gray "Waiting".
+                      const rowsAll = [...viewing.approvals];
+                      const stepsMap = {};
+                      rowsAll.forEach(x => {
+                        const k = Number(x.stepOrder ?? 0);
+                        if (!stepsMap[k]) stepsMap[k] = [];
+                        stepsMap[k].push(x);
+                      });
+                      const stepKeys = Object.keys(stepsMap).map(Number).sort((a, b) => a - b);
+                      const openStep = stepKeys.find(k => {
+                        const rows = stepsMap[k];
+                        const satisfied = rows.some(r => r.status === 'APPROVED');
+                        const blocked = rows.every(r => r.status === 'REJECTED');
+                        return !satisfied && !blocked;
+                      });
+                      return rowsAll.sort((a, b) => (a.stepOrder || a.level || 0) - (b.stepOrder || b.level || 0)).map((a, i) => {
+                        const isCurrentStep = Number(a.stepOrder ?? 0) === openStep;
                       const isApproved = a.status === 'APPROVED';
                       const isReturned = a.status === 'REJECTED' && (a.notes || '').startsWith('[RETURNED]');
                       const isAuto = a.status === 'REJECTED' && (a.notes || '').startsWith('[auto]');
                       const isRejected = a.status === 'REJECTED' && !isReturned && !isAuto;
-                      const accent = isApproved ? '#16a34a' : isReturned ? '#d97706' : isAuto ? '#94a3b8' : '#dc2626';
+                      const isPendingRow = !isApproved && !isReturned && !isAuto && !isRejected;
+                        const isQueued = isPendingRow && !isCurrentStep; // pending pero hindi pa turno
+                        const accent = isApproved ? '#16a34a' : isReturned ? '#d97706' : isAuto ? '#94a3b8' : isQueued ? '#9ca3af' : '#dc2626';
                       const cleanNote = (a.notes || '').startsWith('[auto]') ? '' : (a.notes || '').replace(/^\[RETURNED\]\s*/, '');
                       return (
                         <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg border"
                           style={{
-                            backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : isReturned ? 'rgba(217,119,6,0.12)' : isAuto ? 'rgba(148,163,184,0.12)' : 'rgba(220,38,38,0.12)',
-                            borderColor: isApproved ? 'rgba(22,163,74,0.35)' : isReturned ? 'rgba(217,119,6,0.35)' : isAuto ? 'rgba(148,163,184,0.35)' : 'rgba(220,38,38,0.35)',
+                            backgroundColor: isApproved ? 'rgba(22,163,74,0.12)' : isReturned ? 'rgba(217,119,6,0.12)' : (isAuto || isQueued) ? 'rgba(148,163,184,0.12)' : 'rgba(220,38,38,0.12)',
+                            borderColor: isApproved ? 'rgba(22,163,74,0.35)' : isReturned ? 'rgba(217,119,6,0.35)' : (isAuto || isQueued) ? 'rgba(148,163,184,0.35)' : 'rgba(220,38,38,0.35)',
                           }}>
                           <div className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold mt-0.5 shrink-0 text-white" style={{ backgroundColor: accent }}>
-                            {isApproved ? '✓' : isReturned ? '↩' : isAuto ? '⊘' : isRejected ? '✗' : '⌛'}
+                            {isApproved ? '✓' : isReturned ? '↩' : isAuto ? '⊘' : isRejected ? '✗' : isQueued ? '⏳' : '⌛'}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold">{fullName(a.approver) || '—'}</p>
                             <p className="text-xs font-semibold" style={{ color: accent }}>
-                              {isApproved ? 'Approved' : isReturned ? 'Returned' : isAuto ? 'Skipped — no action needed (decided at an earlier step)' : isRejected ? 'Rejected' : 'Pending approval'}
+                              {isApproved ? 'Approved' : isReturned ? 'Returned' : isAuto ? 'Skipped — no action needed (decided at an earlier step)' : isRejected ? 'Rejected' : isQueued ? 'Waiting — up next after the earlier approver(s)' : 'Pending approval — action needed'}
                             </p>
                             {cleanNote && <p className="text-sm mt-1 font-medium" style={{ color: accent }}>"{cleanNote}"</p>}
                           </div>
                         </div>
                       );
-                    })}
+                      });
+                    })()}
                   </div>
                 </div>
               )}

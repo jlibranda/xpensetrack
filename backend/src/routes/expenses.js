@@ -493,6 +493,25 @@ router.patch('/:id/remarks', authenticate, requireRole('FINANCE', 'ADMIN'), asyn
 
 // Send a "payment sent / reimbursed" email to the filer. Marked once sent so it
 // can't be sent twice. FINANCE/ADMIN only.
+
+// Load a proof-of-payment Receipt as an email attachment (base64) — or null.
+async function proofAttachment(proofId) {
+  if (!proofId) return null;
+  try {
+    const p = await prisma.receipt.findUnique({ where: { id: proofId }, select: { storageKey: true, data: true, mimeType: true, filename: true } });
+    if (!p) return null;
+    const storage = require('../lib/storage');
+    let buffer = null;
+    if (p.storageKey && storage.storageConfigured()) {
+      try { const got = await storage.getObject(p.storageKey); buffer = got.buffer; } catch (e) { console.error('POP fetch failed:', e.message); }
+    }
+    if (!buffer && p.data) buffer = Buffer.from(p.data);
+    if (!buffer) return null;
+    const ext = (p.mimeType || '').includes('pdf') ? 'pdf' : (p.mimeType || '').includes('png') ? 'png' : 'jpg';
+    return { filename: p.filename || `proof-of-payment.${ext}`, content: buffer.toString('base64'), contentType: p.mimeType || undefined };
+  } catch (e) { console.error('proofAttachment:', e.message); return null; }
+}
+
 router.post('/:id/notify-payment', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
     const e = await prisma.expense.findUnique({ where: { id: req.params.id }, include: { submittedBy: true } });
@@ -502,7 +521,9 @@ router.post('/:id/notify-payment', authenticate, requireRole('FINANCE', 'ADMIN')
     if (!to) return res.status(400).json({ error: 'No recipient email on file' });
     const toName = `${e.submittedBy.firstName || ''} ${e.submittedBy.lastName || ''}`.trim() || 'there';
     const doc = { title: e.title, amount: e.amount, amountPhp: e.amountPhp, currency: e.currency, submittedBy: e.submittedBy };
-    const r = await sendPaymentNotificationEmail(to, toName, doc, e.submittedBy, 'expense');
+    // Attach the uploaded proof of payment so the filer receives the actual file.
+    const att = await proofAttachment(e.proofOfPaymentId);
+    const r = await sendPaymentNotificationEmail(to, toName, doc, e.submittedBy, 'expense', att ? [att] : undefined);
     if (r && r.skipped) return res.status(400).json({ error: 'Email notifications are turned off in Settings.' });
     const updated = await prisma.expense.update({ where: { id: e.id }, data: { paymentNotifiedAt: new Date() } });
     res.json({ ok: true, paymentNotifiedAt: updated.paymentNotifiedAt });

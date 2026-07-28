@@ -1041,6 +1041,25 @@ router.post('/delete-selected', authenticate, requireRole('ADMIN'), async (req, 
 
 // Send a "payment / credit posted" email to the AP/AR filer. Marked once sent so
 // it can't be sent twice. FINANCE/ADMIN only.
+
+// Load a proof-of-payment Receipt as an email attachment (base64) — or null.
+async function proofAttachmentL(proofId) {
+  if (!proofId) return null;
+  try {
+    const p = await prisma.receipt.findUnique({ where: { id: proofId }, select: { storageKey: true, data: true, mimeType: true, filename: true } });
+    if (!p) return null;
+    const storage = require('../lib/storage');
+    let buffer = null;
+    if (p.storageKey && storage.storageConfigured()) {
+      try { const got = await storage.getObject(p.storageKey); buffer = got.buffer; } catch (e) { console.error('POP fetch failed:', e.message); }
+    }
+    if (!buffer && p.data) buffer = Buffer.from(p.data);
+    if (!buffer) return null;
+    const ext = (p.mimeType || '').includes('pdf') ? 'pdf' : (p.mimeType || '').includes('png') ? 'png' : 'jpg';
+    return { filename: p.filename || `proof-of-payment.${ext}`, content: buffer.toString('base64'), contentType: p.mimeType || undefined };
+  } catch (e) { console.error('proofAttachmentL:', e.message); return null; }
+}
+
 router.post('/:id/notify-payment', authenticate, requireRole('FINANCE', 'ADMIN'), async (req, res) => {
   try {
     const d = await prisma.ledgerDoc.findUnique({ where: { id: req.params.id } });
@@ -1049,7 +1068,9 @@ router.post('/:id/notify-payment', authenticate, requireRole('FINANCE', 'ADMIN')
     const creator = d.createdById ? await prisma.user.findUnique({ where: { id: d.createdById } }).catch(() => null) : null;
     const to = creator?.email;
     if (!to) return res.status(400).json({ error: 'No recipient email on file' });
-    const r = await sendPaymentNotificationEmail(to, nm(creator) || 'there', ledgerAsExpense(d, creator), creator, 'apar');
+    // Attach the uploaded proof of payment so the filer receives the actual file.
+    const att = await proofAttachmentL(d.proofOfPaymentId);
+    const r = await sendPaymentNotificationEmail(to, nm(creator) || 'there', ledgerAsExpense(d, creator), creator, 'apar', att ? [att] : undefined);
     if (r && r.skipped) return res.status(400).json({ error: 'Email notifications are turned off in Settings.' });
     const updated = await prisma.ledgerDoc.update({ where: { id: d.id }, data: { paymentNotifiedAt: new Date() } });
     await logAudit(req.user, 'LEDGER_PAYMENT_NOTIFIED', { targetType: 'LEDGER_DOC', targetId: d.id, details: `Sent payment notification for "${d.vendorName || 'AP/AR document'}"` });

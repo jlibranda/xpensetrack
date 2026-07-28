@@ -463,7 +463,7 @@ async function sendApprovalReminderEmail(toEmail, toName, expense, employee, day
   , brand), appName);
 }
 
-async function sendPaymentNotificationEmail(toEmail, toName, doc, employee, kind = 'expense') {
+async function sendPaymentNotificationEmail(toEmail, toName, doc, employee, kind = 'expense', attachments) {
   if (!(await notificationsEnabled())) return { skipped: true, reason: 'notifications_disabled' };
   const isApar = kind === 'apar';
   const sym = doc.currency === 'PHP' ? '₱' : '$';
@@ -490,7 +490,7 @@ async function sendPaymentNotificationEmail(toEmail, toName, doc, employee, kind
        <p style="margin:0;font-size:14px;color:#6b7280">${amt}</p>
      </div>
      ${btn(btnLink, btnLabel, brand)}`
-  , brand), appName);
+  , brand), appName, attachments);
 }
 
 // Vendor-facing payment notice: multiple invoices, one email, with the proof of
