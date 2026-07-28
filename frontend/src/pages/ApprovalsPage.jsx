@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import toast from '../lib/toast';
 import { useNotifications } from '../context/NotificationContext';
+import { useOrg } from '../context/OrgContext';
+import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import ReceiptImage from '../components/ReceiptImage';
 
@@ -16,12 +18,17 @@ const STATUS_BADGE = {
 };
 
 export default function ApprovalsPage() {
+  const { settings } = useOrg();
+  const { user } = useAuth();
   const [approvals, setApprovals] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyDetail, setHistoryDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger' (AP/AR)
+  const canExpense = user?.role === 'ADMIN' || (settings?.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user?.role);
+  useEffect(() => { if (!canExpense && source === 'expense') setSource('ledger'); }, [canExpense, source]);
+
   const [counts, setCounts] = useState({ expense: 0, ledger: 0 });
   const [notes, setNotes] = useState({});
   const [noteError, setNoteError] = useState({}); // {id:true} kapag nag-Return/Reject nang walang note
@@ -158,13 +165,13 @@ export default function ApprovalsPage() {
 
       {/* Source toggle: Expenses vs AP & AR invoices */}
       <div className="seg-group mb-3">
-        <button onClick={() => setSource('expense')}
+        {canExpense && <button onClick={() => setSource('expense')}
           className={`seg-btn ${source === 'expense' ? 'active' : ''}`}>
           Expenses
           {counts.expense > 0 && (
             <span className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 bg-red-500 text-white text-xs font-bold rounded-full">{counts.expense}</span>
           )}
-        </button>
+        </button>}
         <button onClick={() => setSource('ledger')}
           className={`seg-btn ${source === 'ledger' ? 'active' : ''}`}>
           AP &amp; AR

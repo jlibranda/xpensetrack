@@ -19,6 +19,9 @@ export default function ReportsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger'
+  const canExpense = user?.role === 'ADMIN' || (settings?.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user?.role);
+  useEffect(() => { if (!canExpense && source === 'expense') setSource('ledger'); }, [canExpense, source]);
+
   const [ledgerRows, setLedgerRows] = useState([]);
   const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default)
   const [userId, setUserId] = useState('');
@@ -132,10 +135,10 @@ export default function ReportsPage() {
         <h1 className="text-xl font-medium text-gray-900">Reports</h1>
         <p className="text-sm text-gray-500 mt-0.5">Summaries and exports</p>
         <div className="seg-group mt-3">
-          <button onClick={() => setSource('expense')}
+          {canExpense && <button onClick={() => setSource('expense')}
             className={`seg-btn ${source === 'expense' ? 'active' : ''}`}>
             Expenses
-          </button>
+          </button>}
           <button onClick={() => setSource('ledger')}
             className={`seg-btn ${source === 'ledger' ? 'active' : ''}`}>
             AP &amp; AR

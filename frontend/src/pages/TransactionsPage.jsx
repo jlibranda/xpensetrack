@@ -65,6 +65,9 @@ export default function TransactionsPage() {
   const [payoutFilter, setPayoutFilter] = useState('');
   const [search, setSearch] = useState(''); // live payee/merchant/keyword filter (client-side)
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger' (AP/AR)
+  const canExpense = user?.role === 'ADMIN' || (settings?.accessControl?.access_expenses || ['EMPLOYEE','MANAGER','FINANCE','ADMIN']).includes(user?.role);
+  useEffect(() => { if (!canExpense && source === 'expense') setSource('ledger'); }, [canExpense, source]);
+
   const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default = all dates)
 
   // payout / processing controls
@@ -462,10 +465,10 @@ export default function TransactionsPage() {
 
       {/* Source toggle: Expenses vs AP & AR invoices */}
       <div className="seg-group mb-4">
-        <button onClick={() => { setSource('expense'); setSelected([]); }}
+        {canExpense && <button onClick={() => { setSource('expense'); setSelected([]); }}
           className={`seg-btn ${source === 'expense' ? 'active' : ''}`}>
           Expenses
-        </button>
+        </button>}
         <button onClick={() => { setSource('ledger'); setSelected([]); }}
           className={`seg-btn ${source === 'ledger' ? 'active' : ''}`}>
           AP &amp; AR

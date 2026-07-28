@@ -255,8 +255,8 @@ export default function Layout() {
                   style={navLinkStyle}>
                   <span className="w-4 text-center text-sm">✓</span>
                   <span>My Approvals</span>
-                  {(pendingCounts.toApprove + (pendingCounts.toApproveLedger || 0)) > 0 && (
-                    <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium">{pendingCounts.toApprove + (pendingCounts.toApproveLedger || 0)}</span>
+                  {((can('access_expenses') ? pendingCounts.toApprove : 0) + (pendingCounts.toApproveLedger || 0)) > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium">{(can('access_expenses') ? pendingCounts.toApprove : 0) + (pendingCounts.toApproveLedger || 0)}</span>
                   )}
                 </NavLink>
               )}
