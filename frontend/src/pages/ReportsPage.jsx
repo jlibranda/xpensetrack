@@ -19,12 +19,6 @@ export default function ReportsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger'
-  // While user/settings are still loading, treat access as ALLOWED — otherwise
-  // the view briefly flips to AP&AR on first paint ("blinking" pending items).
-  const acReady = !!user && !!settings;
-  const __acExp = settings?.accessControl?.access_expenses;
-  const canExpense = !acReady ? true : (user.role === 'ADMIN' || !Array.isArray(__acExp) || __acExp.includes(user.role));
-  useEffect(() => { if (acReady && !canExpense && source === 'expense') setSource('ledger'); }, [acReady, canExpense, source]);
 
   const [ledgerRows, setLedgerRows] = useState([]);
   const [activeRange, setActiveRange] = useState('all'); // 'all' = no date filter (default)
@@ -32,6 +26,12 @@ export default function ReportsPage() {
   const { format } = useCurrency();
   const { settings } = useOrg();
   const { user } = useAuth();
+  // While user/settings are still loading, treat access as ALLOWED — otherwise
+  // the view briefly flips to AP&AR on first paint ("blinking" pending items).
+  const acReady = !!user && !!settings;
+  const __acExp = settings?.accessControl?.access_expenses;
+  const canExpense = !acReady ? true : (user.role === 'ADMIN' || !Array.isArray(__acExp) || __acExp.includes(user.role));
+  useEffect(() => { if (acReady && !canExpense && source === 'expense') setSource('ledger'); }, [acReady, canExpense, source]);
   const canExport = user?.role === 'ADMIN' ||
     (settings?.accessControl?.export_reports || ['MANAGER','FINANCE','ADMIN']).includes(user?.role);
   const glCodes = settings?.categoryGlCodes || {};
