@@ -66,7 +66,8 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!acReady) return; // hintayin ang permissions bago mag-fetch — iwas expense flash
+    if (!acReady) return; // wait for permissions before fetching — avoids the expense flash
+    if (source === 'expense' && !canExpense && Array.isArray(ledger)) return; // let the view flip to AP&AR first
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];

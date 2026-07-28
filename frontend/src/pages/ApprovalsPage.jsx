@@ -95,7 +95,7 @@ export default function ApprovalsPage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (!acReady) return; setSelected(null); load(); /* eslint-disable-next-line */ }, [source, acReady]);
+  useEffect(() => { if (!acReady || (source === 'expense' && !canExpense)) return; setSelected(null); load(); /* eslint-disable-next-line */ }, [source, acReady, canExpense]);
 
   // Pending counts for BOTH sources, so each toggle shows its own bubble.
   const loadCounts = async () => {
