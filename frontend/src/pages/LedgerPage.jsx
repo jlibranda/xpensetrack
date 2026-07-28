@@ -304,21 +304,23 @@ export default function LedgerPage({ mode = 'manage' }) {
           </select></Field>
           <div className="sm:col-span-2"><Field label="Vendor / Payee">
             <select
-              value={(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) ? '__OTHER__' : (editing.vendorName || '')}
+              value={editing.vendorName || ''}
               onChange={(e) => {
                 const val = e.target.value;
-                if (val === '__OTHER__') setEditing({ ...editing, _vendorOther: true, vendorName: '', vendorTin: '', _vendorType: 'COMPANY' });
-                else { const v = vendors.find(x => x.name === val); setEditing({ ...editing, _vendorOther: false, vendorName: val, vendorTin: (v && v.tin) || '', _vendorType: (v && v.type) || 'COMPANY' }); }
+                const v = vendors.find(x => x.name === val);
+                setEditing({ ...editing, _vendorOther: false, vendorName: val, vendorTin: (v && v.tin) || editing.vendorTin || '', _vendorType: (v && v.type) || 'COMPANY' });
               }}
               className="inp">
               <option value="">— select vendor / payee —</option>
               {vendors.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
-              <option value="__OTHER__">Others (type manually)</option>
+              {/* Legacy support: old documents may carry a vendor that is no longer
+                  (or was never) in the Settings list — keep it selectable so those
+                  records stay viewable/editable. New filings must pick from the list. */}
+              {editing.vendorName && !vendorNames.includes(editing.vendorName) && (
+                <option value={editing.vendorName}>{editing.vendorName} (not in vendor list)</option>
+              )}
             </select>
-            {(editing._vendorOther || (editing.vendorName && !vendorNames.includes(editing.vendorName))) && (
-              <input className="inp mt-2" placeholder="Enter vendor / payee name" value={editing.vendorName}
-                onChange={(e) => setEditing({ ...editing, _vendorOther: true, vendorName: e.target.value })} />
-            )}
+            <p className="text-[11px] text-gray-400 mt-1">Vendor not in the list? Add it first in Settings → Vendors/Payees (or via bulk upload / Google Sheet sync), then it will appear here.</p>
           </Field></div>
           {!isGovt && <Field label="Vendor TIN">
             <input className="inp" inputMode="numeric" value={editing.vendorTin}
