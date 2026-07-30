@@ -21,6 +21,7 @@ export default function AnalyticsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [activeRange, setActiveRange] = useState('month'); // default: this month
+  const [trendVendor, setTrendVendor] = useState(''); // vendor trend chart selection ('' = auto top vendor)
   const [source, setSource] = useState('expense'); // 'expense' | 'ledger'
   const { format } = useCurrency();
   const { settings } = useOrg();
@@ -153,10 +154,44 @@ export default function AnalyticsPage() {
   const ledgerCategory = Object.entries(lCatMap).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a, b) => b.value - a.value);
 
   const lVenMap = {};
-  lActive.forEach(d => { const v = d.vendorName || '—'; lVenMap[v] = (lVenMap[v] || 0) + (d.amountPhp || 0); });
+  const lVenMapFull = {};
+  lActive.forEach(d => { const v = d.vendorName || '—'; lVenMap[v] = (lVenMap[v] || 0) + (d.amountPhp || 0); if (v !== '—') lVenMapFull[v] = (lVenMapFull[v] || 0) + (d.amountPhp || 0); });
   const ledgerVendors = Object.entries(lVenMap).map(([name, value]) => ({ name: name.length > 14 ? name.slice(0, 13) + '…' : name, value: Math.round(value) })).sort((a, b) => b.value - a.value).slice(0, 8);
 
   const apArSplit = [{ name: 'AP (payables)', value: Math.round(apTotal) }, { name: 'AR (receivables)', value: Math.round(arTotal) }].filter(x => x.value > 0);
+
+  // ----- Vendor trend: monthly AP/AR amounts for ONE selected vendor -----
+  // Answers "is our water bill going up or down?" — pick a vendor, see the line.
+  const trendVendorNames = [...new Set(lActive.map(d => (d.vendorName || '').trim()).filter(Boolean))].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  const topVendorName = Object.entries(lVenMapFull || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  const activeTrendVendor = trendVendor || topVendorName;
+  const trendRows = lActive.filter(d => (d.vendorName || '').trim().toLowerCase() === activeTrendVendor.trim().toLowerCase());
+  const trendByMonth = {};
+  trendRows.forEach(d => {
+    const dt = new Date(d.docDate || d.createdAt);
+    if (isNaN(dt)) return;
+    const k = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+    if (!trendByMonth[k]) trendByMonth[k] = { ap: 0, ar: 0 };
+    if (d.docType === 'AR_INVOICE') trendByMonth[k].ar += d.amountPhp || 0;
+    else trendByMonth[k].ap += d.amountPhp || 0;
+  });
+  const trendKeys = Object.keys(trendByMonth).sort();
+  // Fill month gaps so the line is continuous (a skipped month = 0, visible dip).
+  const vendorTrend = [];
+  if (trendKeys.length) {
+    const [sy, sm] = trendKeys[0].split('-').map(Number);
+    const [ey, em] = trendKeys[trendKeys.length - 1].split('-').map(Number);
+    const cur = new Date(sy, sm - 1, 1);
+    const end = new Date(ey, em - 1, 1);
+    while (cur <= end) {
+      const k = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`;
+      const v = trendByMonth[k] || { ap: 0, ar: 0 };
+      vendorTrend.push({ month: cur.toLocaleDateString('en-PH', { month: 'short', year: '2-digit' }), AP: Math.round(v.ap), AR: Math.round(v.ar) });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+  }
+  const trendHasAr = vendorTrend.some(x => x.AR > 0);
+  const trendHasAp = vendorTrend.some(x => x.AP > 0);
 
   const ledgerBody = (
     <>
@@ -191,17 +226,27 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">AP vs AR</h2>
-          {apArSplit.length > 0 ? (
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h2 className="text-sm font-medium text-gray-700">AP / AR trend per vendor</h2>
+            <select value={activeTrendVendor} onChange={e => setTrendVendor(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand-400 max-w-[180px]">
+              {trendVendorNames.length === 0 && <option value="">— no vendors —</option>}
+              {trendVendorNames.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          {vendorTrend.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={apArSplit} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-                  {apArSplit.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
+              <LineChart data={vendorTrend}>
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${Math.round(v / 1000)}k` : v} />
                 <Tooltip formatter={v => format(v)} {...TT} />
-              </PieChart>
+                {trendHasAp && <Line type="monotone" dataKey="AP" stroke="#dc2626" strokeWidth={2} dot={{ r: 3 }} />}
+                {trendHasAr && <Line type="monotone" dataKey="AR" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />}
+                {(trendHasAp && trendHasAr) && <Legend wrapperStyle={{ fontSize: 11 }} />}
+              </LineChart>
             </ResponsiveContainer>
-          ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>}
+          ) : <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data for this vendor in the selected period</div>}
+          <p className="text-[11px] text-gray-400 mt-1">Monthly totals for the selected vendor — rising or falling at a glance (e.g. utility bills).</p>
         </div>
       </div>
 
