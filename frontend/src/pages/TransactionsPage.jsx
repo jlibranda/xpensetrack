@@ -881,7 +881,7 @@ export default function TransactionsPage() {
                               <td className="p-1"><input value={r.desc || ''} onChange={e => setRow2307(i, { desc: e.target.value })} placeholder="Nature of income payment" className="w-52 px-1 py-1 border border-gray-200 rounded" /></td>
                               <td className="p-1">
                                 <select value={r.atc || ''} className="w-24 px-1 py-1 border border-gray-200 rounded bg-white font-mono"
-                                  onChange={e => { const code = e.target.value; const a = atcList.find(x => x.code === code); setRow2307(i, { atc: code, rate: a ? a.rate : (r.rate || ''), desc: r.desc || (a ? a.description : '') }); }}>
+                                  onChange={e => { const code = e.target.value; const a = atcList.find(x => x.code === code); setRow2307(i, { atc: code, rate: a ? a.rate : (r.rate || ''), desc: (a && a.description) ? a.description : (r.desc || '') }); }}>
                                   <option value="">—</option>
                                   {opts.map(code => <option key={code} value={code}>{code}</option>)}
                                 </select>
