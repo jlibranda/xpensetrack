@@ -88,6 +88,7 @@ const include = {
   client: { select: { id: true, name: true } },
   receipt: { select: { id: true, mimeType: true, filename: true } },
   proofOfPayment: { select: { id: true, mimeType: true, filename: true } },
+  signed2307: { select: { id: true, mimeType: true, filename: true } },
   createdBy: { select: { id: true, firstName: true, lastName: true } },
   assignedTo: { select: { id: true, firstName: true, lastName: true } },
   lastEditedBy: { select: { id: true, firstName: true, lastName: true } },
@@ -555,7 +556,7 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
 
     const docs = await prisma.ledgerDoc.findMany({
       where: { id: { in: ids } },
-      include: { proofOfPayment: { select: { id: true, storageKey: true, data: true, mimeType: true, filename: true } } },
+      include: { proofOfPayment: { select: { id: true, storageKey: true, data: true, mimeType: true, filename: true } }, signed2307: { select: { id: true, storageKey: true, data: true, mimeType: true, filename: true } } },
     });
     if (!docs.length) return res.status(404).json({ error: 'Invoices not found.' });
 
@@ -633,10 +634,33 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
       }
     }
 
-    // Attachment 2: ONE combined BIR 2307 covering ALL selected invoices.
-    // If the caller passed edited 2307 data (from the Generate-2307 editor),
-    // fill the form with THAT — otherwise auto-build from the invoices.
-    if (attach2307) try {
+    // Attachment 2 (option A): the UPLOADED SIGNED 2307 file(s) — used when the
+    // caller asks for the signed copy (deduped, several invoices may share one).
+    const useSigned = attach2307 && req.body?.useSigned === true;
+    if (useSigned) {
+      const seenSigned = new Set();
+      for (const d of docs) {
+        const p = d.signed2307;
+        if (!p || seenSigned.has(p.id)) continue;
+        seenSigned.add(p.id);
+        let buffer = null;
+        if (p.storageKey && storage.storageConfigured()) {
+          try { const got = await storage.getObject(p.storageKey); buffer = got.buffer; } catch (e) { console.error('Signed-2307 fetch failed:', e.message); }
+        }
+        if (!buffer && p.data) buffer = Buffer.from(p.data);
+        if (!buffer) continue;
+        const ext = (p.mimeType || '').includes('pdf') ? 'pdf' : (p.mimeType || '').includes('png') ? 'png' : 'jpg';
+        attachments.push({ filename: p.filename || `signed-2307-${attachments.length + 1}.${ext}`, content: buffer.toString('base64'), contentType: p.mimeType || undefined });
+      }
+      if (!attachments.length) {
+        return res.status(400).json({ error: 'No signed 2307 uploaded yet for the selected invoice(s). Upload it first in Transactions, or switch to the auto-generated 2307.' });
+      }
+    }
+
+    // Attachment 2 (option B): ONE combined GENERATED BIR 2307 covering ALL
+    // selected invoices. If the caller passed edited 2307 data (from the
+    // Generate-2307 editor), fill the form with THAT.
+    if (attach2307 && !useSigned) try {
       let prepared = req.body?.data2307 && typeof req.body.data2307 === 'object' ? req.body.data2307 : null;
       if (!prepared) {
         const docs2307 = await fetch2307Docs({ ids });
@@ -930,7 +954,7 @@ router.delete('/:id', authenticate, requirePermission(PERM, FALLBACK), async (re
     if (!isAdminFinance(req.user) && (docIsApproved(d) || !['DRAFT', 'RETURNED', 'REJECTED', 'CANCELLED'].includes(d.status))) {
       return res.status(403).json({ error: 'This AP/AR record is locked after approval — only Finance or Admin can delete it.' });
     }
-    const orphanIds = [d.receiptId, d.proofOfPaymentId];
+    const orphanIds = [d.receiptId, d.proofOfPaymentId, d.signed2307Id];
     await prisma.approval.deleteMany({ where: { ledgerDocId: req.params.id } }).catch(() => {});
     await prisma.ledgerDoc.delete({ where: { id: req.params.id } });
     const { deleteReceiptsByIds } = require('../lib/receiptCleanup');

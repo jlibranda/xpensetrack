@@ -147,6 +147,7 @@ export default function TransactionsPage() {
           proofOfPayment: doc.proofOfPayment || null,
           paymentNotifiedAt: doc.paymentNotifiedAt || null,
           popEmailedAt: doc.popEmailedAt || null,
+          signed2307: doc.signed2307 || null,
           form2307EmailedAt: doc.form2307EmailedAt || null,
           orNumber: doc.docNumber || '',
         })));
@@ -299,6 +300,7 @@ export default function TransactionsPage() {
         subject: vendorMail.subject,       // undefined = use saved template
         message: vendorMail.message,       // undefined = use saved template
         data2307: vendorMail.data2307 || undefined, // edited via the 2307 editor
+        useSigned: vendorMail.kind === '2307' ? (vendorMail.useSigned ?? rows.some(r => vendorMail.ids.includes(r.id) && r.signed2307?.id)) : undefined,
         amounts: Object.fromEntries((vendorMail.lines || []).map(ln => [ln.id, { gross: Number(String(ln.gross ?? '').replace(/,/g, '')) || 0, wtax: Number(String(ln.wtax ?? '').replace(/,/g, '')) || 0 }])), // edited breakdown
       });
       toast.success(r.message || 'Sent to vendor');
@@ -324,6 +326,19 @@ export default function TransactionsPage() {
       }
     } finally { setNotifying(false); }
   };
+  const uploadSigned2307 = async (id, file) => {
+    if (!file) return;
+    setUploadingProof(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await api.post(`/ocr/ledger-signed-2307/${id}`, fd);
+      toast.success('Signed 2307 uploaded');
+      await load();
+    } catch (e2) { toast.error(e2.error || 'Upload failed'); }
+    finally { setUploadingProof(false); }
+  };
+
   const uploadProof = async (id, file) => {
     if (!file) return;
     setUploadingProof(true);
@@ -770,20 +785,42 @@ export default function TransactionsPage() {
               );
               })()}
 
-              {/* BIR 2307 to vendor — separate from POP; available once PROCESSED even without proof */}
+              {/* BIR 2307 to vendor — separate from POP; available once PROCESSED even without proof.
+                  Workflow: (optional) upload the SIGNED 2307 → email it to the client. */}
               {source === 'ledger' && e._isLedger && canProcess && ['PROCESSED','PAID'].includes(e.status) && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <p className="text-xs font-medium text-gray-700 mb-2">BIR 2307</p>
-                  {e.form2307EmailedAt ? (
-                    <p className="text-xs font-medium flex items-center gap-2" style={{ color: '#16a34a' }}>
-                      ✓ 2307 emailed to vendor · {new Date(e.form2307EmailedAt).toLocaleDateString()}
-                      <button onClick={() => openVendorMailSingle('2307', e)} className="underline text-[11px] text-gray-500 font-normal">resend</button>
-                    </p>
-                  ) : (
-                    <button onClick={() => openVendorMailSingle('2307', e)}
-                      className="text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200 hover:bg-gray-50">
-                      ✉️ Email 2307 to vendor
-                    </button>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    {e.signed2307?.id ? (
+                      <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#16a34a' }}>
+                        ✓ Signed 2307 on file{e.signed2307.filename ? ` · ${e.signed2307.filename}` : ''}
+                        <label className="underline text-[11px] text-gray-500 font-normal cursor-pointer">
+                          replace
+                          <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingProof}
+                            onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; uploadSigned2307(e.id, f); }} />
+                        </label>
+                      </span>
+                    ) : (
+                      <label className={`text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200 hover:bg-gray-50 cursor-pointer btn-like ${uploadingProof ? 'opacity-60 pointer-events-none' : ''}`}>
+                        {uploadingProof ? 'Uploading…' : '⬆ Upload signed 2307'}
+                        <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingProof}
+                          onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; uploadSigned2307(e.id, f); }} />
+                      </label>
+                    )}
+                    {e.form2307EmailedAt ? (
+                      <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#16a34a' }}>
+                        ✓ 2307 emailed to vendor · {new Date(e.form2307EmailedAt).toLocaleDateString()}
+                        <button onClick={() => openVendorMailSingle('2307', e)} className="underline text-[11px] text-gray-500 font-normal">resend</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => openVendorMailSingle('2307', e)}
+                        className="text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200 hover:bg-gray-50">
+                        ✉️ Email 2307 to vendor
+                      </button>
+                    )}
+                  </div>
+                  {!e.signed2307?.id && (
+                    <p className="text-[11px] text-gray-400">Upload the signed copy to email it to the client — or email the auto-generated 2307 right away.</p>
                   )}
                 </div>
               )}
@@ -1024,7 +1061,29 @@ export default function TransactionsPage() {
                 </div>
               </div>
               <p className="text-xs text-gray-500 mb-2">Invoice(s) in this {vendorMail.kind === '2307' ? '2307' : 'POP'} email — amounts are editable (email display only):</p>
-              {vendorMail.kind === '2307' && (
+              {vendorMail.kind === '2307' && (() => {
+                const selRows = rows.filter(r => vendorMail.ids.includes(r.id));
+                const signedCount = selRows.filter(r => r.signed2307?.id).length;
+                const useSigned = vendorMail.useSigned ?? (signedCount > 0); // default: signed kapag meron
+                return (
+                  <div className="mb-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-1.5 text-xs text-gray-700">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="attach2307mode" checked={useSigned} disabled={signedCount === 0}
+                          onChange={() => setVendorMail(m => ({ ...m, useSigned: true }))} />
+                        Uploaded SIGNED 2307 {signedCount > 0 ? `(${signedCount}/${selRows.length} invoice${selRows.length > 1 ? 's' : ''} have one)` : '(none uploaded)'}
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="attach2307mode" checked={!useSigned}
+                          onChange={() => setVendorMail(m => ({ ...m, useSigned: false }))} />
+                        Auto-generated 2307
+                      </label>
+                    </div>
+                    {useSigned ? (
+                      signedCount < selRows.length && selRows.length > 1 ? (
+                        <p className="text-[11px] text-amber-600">Only invoices with an uploaded signed 2307 will have a file attached — upload the missing ones in the BIR 2307 section first.</p>
+                      ) : null
+                    ) : (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-xs">
                   {vendorMail.edited2307 ? (
                     <span className="flex items-center gap-1.5 text-green-600 font-medium">
@@ -1041,7 +1100,10 @@ export default function TransactionsPage() {
                     </>
                   )}
                 </div>
-              )}
+                    )}
+                  </div>
+                );
+              })()}
               <div className="border border-gray-100 rounded-lg overflow-hidden mb-2">
                 <table className="w-full text-xs">
                   <thead><tr className="bg-gray-50 text-gray-500">

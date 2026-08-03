@@ -18,7 +18,7 @@ async function deleteReceiptsByIds(receiptIds) {
       where: {
         id: { in: ids },
         expenses: { none: {} }, ledgerDocs: { none: {} },
-        proofForExpenses: { none: {} }, proofForLedger: { none: {} },
+        proofForExpenses: { none: {} }, proofForLedger: { none: {} }, signed2307For: { none: {} },
       },
       select: { id: true, storageKey: true },
     });
@@ -46,8 +46,8 @@ async function receiptIdsForExpenses(expenseIds) {
 // Same for AP/AR ledger docs.
 async function receiptIdsForLedgerDocs(ledgerIds) {
   if (!ledgerIds?.length) return [];
-  const rows = await prisma.ledgerDoc.findMany({ where: { id: { in: ledgerIds } }, select: { receiptId: true, proofOfPaymentId: true } });
-  return rows.flatMap(r => [r.receiptId, r.proofOfPaymentId]);
+  const rows = await prisma.ledgerDoc.findMany({ where: { id: { in: ledgerIds } }, select: { receiptId: true, proofOfPaymentId: true, signed2307Id: true } });
+  return rows.flatMap(r => [r.receiptId, r.proofOfPaymentId, r.signed2307Id]);
 }
 
 module.exports = { deleteReceiptsByIds, receiptIdsForExpenses, receiptIdsForLedgerDocs };

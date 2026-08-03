@@ -77,7 +77,7 @@ router.get('/storage-stats', authenticate, requirePermission('manage_receipt_sto
     const total = await prisma.receipt.count();
     const withBytes = await prisma.receipt.count({ where: { NOT: { data: null } } });
     const inStorage = await prisma.receipt.count({ where: { NOT: { storageKey: null } } });
-    const orphans = await prisma.receipt.count({ where: { expenses: { none: {} }, ledgerDocs: { none: {} }, proofForExpenses: { none: {} }, proofForLedger: { none: {} } } });
+    const orphans = await prisma.receipt.count({ where: { expenses: { none: {} }, ledgerDocs: { none: {} }, proofForExpenses: { none: {} }, proofForLedger: { none: {} }, signed2307For: { none: {} } } });
     res.json({ total, withBytes, inStorage, orphans });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -92,12 +92,12 @@ router.post('/purge', authenticate, requirePermission('manage_receipt_storage'),
     if (confirm !== 'PURGE') return res.status(400).json({ error: "Type PURGE to confirm." });
     const storage = require('../lib/storage');
     const metas = await prisma.receipt.findMany({
-      select: { id: true, storageKey: true, data: false, expenses: { select: { status: true, createdAt: true } }, proofForExpenses: { select: { id: true } }, proofForLedger: { select: { id: true } } },
+      select: { id: true, storageKey: true, data: false, expenses: { select: { status: true, createdAt: true } }, proofForExpenses: { select: { id: true } }, proofForLedger: { select: { id: true } }, signed2307For: { select: { id: true } } },
     });
     let count = 0;
     for (const m of metas) {
       // NEVER purge proof-of-payment files — they are linked financial documents.
-      if ((m.proofForExpenses?.length || 0) > 0 || (m.proofForLedger?.length || 0) > 0) continue;
+      if ((m.proofForExpenses?.length || 0) > 0 || (m.proofForLedger?.length || 0) > 0 || (m.signed2307For?.length || 0) > 0) continue;
       // Only EXPENSE scan receipts are purged; AP/AR receipts and unattached
       // uploads are untouched (orphans have their own purge-orphans endpoint).
       const exp = (m.expenses && m.expenses[0]) || null;
@@ -125,10 +125,10 @@ router.delete('/:id', authenticate, async (req, res) => {
   try {
     const r = await prisma.receipt.findUnique({
       where: { id: req.params.id },
-      select: { id: true, storageKey: true, expenses: { select: { id: true } }, ledgerDocs: { select: { id: true } }, proofForExpenses: { select: { id: true } }, proofForLedger: { select: { id: true } } },
+      select: { id: true, storageKey: true, expenses: { select: { id: true } }, ledgerDocs: { select: { id: true } }, proofForExpenses: { select: { id: true } }, proofForLedger: { select: { id: true } }, signed2307For: { select: { id: true } } },
     });
     if (!r) return res.json({ deleted: false, reason: 'not_found' });
-    if ((r.expenses?.length || 0) > 0 || (r.ledgerDocs?.length || 0) > 0 || (r.proofForExpenses?.length || 0) > 0 || (r.proofForLedger?.length || 0) > 0) {
+    if ((r.expenses?.length || 0) > 0 || (r.ledgerDocs?.length || 0) > 0 || (r.proofForExpenses?.length || 0) > 0 || (r.proofForLedger?.length || 0) > 0 || (r.signed2307For?.length || 0) > 0) {
       return res.status(409).json({ deleted: false, reason: 'linked' });
     }
     if (r.storageKey) { try { require('../lib/storage').deleteObject(r.storageKey); } catch (e) {} }
@@ -146,7 +146,7 @@ router.post('/purge-orphans', authenticate, requirePermission('manage_receipt_st
       // A receipt is an orphan ONLY if NOTHING points to it — not as a scanned
       // receipt AND not as a proof of payment (expense or AP/AR). Proof-of-payment
       // files are linked documents, never orphans.
-      where: { expenses: { none: {} }, ledgerDocs: { none: {} }, proofForExpenses: { none: {} }, proofForLedger: { none: {} } },
+      where: { expenses: { none: {} }, ledgerDocs: { none: {} }, proofForExpenses: { none: {} }, proofForLedger: { none: {} }, signed2307For: { none: {} } },
       select: { id: true, storageKey: true },
     });
     let count = 0;

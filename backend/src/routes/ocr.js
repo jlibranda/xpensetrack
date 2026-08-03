@@ -541,6 +541,53 @@ router.post('/proof-of-payment/:expenseId', authenticate, requireRole('FINANCE',
 
 // Finance/Admin upload a proof-of-payment document for an AP/AR ledger doc.
 // Same storage + linking as the expense proof-of-payment above.
+
+// POST /api/ocr/ledger-signed-2307/:ledgerId — upload the SIGNED BIR 2307 file
+// (scanned/signed PDF or image) for an AP/AR document. Mirrors the proof-of-
+// payment flow: stored via the storage adapter, replace cleans up the old file.
+router.post('/ledger-signed-2307/:ledgerId', authenticate, requireRole('FINANCE', 'ADMIN'), upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const storage = require('../lib/storage');
+    const { buffer: storeBuf, mime: storeMime } = await compressForStorage(
+      req.file.buffer, req.file.mimetype, req.file.originalname
+    );
+    const receiptData = { mimeType: storeMime, filename: req.file.originalname || 'signed-2307' };
+    if (storage.storageConfigured()) {
+      try {
+        const ext = storeMime.includes('pdf') ? 'pdf' : 'jpg';
+        const key = `signed2307/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        await storage.putObject(key, storeBuf, storeMime);
+        receiptData.storageKey = key;
+      } catch (e) {
+        console.error('Signed-2307 storage upload failed, falling back to DB:', e.message);
+        receiptData.data = storeBuf;
+      }
+    } else {
+      receiptData.data = storeBuf;
+    }
+    const rec = await prisma.receipt.create({ data: receiptData });
+    const prevDoc = await prisma.ledgerDoc.findUnique({ where: { id: req.params.ledgerId }, select: { signed2307Id: true } });
+    const oldId = prevDoc?.signed2307Id || null;
+    await prisma.ledgerDoc.update({ where: { id: req.params.ledgerId }, data: { signed2307Id: rec.id } });
+    // Auto-cleanup: remove the replaced signed 2307 (storage object + DB row).
+    if (oldId && oldId !== rec.id) {
+      try {
+        const old = await prisma.receipt.findUnique({ where: { id: oldId } });
+        if (old?.storageKey && storage.storageConfigured()) {
+          try { await storage.deleteObject(old.storageKey); } catch (e) { console.error('Signed-2307 old-object delete failed:', e.message); }
+        }
+        await prisma.receipt.delete({ where: { id: oldId } });
+      } catch (e) { console.error('Signed-2307 old-receipt cleanup failed:', e.message); }
+    }
+    try {
+      const { logAudit } = require('../lib/audit');
+      await logAudit(req.user, 'SIGNED_2307_UPLOADED', { targetType: 'LEDGER', targetId: req.params.ledgerId, details: `Uploaded signed 2307 (${receiptData.filename})` });
+    } catch (e) { /* non-blocking */ }
+    res.json({ message: 'Signed 2307 uploaded', receiptId: rec.id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/ledger-proof-of-payment/:ledgerId', authenticate, requireRole('FINANCE', 'ADMIN'), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {

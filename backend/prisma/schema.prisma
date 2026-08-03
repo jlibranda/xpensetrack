@@ -109,6 +109,7 @@ model Receipt {
   proofForExpenses Expense[] @relation("ExpenseProofOfPayment")
   ledgerDocs LedgerDoc[]
   proofForLedger LedgerDoc[] @relation("LedgerProofOfPayment")
+  signed2307For    LedgerDoc[] @relation("LedgerSigned2307")
   createdAt DateTime  @default(now())
 }
 
@@ -155,6 +156,8 @@ model LedgerDoc {
   receipt       Receipt?  @relation(fields: [receiptId], references: [id])
   proofOfPaymentId String?
   proofOfPayment   Receipt? @relation("LedgerProofOfPayment", fields: [proofOfPaymentId], references: [id])
+  signed2307Id     String?
+  signed2307       Receipt? @relation("LedgerSigned2307", fields: [signed2307Id], references: [id])
   paymentNotifiedAt DateTime?
   popEmailedAt      DateTime?   // vendor was emailed the Proof of Payment
   form2307EmailedAt DateTime?   // vendor was emailed the BIR 2307
