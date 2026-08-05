@@ -156,6 +156,9 @@ model LedgerDoc {
   receipt       Receipt?  @relation(fields: [receiptId], references: [id])
   proofOfPaymentId String?
   proofOfPayment   Receipt? @relation("LedgerProofOfPayment", fields: [proofOfPaymentId], references: [id])
+  gen2307Gross     Float?     // last generated 2307: this doc's share of income total
+  gen2307Wtax      Float?     // last generated 2307: this doc's share of tax withheld
+  gen2307At        DateTime?  // when the 2307 was last generated for this doc
   signed2307Id     String?
   signed2307       Receipt? @relation("LedgerSigned2307", fields: [signed2307Id], references: [id])
   paymentNotifiedAt DateTime?

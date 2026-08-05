@@ -528,10 +528,38 @@ router.get('/2307/prepare', authenticate, requirePermission(PERM, FALLBACK), asy
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+
+// Record the generated-2307 totals on each covered invoice (proportional by
+// amount) so the vendor-email compose can prefill the EXACT same figures —
+// no AI needed: the signed copy is a print of this generated form.
+async function stamp2307Totals(ids, prepared) {
+  try {
+    if (!Array.isArray(ids) || !ids.length || !prepared) return;
+    const num = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
+    const rows = Array.isArray(prepared.rows) ? prepared.rows : [];
+    const gross = rows.reduce((t, r) => t + num(r.m1) + num(r.m2) + num(r.m3), 0);
+    const wtax = rows.reduce((t, r) => t + num(r.tax), 0);
+    if (!gross && !wtax) return;
+    const docs = await prisma.ledgerDoc.findMany({ where: { id: { in: ids } }, select: { id: true, amountPhp: true, amount: true } });
+    const amtSum = docs.reduce((t, d) => t + num(d.amountPhp ?? d.amount), 0);
+    const now = new Date();
+    for (const d of docs) {
+      const share = amtSum > 0 ? num(d.amountPhp ?? d.amount) / amtSum : (docs.length ? 1 / docs.length : 0);
+      await prisma.ledgerDoc.update({ where: { id: d.id }, data: {
+        gen2307Gross: +(gross * share).toFixed(2),
+        gen2307Wtax: +(wtax * share).toFixed(2),
+        gen2307At: now,
+      } }).catch(() => {});
+    }
+  } catch (e) { console.error('stamp2307Totals:', e.message); }
+}
+
 router.post('/2307/pdf', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
     const d = req.body || {};
     const buf = await fill2307Pdf(d);
+    // Track the generated figures on the covered invoices (fire-and-forget).
+    if (Array.isArray(d._ids) && d._ids.length) stamp2307Totals(d._ids, d);
     const vName = (d.payee?.name || 'payee').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
     res.setHeader('Content-Disposition', `attachment; filename="2307-${vName}-Q${d.scopeQuarter || ''}-${d.scopeYear || ''}.pdf"`);
     res.setHeader('Content-Type', 'application/pdf');
@@ -778,6 +806,7 @@ router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), as
         }
       }
       if (prepared) {
+        await stamp2307Totals(ids, prepared);
         // Guarantee the payee block is complete: backfill name from the invoice
         // vendor and address/TIN/ZIP from the Settings vendor record if blank.
         prepared.payee = prepared.payee || {};

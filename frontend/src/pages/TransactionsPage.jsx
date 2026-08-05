@@ -148,6 +148,9 @@ export default function TransactionsPage() {
           paymentNotifiedAt: doc.paymentNotifiedAt || null,
           popEmailedAt: doc.popEmailedAt || null,
           signed2307: doc.signed2307 || null,
+          gen2307Gross: doc.gen2307Gross ?? null,
+          gen2307Wtax: doc.gen2307Wtax ?? null,
+          gen2307At: doc.gen2307At || null,
           form2307EmailedAt: doc.form2307EmailedAt || null,
           orNumber: doc.docNumber || '',
         })));
@@ -263,7 +266,7 @@ export default function TransactionsPage() {
 
   const openVendorMailSingle = (kind, e) => setVendorMail({
     kind, vendorName: e.vendorName, ids: [e.id],
-    lines: [{ id: e.id, label: e.orNumber || e.title, gross: Number(e.amountPhp ?? e.amount ?? 0), wtax: wtaxLike2307(e), rate: Number(e.ewtRate ?? 0), origGross: Number(e.amountPhp ?? e.amount ?? 0), origWtax: wtaxLike2307(e) }],
+    lines: [(() => { const g = e.gen2307Gross != null ? Number(e.gen2307Gross) : Number(e.amountPhp ?? e.amount ?? 0); const w = e.gen2307Wtax != null ? Number(e.gen2307Wtax) : wtaxLike2307(e); return { id: e.id, label: e.orNumber || e.title, gross: g, wtax: w, rate: Number(e.ewtRate ?? 0), origGross: g, origWtax: w }; })()],
     cc: user?.email || '',
   });
 
@@ -279,37 +282,10 @@ export default function TransactionsPage() {
       kind,
       vendorName: picked[0].vendorName,
       ids: picked.map(r => r.id),
-      lines: picked.map(r => ({ id: r.id, label: r.orNumber || r.title, gross: Number(r.amountPhp ?? r.amount ?? 0), wtax: wtaxLike2307(r), rate: Number(r.ewtRate ?? 0), origGross: Number(r.amountPhp ?? r.amount ?? 0), origWtax: wtaxLike2307(r) })),
+      lines: picked.map(r => { const g = r.gen2307Gross != null ? Number(r.gen2307Gross) : Number(r.amountPhp ?? r.amount ?? 0); const w = r.gen2307Wtax != null ? Number(r.gen2307Wtax) : wtaxLike2307(r); return { id: r.id, label: r.orNumber || r.title, gross: g, wtax: w, rate: Number(r.ewtRate ?? 0), origGross: g, origWtax: w }; }),
       cc: user?.email || '', // auto-populated: ang nagpo-process ng email
     });
   };
-  // AI-read the uploaded signed 2307 → auto-populate Gross/WTax/Net in the
-  // compose (distributed proportionally per invoice). Values stay editable.
-  const [reading2307, setReading2307] = useState(false);
-  const readSigned2307 = async () => {
-    if (!vendorMail?.ids?.length) return;
-    setReading2307(true);
-    try {
-      const r = await api.post('/ledger/signed-2307-read', { ids: vendorMail.ids });
-      setVendorMail(m => {
-        const n = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
-        const ls = m.lines || [];
-        const grossSum = ls.reduce((t, l) => t + n(l.gross), 0);
-        const lines = ls.map(l => {
-          const share = grossSum > 0 ? n(l.gross) / grossSum : (ls.length ? 1 / ls.length : 0);
-          return { ...l, gross: +(r.gross * share).toFixed(2), wtax: +(r.wtax * share).toFixed(2) };
-        });
-        return { ...m, lines };
-      });
-      // Remember WHICH signed files were read — kapag na-replace ang file
-      // pagkatapos, magpapakita ng paalala na i-refresh ang pagbasa.
-      const readSig = rows.filter(x => vendorMail.ids.includes(x.id)).map(x => x.signed2307?.id || '-').sort().join(',');
-      setVendorMail(m => ({ ...m, read2307Sig: readSig }));
-      toast.success(`Read from signed 2307 — Gross ${format(r.gross)} · WTax ${format(r.wtax)} · Net ${format(r.net)}`);
-    } catch (e2) { toast.error(e2.error || 'Could not read the signed 2307'); }
-    finally { setReading2307(false); }
-  };
-
   const sendVendorMail = async () => {
     if (!vendorMail?.ids?.length) return;
     setVendorMailSending(true);
@@ -451,6 +427,7 @@ export default function TransactionsPage() {
       const data = await api.get(`/ledger/2307/prepare?ids=${encodeURIComponent(selected.join(','))}`);
       if (!data.rows || !data.rows.length) data.rows = [{ desc: '', atc: '', rate: '', m1: 0, m2: 0, m3: 0, tax: 0 }];
       const first = visibleRows.find(r => selected.includes(r.id)) || {};
+      data._ids = [...selected]; // backend stamps these docs' gen-2307 totals on PDF generate
       setGen2307Data(data);
       setGen2307(first); // open only once data is ready → form shows directly, no intermediate window
     } catch (e) { toast.error(e?.response?.data?.error || 'Cannot prepare 2307'); }
@@ -1035,6 +1012,7 @@ export default function TransactionsPage() {
           if (!vendorMail.ids.length) return;
           try {
             const data = await api.get(`/ledger/2307/prepare?ids=${encodeURIComponent(vendorMail.ids.join(','))}`);
+            data._ids = [...vendorMail.ids];
             setGen2307({ _forEmail: true, vendorName: vendorMail.vendorName });
             setGen2307Data(data);
           } catch (e2) { toast.error(e2.error || 'Could not prepare the 2307'); }
@@ -1108,17 +1086,16 @@ export default function TransactionsPage() {
                     </div>
                     {useSigned ? (
                       <div className="flex flex-wrap items-center gap-2">
-                        <button onClick={readSigned2307} disabled={reading2307 || signedCount === 0}
-                          className="px-2.5 py-1 rounded-lg border border-gray-200 hover:bg-gray-50 text-[11px] disabled:opacity-50">
-                          {reading2307 ? 'Reading…' : '🔍 Read amounts from signed 2307'}
-                        </button>
-                        <span className="text-[11px] text-gray-400">AI-fills Gross/WTax/Net below from the uploaded file — still editable.</span>
                         {(() => {
-                          const curSig = selRows.map(x => x.signed2307?.id || '-').sort().join(',');
-                          const stale = vendorMail.read2307Sig && vendorMail.read2307Sig !== curSig;
-                          return stale ? (
-                            <p className="text-[11px] text-amber-600 w-full font-medium">⚠ The signed 2307 was replaced since the last read — click "Read amounts" again to refresh the figures below.</p>
-                          ) : null;
+                          // No AI needed: the figures below come from the LAST
+                          // GENERATED 2307 for these invoices — the signed copy
+                          // is a print of that same form, so the amounts match.
+                          const stamped = selRows.filter(x => x.gen2307Gross != null);
+                          if (stamped.length === selRows.length && selRows.length > 0) {
+                            const latest = stamped.map(x => x.gen2307At).filter(Boolean).sort().pop();
+                            return <p className="text-[11px] text-green-600 w-full">✓ Gross/WTax below are from your generated 2307{latest ? ` (${new Date(latest).toLocaleDateString()})` : ''} — they match the signed copy. Still editable.</p>;
+                          }
+                          return <p className="text-[11px] text-amber-600 w-full">Tip: figures below are computed from the invoice records. To make them match the signed copy exactly, open "Generate 2307" for these invoice(s) once — the system remembers the generated figures.</p>;
                         })()}
                         {signedCount < selRows.length && selRows.length > 1 && (
                           <p className="text-[11px] text-amber-600 w-full">Only invoices with an uploaded signed 2307 will have a file attached — upload the missing ones in the BIR 2307 section first.</p>
