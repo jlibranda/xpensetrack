@@ -301,6 +301,10 @@ export default function TransactionsPage() {
         });
         return { ...m, lines };
       });
+      // Remember WHICH signed files were read — kapag na-replace ang file
+      // pagkatapos, magpapakita ng paalala na i-refresh ang pagbasa.
+      const readSig = rows.filter(x => vendorMail.ids.includes(x.id)).map(x => x.signed2307?.id || '-').sort().join(',');
+      setVendorMail(m => ({ ...m, read2307Sig: readSig }));
       toast.success(`Read from signed 2307 — Gross ${format(r.gross)} · WTax ${format(r.wtax)} · Net ${format(r.net)}`);
     } catch (e2) { toast.error(e2.error || 'Could not read the signed 2307'); }
     finally { setReading2307(false); }
@@ -1109,6 +1113,13 @@ export default function TransactionsPage() {
                           {reading2307 ? 'Reading…' : '🔍 Read amounts from signed 2307'}
                         </button>
                         <span className="text-[11px] text-gray-400">AI-fills Gross/WTax/Net below from the uploaded file — still editable.</span>
+                        {(() => {
+                          const curSig = selRows.map(x => x.signed2307?.id || '-').sort().join(',');
+                          const stale = vendorMail.read2307Sig && vendorMail.read2307Sig !== curSig;
+                          return stale ? (
+                            <p className="text-[11px] text-amber-600 w-full font-medium">⚠ The signed 2307 was replaced since the last read — click "Read amounts" again to refresh the figures below.</p>
+                          ) : null;
+                        })()}
                         {signedCount < selRows.length && selRows.length > 1 && (
                           <p className="text-[11px] text-amber-600 w-full">Only invoices with an uploaded signed 2307 will have a file attached — upload the missing ones in the BIR 2307 section first.</p>
                         )}
