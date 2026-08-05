@@ -283,6 +283,29 @@ export default function TransactionsPage() {
       cc: user?.email || '', // auto-populated: ang nagpo-process ng email
     });
   };
+  // AI-read the uploaded signed 2307 → auto-populate Gross/WTax/Net in the
+  // compose (distributed proportionally per invoice). Values stay editable.
+  const [reading2307, setReading2307] = useState(false);
+  const readSigned2307 = async () => {
+    if (!vendorMail?.ids?.length) return;
+    setReading2307(true);
+    try {
+      const r = await api.post('/ledger/signed-2307-read', { ids: vendorMail.ids });
+      setVendorMail(m => {
+        const n = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
+        const ls = m.lines || [];
+        const grossSum = ls.reduce((t, l) => t + n(l.gross), 0);
+        const lines = ls.map(l => {
+          const share = grossSum > 0 ? n(l.gross) / grossSum : (ls.length ? 1 / ls.length : 0);
+          return { ...l, gross: +(r.gross * share).toFixed(2), wtax: +(r.wtax * share).toFixed(2) };
+        });
+        return { ...m, lines };
+      });
+      toast.success(`Read from signed 2307 — Gross ${format(r.gross)} · WTax ${format(r.wtax)} · Net ${format(r.net)}`);
+    } catch (e2) { toast.error(e2.error || 'Could not read the signed 2307'); }
+    finally { setReading2307(false); }
+  };
+
   const sendVendorMail = async () => {
     if (!vendorMail?.ids?.length) return;
     setVendorMailSending(true);
@@ -1080,9 +1103,16 @@ export default function TransactionsPage() {
                       </label>
                     </div>
                     {useSigned ? (
-                      signedCount < selRows.length && selRows.length > 1 ? (
-                        <p className="text-[11px] text-amber-600">Only invoices with an uploaded signed 2307 will have a file attached — upload the missing ones in the BIR 2307 section first.</p>
-                      ) : null
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button onClick={readSigned2307} disabled={reading2307 || signedCount === 0}
+                          className="px-2.5 py-1 rounded-lg border border-gray-200 hover:bg-gray-50 text-[11px] disabled:opacity-50">
+                          {reading2307 ? 'Reading…' : '🔍 Read amounts from signed 2307'}
+                        </button>
+                        <span className="text-[11px] text-gray-400">AI-fills Gross/WTax/Net below from the uploaded file — still editable.</span>
+                        {signedCount < selRows.length && selRows.length > 1 && (
+                          <p className="text-[11px] text-amber-600 w-full">Only invoices with an uploaded signed 2307 will have a file attached — upload the missing ones in the BIR 2307 section first.</p>
+                        )}
+                      </div>
                     ) : (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-xs">
                   {vendorMail.edited2307 ? (

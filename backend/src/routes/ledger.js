@@ -543,6 +543,69 @@ router.post('/2307/pdf', authenticate, requirePermission(PERM, FALLBACK), async 
 // POST /api/ledger/email-vendor — email the vendor their Proof of Payment (POP)
 // and a combined BIR 2307 PDF covering one or MORE processed invoices.
 // Body: { ids: [ledgerDocId, ...] }  — all docs must belong to the same vendor.
+
+// POST /api/ledger/signed-2307-read — AI-read the uploaded SIGNED 2307 file(s)
+// and return the totals so the email compose can auto-populate Gross/WTax/Net.
+// Body: { ids: [ledgerDocId,...] } — reads each DISTINCT signed file and sums.
+router.post('/signed-2307-read', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
+  try {
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) return res.status(400).json({ error: 'AI reading requires ANTHROPIC_API_KEY on the server. Enter the amounts manually, or set the key in Railway.' });
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'Select invoice(s) first.' });
+    const docs = await prisma.ledgerDoc.findMany({
+      where: { id: { in: ids } },
+      include: { signed2307: { select: { id: true, storageKey: true, data: true, mimeType: true, filename: true } } },
+    });
+    const storage = require('../lib/storage');
+    const seen = new Set();
+    let gross = 0, wtax = 0, files = 0;
+    for (const d of docs) {
+      const p = d.signed2307;
+      if (!p || seen.has(p.id)) continue;
+      seen.add(p.id);
+      let buffer = null;
+      if (p.storageKey && storage.storageConfigured()) {
+        try { const got = await storage.getObject(p.storageKey); buffer = got.buffer; } catch (e) { console.error('Signed-2307 fetch failed:', e.message); }
+      }
+      if (!buffer && p.data) buffer = Buffer.from(p.data);
+      if (!buffer) continue;
+      const base64 = buffer.toString('base64');
+      const mime = p.mimeType || 'image/jpeg';
+      const isPdf = mime.includes('pdf');
+      const mediaBlock = isPdf
+        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+        : { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } };
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 300,
+          messages: [{ role: 'user', content: [
+            mediaBlock,
+            { type: 'text', text: 'This is a Philippine BIR Form 2307 (Certificate of Creditable Tax Withheld at Source). Read the totals row of Part III. Return ONLY a JSON object: {"incomeTotal":123.45,"taxWithheld":12.34}. incomeTotal = the grand TOTAL of income payments (the "Total" column total). taxWithheld = the total of "Tax Withheld for the Quarter". Numbers only (no commas/currency). Use null if unreadable. JSON only, no markdown.' },
+          ] }],
+        }),
+      });
+      if (!response.ok) { console.error('Anthropic 2307 read error:', await response.text()); continue; }
+      const aiData = await response.json();
+      const text = aiData.content?.[0]?.text?.trim() || '';
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) continue;
+      try {
+        const parsed = JSON.parse(match[0]);
+        const num = (x) => Number(String(x ?? '').replace(/[^0-9.\-]/g, '')) || 0;
+        if (parsed.incomeTotal != null) gross += num(parsed.incomeTotal);
+        if (parsed.taxWithheld != null) wtax += num(parsed.taxWithheld);
+        files++;
+      } catch (e) { /* skip unparseable */ }
+    }
+    if (!files) return res.status(400).json({ error: 'Could not read the signed 2307 file(s) — the scan may be unclear. Enter the amounts manually.' });
+    res.json({ gross: +gross.toFixed(2), wtax: +wtax.toFixed(2), net: +(gross - wtax).toFixed(2), files });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/email-vendor', authenticate, requirePermission(PERM, FALLBACK), async (req, res) => {
   try {
     const { ids } = req.body || {};
