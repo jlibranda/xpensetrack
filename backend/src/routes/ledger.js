@@ -560,6 +560,7 @@ router.post('/signed-2307-read', authenticate, requirePermission(PERM, FALLBACK)
     const storage = require('../lib/storage');
     const seen = new Set();
     let gross = 0, wtax = 0, files = 0;
+    const readErrors = [];
     for (const d of docs) {
       const p = d.signed2307;
       if (!p || seen.has(p.id)) continue;
@@ -576,12 +577,15 @@ router.post('/signed-2307-read', authenticate, requirePermission(PERM, FALLBACK)
       const mediaBlock = isPdf
         ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
         : { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } };
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // Try the stronger model first; fall back to the one the receipt scanner
+      // already uses (guaranteed available on this API key).
+      let response = null, lastApiErr = '';
+      for (const model of ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']) {
+        response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
-          // Sonnet reads dense government forms far more reliably than Haiku.
-          model: 'claude-sonnet-4-6',
+          model,
           max_tokens: 1000,
           messages: [{ role: 'user', content: [
             mediaBlock,
@@ -609,7 +613,12 @@ Return ONLY this JSON (no markdown):
           ] }],
         }),
       });
-      if (!response.ok) { console.error('Anthropic 2307 read error:', await response.text()); continue; }
+        if (response.ok) break;
+        lastApiErr = await response.text().catch(() => '');
+        console.error(`Anthropic 2307 read error (${model}):`, lastApiErr);
+        response = null;
+      }
+      if (!response) { readErrors.push(lastApiErr.slice(0, 200)); continue; }
       const aiData = await response.json();
       const text = aiData.content?.[0]?.text?.trim() || '';
       const match = text.match(/\{[\s\S]*\}/);
@@ -629,12 +638,15 @@ Return ONLY this JSON (no markdown):
           if (!g || Math.abs(g - rowGross) > 1) g = rowGross;
           if (!t || Math.abs(t - rowTax) > 1) t = rowTax;
         }
-        // Sanity: tax cannot exceed income — likely a column mix-up; swap-proof.
-        if (g && t && t > g) { const tmp = t; t = Math.min(t, g); if (tmp > g && rowsArr.length) { g = Math.max(rowGross, g); t = rowTax || t; } }
+        // Sanity: tax cannot exceed income — likely a column mix-up; prefer row sums.
+        if (g && t && t > g && rowsArr.length) { g = rowGross || g; t = rowTax || 0; }
         if (g || t) { gross += g; wtax += t; files++; }
       } catch (e) { /* skip unparseable */ }
     }
-    if (!files) return res.status(400).json({ error: 'Could not read the signed 2307 file(s) — the scan may be unclear. Enter the amounts manually.' });
+    if (!files) {
+      const hint = readErrors.length ? ` (API: ${readErrors[0]})` : ' — the scan may be unclear.';
+      return res.status(400).json({ error: `Could not read the signed 2307 file(s)${hint} Enter the amounts manually.` });
+    }
     res.json({ gross: +gross.toFixed(2), wtax: +wtax.toFixed(2), net: +(gross - wtax).toFixed(2), files });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
