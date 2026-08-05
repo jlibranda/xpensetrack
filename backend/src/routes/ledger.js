@@ -540,16 +540,23 @@ async function stamp2307Totals(ids, prepared) {
     const gross = rows.reduce((t, r) => t + num(r.m1) + num(r.m2) + num(r.m3), 0);
     const wtax = rows.reduce((t, r) => t + num(r.tax), 0);
     if (!gross && !wtax) return;
-    const docs = await prisma.ledgerDoc.findMany({ where: { id: { in: ids } }, select: { id: true, amountPhp: true, amount: true } });
+    const docs = await prisma.ledgerDoc.findMany({ where: { id: { in: ids } }, select: { id: true, amountPhp: true, amount: true, gen2307Gross: true, gen2307Wtax: true, gen2307At: true } });
     const amtSum = docs.reduce((t, d) => t + num(d.amountPhp ?? d.amount), 0);
     const now = new Date();
     for (const d of docs) {
       const share = amtSum > 0 ? num(d.amountPhp ?? d.amount) / amtSum : (docs.length ? 1 / docs.length : 0);
-      await prisma.ledgerDoc.update({ where: { id: d.id }, data: {
-        gen2307Gross: +(gross * share).toFixed(2),
-        gen2307Wtax: +(wtax * share).toFixed(2),
-        gen2307At: now,
-      } }).catch(() => {});
+      const newGross = +(gross * share).toFixed(2);
+      const newWtax = +(wtax * share).toFixed(2);
+      const data = { gen2307Gross: newGross, gen2307Wtax: newWtax, gen2307At: now };
+      // Keep ONE previous version for revert: shift current → previous, but only
+      // when the figures actually changed (re-generating identical numbers
+      // shouldn't waste the revert slot). Anything older is dropped.
+      if (d.gen2307Gross != null && (Math.abs(d.gen2307Gross - newGross) > 0.009 || Math.abs((d.gen2307Wtax || 0) - newWtax) > 0.009)) {
+        data.gen2307PrevGross = d.gen2307Gross;
+        data.gen2307PrevWtax = d.gen2307Wtax;
+        data.gen2307PrevAt = d.gen2307At;
+      }
+      await prisma.ledgerDoc.update({ where: { id: d.id }, data }).catch(() => {});
     }
   } catch (e) { console.error('stamp2307Totals:', e.message); }
 }
@@ -558,8 +565,9 @@ router.post('/2307/pdf', authenticate, requirePermission(PERM, FALLBACK), async 
   try {
     const d = req.body || {};
     const buf = await fill2307Pdf(d);
-    // Track the generated figures on the covered invoices (fire-and-forget).
-    if (Array.isArray(d._ids) && d._ids.length) stamp2307Totals(d._ids, d);
+    // Track the generated figures on the covered invoices BEFORE responding,
+    // so an immediately-opened Email 2307 already sees the fresh memory.
+    if (Array.isArray(d._ids) && d._ids.length) await stamp2307Totals(d._ids, d);
     const vName = (d.payee?.name || 'payee').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
     res.setHeader('Content-Disposition', `attachment; filename="2307-${vName}-Q${d.scopeQuarter || ''}-${d.scopeYear || ''}.pdf"`);
     res.setHeader('Content-Type', 'application/pdf');

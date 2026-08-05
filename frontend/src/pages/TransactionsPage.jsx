@@ -151,6 +151,9 @@ export default function TransactionsPage() {
           gen2307Gross: doc.gen2307Gross ?? null,
           gen2307Wtax: doc.gen2307Wtax ?? null,
           gen2307At: doc.gen2307At || null,
+          gen2307PrevGross: doc.gen2307PrevGross ?? null,
+          gen2307PrevWtax: doc.gen2307PrevWtax ?? null,
+          gen2307PrevAt: doc.gen2307PrevAt || null,
           form2307EmailedAt: doc.form2307EmailedAt || null,
           orNumber: doc.docNumber || '',
         })));
@@ -405,7 +408,8 @@ export default function TransactionsPage() {
       const vn = (gen2307Data.payee?.name || 'payee').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
       a.download = `2307-${vn}-Q${gen2307Data.scopeQuarter || ''}-${gen2307Data.scopeYear || ''}.pdf`;
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      toast.success('2307 generated');
+      toast.success('2307 generated — figures remembered for the vendor email');
+      load(); // refresh rows so Email 2307 immediately prefills from this generate
     } catch (e) { toast.error('Failed to generate PDF'); }
   };
   const setRow2307 = (i, patch) => setGen2307Data(d => ({ ...d, rows: d.rows.map((r, idx) => {
@@ -1091,9 +1095,36 @@ export default function TransactionsPage() {
                           // GENERATED 2307 for these invoices — the signed copy
                           // is a print of that same form, so the amounts match.
                           const stamped = selRows.filter(x => x.gen2307Gross != null);
+                          const hasPrev = selRows.some(x => x.gen2307PrevGross != null);
+                          const usingPrev = vendorMail.useGenPrev === true;
+                          const applyGen = (prev) => setVendorMail(m => ({
+                            ...m,
+                            useGenPrev: prev,
+                            lines: (m.lines || []).map(l => {
+                              const r0 = selRows.find(x => x.id === l.id);
+                              if (!r0) return l;
+                              const g = prev ? r0.gen2307PrevGross : r0.gen2307Gross;
+                              const w = prev ? r0.gen2307PrevWtax : r0.gen2307Wtax;
+                              if (g == null) return l; // walang version na iyon ang invoice na ito
+                              return { ...l, gross: Number(g), wtax: Number(w || 0) };
+                            }),
+                          }));
                           if (stamped.length === selRows.length && selRows.length > 0) {
                             const latest = stamped.map(x => x.gen2307At).filter(Boolean).sort().pop();
-                            return <p className="text-[11px] text-green-600 w-full">✓ Gross/WTax below are from your generated 2307{latest ? ` (${new Date(latest).toLocaleDateString()})` : ''} — they match the signed copy. Still editable.</p>;
+                            const prevAt = selRows.map(x => x.gen2307PrevAt).filter(Boolean).sort().pop();
+                            return (
+                              <div className="w-full">
+                                <p className="text-[11px] text-green-600">
+                                  ✓ Gross/WTax below are from your generated 2307{latest && !usingPrev ? ` (${new Date(latest).toLocaleDateString()})` : ''}{usingPrev ? ` — PREVIOUS version${prevAt ? ` (${new Date(prevAt).toLocaleDateString()})` : ''}` : ''} — they match the signed copy. Still editable.
+                                </p>
+                                {hasPrev && (
+                                  <button onClick={() => applyGen(!usingPrev)}
+                                    className="underline text-[11px] text-gray-500 mt-0.5">
+                                    {usingPrev ? '↪ Use latest figures' : `↩ Revert to previous figures${prevAt ? ` (${new Date(prevAt).toLocaleDateString()})` : ''}`}
+                                  </button>
+                                )}
+                              </div>
+                            );
                           }
                           return <p className="text-[11px] text-amber-600 w-full">Tip: figures below are computed from the invoice records. To make them match the signed copy exactly, open "Generate 2307" for these invoice(s) once — the system remembers the generated figures.</p>;
                         })()}
