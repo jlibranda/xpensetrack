@@ -580,11 +580,32 @@ router.post('/signed-2307-read', authenticate, requirePermission(PERM, FALLBACK)
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 300,
+          // Sonnet reads dense government forms far more reliably than Haiku.
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1000,
           messages: [{ role: 'user', content: [
             mediaBlock,
-            { type: 'text', text: 'This is a Philippine BIR Form 2307 (Certificate of Creditable Tax Withheld at Source). Read the totals row of Part III. Return ONLY a JSON object: {"incomeTotal":123.45,"taxWithheld":12.34}. incomeTotal = the grand TOTAL of income payments (the "Total" column total). taxWithheld = the total of "Tax Withheld for the Quarter". Numbers only (no commas/currency). Use null if unreadable. JSON only, no markdown.' },
+            { type: 'text', text: `This is a Philippine BIR Form 2307 (Certificate of Creditable Tax Withheld at Source).
+
+FORM LAYOUT — Part III "Details of Monthly Income Payments and Taxes Withheld" is a grid with these columns, left to right:
+1. Income Payments Subject to Expanded Withholding Tax (description)
+2. ATC (code like WC160, WI010)
+3. 1st Month of the Quarter (amount)
+4. 2nd Month of the Quarter (amount)
+5. 3rd Month of the Quarter (amount)
+6. Total (amount = sum of the three months)
+7. Tax Withheld for the Quarter (amount)
+
+TASK — read ONLY the FIRST section (Income Payments Subject to Expanded Withholding Tax) and its "Total" row. IGNORE the second section ("Money Payments Subject to Withholding of Business Tax") entirely.
+
+Return ONLY this JSON (no markdown):
+{"rows":[{"atc":"","total":123.45,"tax":12.34}],"incomeTotal":123.45,"taxWithheld":12.34}
+
+- rows: one entry per filled data row — "total" is column 6, "tax" is column 7 of that row.
+- incomeTotal: the value in column 6 of the "Total" row (grand total of income payments).
+- taxWithheld: the value in column 7 of the "Total" row.
+- Parse numbers carefully: "1,234.56" means 1234.56. Do not confuse column 6 with column 7 — the tax is always the RIGHTMOST column and is much smaller than the income.
+- Use null for anything unreadable. JSON only.` },
           ] }],
         }),
       });
@@ -596,9 +617,21 @@ router.post('/signed-2307-read', authenticate, requirePermission(PERM, FALLBACK)
       try {
         const parsed = JSON.parse(match[0]);
         const num = (x) => Number(String(x ?? '').replace(/[^0-9.\-]/g, '')) || 0;
-        if (parsed.incomeTotal != null) gross += num(parsed.incomeTotal);
-        if (parsed.taxWithheld != null) wtax += num(parsed.taxWithheld);
-        files++;
+        // Self-check: compare the stated Total row vs the sum of the data rows.
+        // If they disagree (or the Total row is blank), trust the ROW SUMS —
+        // per-cell reads are more reliable than a single grand-total cell.
+        const rowsArr = Array.isArray(parsed.rows) ? parsed.rows : [];
+        const rowGross = rowsArr.reduce((t, r) => t + num(r.total), 0);
+        const rowTax = rowsArr.reduce((t, r) => t + num(r.tax), 0);
+        let g = num(parsed.incomeTotal);
+        let t = num(parsed.taxWithheld);
+        if (rowsArr.length) {
+          if (!g || Math.abs(g - rowGross) > 1) g = rowGross;
+          if (!t || Math.abs(t - rowTax) > 1) t = rowTax;
+        }
+        // Sanity: tax cannot exceed income — likely a column mix-up; swap-proof.
+        if (g && t && t > g) { const tmp = t; t = Math.min(t, g); if (tmp > g && rowsArr.length) { g = Math.max(rowGross, g); t = rowTax || t; } }
+        if (g || t) { gross += g; wtax += t; files++; }
       } catch (e) { /* skip unparseable */ }
     }
     if (!files) return res.status(400).json({ error: 'Could not read the signed 2307 file(s) — the scan may be unclear. Enter the amounts manually.' });
