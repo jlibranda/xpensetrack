@@ -1107,19 +1107,22 @@ export default function TransactionsPage() {
                               return { ...l, gross: Number(g), wtax: Number(w || 0) };
                             }),
                           }));
-                          if (stamped.length === selRows.length && selRows.length > 0) {
+                          if (stamped.length > 0) {
                             const latest = stamped.map(x => x.gen2307At).filter(Boolean).sort().pop();
                             const prevAt = selRows.map(x => x.gen2307PrevAt).filter(Boolean).sort().pop();
                             return (
-                              <div className="w-full">
-                                <p className="text-[11px] text-green-600">
-                                  ✓ Gross/WTax below are from your generated 2307{latest && !usingPrev ? ` (${new Date(latest).toLocaleDateString()})` : ''}{usingPrev ? ` — PREVIOUS version${prevAt ? ` (${new Date(prevAt).toLocaleDateString()})` : ''}` : ''} — they match the signed copy. Still editable.
+                              <div className="w-full mb-1 px-2.5 py-2 rounded-lg border border-green-100 bg-green-50/60">
+                                <p className="text-[11px] text-green-700">
+                                  ✓ Figures below are from your generated 2307{latest && !usingPrev ? ` (latest — ${new Date(latest).toLocaleDateString()})` : ''}{usingPrev ? ` — PREVIOUS version${prevAt ? ` (${new Date(prevAt).toLocaleDateString()})` : ''}` : ''}. Still editable.
+                                  {stamped.length < selRows.length ? ' (Some selected invoices have no generated 2307 yet — those use computed figures.)' : ''}
                                 </p>
-                                {hasPrev && (
+                                {hasPrev ? (
                                   <button onClick={() => applyGen(!usingPrev)}
-                                    className="underline text-[11px] text-gray-500 mt-0.5">
-                                    {usingPrev ? '↪ Use latest figures' : `↩ Revert to previous figures${prevAt ? ` (${new Date(prevAt).toLocaleDateString()})` : ''}`}
+                                    className={`mt-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium ${usingPrev ? 'border-green-200 bg-white text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
+                                    {usingPrev ? '↪ Use LATEST figures' : `↩ Revert to PREVIOUS figures${prevAt ? ` (${new Date(prevAt).toLocaleDateString()})` : ''}`}
                                   </button>
+                                ) : (
+                                  <p className="text-[10px] text-gray-400 mt-0.5">No previous version yet — a revert button appears here after you re-generate the 2307 with different amounts.</p>
                                 )}
                               </div>
                             );
