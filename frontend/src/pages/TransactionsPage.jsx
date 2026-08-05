@@ -336,6 +336,7 @@ export default function TransactionsPage() {
   const uploadSigned2307 = async (id, file) => {
     if (!file) return;
     setUploadingSigned(true); // separate state — must NOT light up the proof-of-payment button
+    toast.info('Uploading signed 2307…'); // instant feedback kahit mabilis ang upload
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -799,6 +800,11 @@ export default function TransactionsPage() {
               {source === 'ledger' && e._isLedger && canProcess && ['PROCESSED','PAID'].includes(e.status) && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <p className="text-xs font-medium text-gray-700 mb-2">BIR 2307</p>
+                  {uploadingSigned && (
+                    <div className="mb-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600 animate-pulse">
+                      ⏳ Uploading signed 2307… please wait
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     {e.signed2307?.id ? (
                       <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#16a34a' }}>
