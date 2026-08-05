@@ -803,11 +803,15 @@ export default function TransactionsPage() {
                     {e.signed2307?.id ? (
                       <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#16a34a' }}>
                         ✓ Signed 2307 on file{e.signed2307.filename ? ` · ${e.signed2307.filename}` : ''}
-                        <label className="underline text-[11px] text-gray-500 font-normal cursor-pointer">
-                          replace
-                          <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingSigned}
-                            onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; uploadSigned2307(e.id, f); }} />
-                        </label>
+                        {uploadingSigned ? (
+                          <span className="text-[11px] text-gray-500 font-normal animate-pulse">⏳ Replacing…</span>
+                        ) : (
+                          <label className="underline text-[11px] text-gray-500 font-normal cursor-pointer">
+                            replace
+                            <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingSigned}
+                              onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; uploadSigned2307(e.id, f); }} />
+                          </label>
+                        )}
                       </span>
                     ) : (
                       <label className={`text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200 hover:bg-gray-50 cursor-pointer btn-like ${uploadingSigned ? 'opacity-60 pointer-events-none' : ''}`}>
