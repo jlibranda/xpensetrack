@@ -332,9 +332,10 @@ export default function TransactionsPage() {
       }
     } finally { setNotifying(false); }
   };
+  const [uploadingSigned, setUploadingSigned] = useState(false);
   const uploadSigned2307 = async (id, file) => {
     if (!file) return;
-    setUploadingProof(true);
+    setUploadingSigned(true); // separate state — must NOT light up the proof-of-payment button
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -342,7 +343,7 @@ export default function TransactionsPage() {
       toast.success('Signed 2307 uploaded');
       await load();
     } catch (e2) { toast.error(e2.error || 'Upload failed'); }
-    finally { setUploadingProof(false); }
+    finally { setUploadingSigned(false); }
   };
 
   const uploadProof = async (id, file) => {
@@ -804,14 +805,14 @@ export default function TransactionsPage() {
                         ✓ Signed 2307 on file{e.signed2307.filename ? ` · ${e.signed2307.filename}` : ''}
                         <label className="underline text-[11px] text-gray-500 font-normal cursor-pointer">
                           replace
-                          <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingProof}
+                          <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingSigned}
                             onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; uploadSigned2307(e.id, f); }} />
                         </label>
                       </span>
                     ) : (
-                      <label className={`text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200 hover:bg-gray-50 cursor-pointer btn-like ${uploadingProof ? 'opacity-60 pointer-events-none' : ''}`}>
-                        {uploadingProof ? 'Uploading…' : '⬆ Upload signed 2307'}
-                        <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingProof}
+                      <label className={`text-xs px-3 py-1.5 rounded-lg font-medium border border-gray-200 hover:bg-gray-50 cursor-pointer btn-like ${uploadingSigned ? 'opacity-60 pointer-events-none' : ''}`}>
+                        {uploadingSigned ? 'Uploading…' : '⬆ Upload signed 2307'}
+                        <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingSigned}
                           onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; uploadSigned2307(e.id, f); }} />
                       </label>
                     )}
@@ -946,7 +947,7 @@ export default function TransactionsPage() {
                   </div>
 
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => { if (gen2307._forEmail) { setGen2307(null); setGen2307Data(null); } else setGen2307Data(null); }} className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50">← Back</button>
+                    <button onClick={() => { setGen2307(null); setGen2307Data(null); }} className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50">← Back</button>
                     {gen2307._forEmail ? (
                       <button onClick={() => {
                         const { _forEmail, ...clean } = d;
