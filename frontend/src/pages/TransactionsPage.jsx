@@ -1088,8 +1088,6 @@ export default function TransactionsPage() {
                         Auto-generated 2307
                       </label>
                     </div>
-                    {useSigned ? (
-                      <div className="flex flex-wrap items-center gap-2">
                         {(() => {
                           // No AI needed: the figures below come from the LAST
                           // GENERATED 2307 for these invoices — the signed copy
@@ -1128,6 +1126,8 @@ export default function TransactionsPage() {
                           }
                           return <p className="text-[11px] text-amber-600 w-full">Tip: figures below are computed from the invoice records. To make them match the signed copy exactly, open "Generate 2307" for these invoice(s) once — the system remembers the generated figures.</p>;
                         })()}
+                    {useSigned ? (
+                      <div className="flex flex-wrap items-center gap-2">
                         {signedCount < selRows.length && selRows.length > 1 && (
                           <p className="text-[11px] text-amber-600 w-full">Only invoices with an uploaded signed 2307 will have a file attached — upload the missing ones in the BIR 2307 section first.</p>
                         )}
